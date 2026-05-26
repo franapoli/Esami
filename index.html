@@ -76,8 +76,10 @@
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
   <p class="subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
-  <label for="nome">Nome e cognome</label>
-  <input type="text" id="nome" placeholder="Es. Mario Rossi">
+  <label for="cognome">Cognome</label>
+  <input type="text" id="cognome" placeholder="Es. Rossi">
+  <label for="nome">Nome</label>
+  <input type="text" id="nome" placeholder="Es. Mario">
   <label for="matricola">Matricola</label>
   <input type="text" id="matricola" placeholder="Es. 123456">
   <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
@@ -213,6 +215,7 @@ const ACMG_SCHEMA = `<table class="acmg-table">
 let current = 0;
 let answers = new Array(questions.length).fill(null);
 let studentNome = "";
+let studentCognome = "";
 let studentMatricola = "";
 
 const LS_KEY = "quiz_session_" + EXAM_DATE;
@@ -221,6 +224,7 @@ const LS_KEY = "quiz_session_" + EXAM_DATE;
 function saveLocal() {
   localStorage.setItem(LS_KEY, JSON.stringify({
     nome: studentNome,
+    cognome: studentCognome,
     matricola: studentMatricola,
     answers,
     current,
@@ -243,26 +247,28 @@ function clearLocal() {
 window.addEventListener("load", function() {
   const saved = loadLocal();
   if (!saved) return;
-  const resume = confirm("Trovata una sessione in corso per " + saved.nome + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
+  const resume = confirm("Trovata una sessione in corso per " + saved.cognome + " " + saved.nome + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
   if (!resume) { clearLocal(); return; }
   studentNome = saved.nome;
+  studentCognome = saved.cognome || "";
   studentMatricola = saved.matricola;
   answers = saved.answers || new Array(questions.length).fill(null);
   current = saved.current || 0;
   startTime = saved.startTime ? new Date(saved.startTime) : new Date();
   document.getElementById("cover").style.display = "none";
   document.getElementById("quiz-wrapper").classList.add("active");
-  document.getElementById("student-info").innerHTML = "<strong>" + studentNome + "</strong><br>" + studentMatricola;
+  document.getElementById("student-info").innerHTML = "<strong>" + studentCognome + " " + studentNome + "</strong><br>" + studentMatricola;
   buildGrid();
   renderQuestion();
 });
 
 // ---- INIT ----
 async function initQuiz() {
+  const cognome = document.getElementById("cognome").value.trim();
   const nome = document.getElementById("nome").value.trim();
   const matricola = document.getElementById("matricola").value.trim();
-  if (!nome || !matricola) {
-    document.getElementById("cover-error").textContent = "Inserisci nome e matricola.";
+  if (!cognome || !nome || !matricola) {
+    document.getElementById("cover-error").textContent = "Inserisci cognome, nome e matricola.";
     return;
   }
   const btn = document.getElementById("btn-start");
@@ -271,20 +277,21 @@ async function initQuiz() {
   document.getElementById("cover-error").textContent = "";
 
   try {
-    const res = await callScript({ action:"init", nome, matricola, examDate: EXAM_DATE });
+    const res = await callScript({ action:"init", cognome, nome, matricola, examDate: EXAM_DATE });
     if (res.status === "duplicate") {
-      document.getElementById("cover-error").textContent = "Matricola gia registrata. Contatta il docente.";
+      document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
       btn.disabled = false;
       btn.textContent = "Inizia il quiz";
       return;
     }
     studentNome = nome;
+    studentCognome = cognome;
     studentMatricola = matricola;
     startTime = new Date();
     saveLocal();
     document.getElementById("cover").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
-    document.getElementById("student-info").innerHTML = "<strong>" + nome + "</strong><br>" + matricola;
+    document.getElementById("student-info").innerHTML = "<strong>" + cognome + " " + nome + "</strong><br>" + matricola;
     buildGrid();
     renderQuestion();
   } catch(err) {
@@ -412,16 +419,17 @@ async function showResults() {
   document.getElementById("thankyou").style.display = "block";
 
   let score = 0;
-  const resultRows = [];
+  const resultRows = []; // { ans, pts }
 
   questions.forEach((q, i) => {
     let userAns = answers[i];
     let correct = false;
     if (q.type === "mc") correct = userAns === q.correct;
     else if (q.type === "fitb") correct = normalizeAnswer(userAns) === normalizeAnswer(q.correct);
-    score += correct ? q.pts : 0;
+    const pts = correct ? q.pts : 0;
+    score += pts;
     const userDisplay = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
-    resultRows.push(userDisplay);
+    resultRows.push({ ans: userDisplay, pts });
   });
 
   const endTime = new Date();
@@ -435,6 +443,8 @@ async function showResults() {
     await callScript({
       action: "finalize",
       matricola: studentMatricola,
+      cognome: studentCognome,
+      nome: studentNome,
       examDate: EXAM_DATE,
       score,
       answers: resultRows,
