@@ -215,6 +215,48 @@ let answers = new Array(questions.length).fill(null);
 let studentNome = "";
 let studentMatricola = "";
 
+const LS_KEY = "quiz_session_" + EXAM_DATE;
+
+// ---- LOCALSTORAGE ----
+function saveLocal() {
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    nome: studentNome,
+    matricola: studentMatricola,
+    answers,
+    current,
+    startTime: startTime ? startTime.toISOString() : null
+  }));
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function clearLocal() {
+  localStorage.removeItem(LS_KEY);
+}
+
+// ---- AUTO-RESTORE on page load ----
+window.addEventListener("load", function() {
+  const saved = loadLocal();
+  if (!saved) return;
+  const resume = confirm("Trovata una sessione in corso per " + saved.nome + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
+  if (!resume) { clearLocal(); return; }
+  studentNome = saved.nome;
+  studentMatricola = saved.matricola;
+  answers = saved.answers || new Array(questions.length).fill(null);
+  current = saved.current || 0;
+  startTime = saved.startTime ? new Date(saved.startTime) : new Date();
+  document.getElementById("cover").style.display = "none";
+  document.getElementById("quiz-wrapper").classList.add("active");
+  document.getElementById("student-info").innerHTML = "<strong>" + studentNome + "</strong><br>" + studentMatricola;
+  buildGrid();
+  renderQuestion();
+});
+
 // ---- INIT ----
 async function initQuiz() {
   const nome = document.getElementById("nome").value.trim();
@@ -231,7 +273,7 @@ async function initQuiz() {
   try {
     const res = await callScript({ action:"init", nome, matricola, examDate: EXAM_DATE });
     if (res.status === "duplicate") {
-      document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
+      document.getElementById("cover-error").textContent = "Matricola gia registrata. Contatta il docente.";
       btn.disabled = false;
       btn.textContent = "Inizia il quiz";
       return;
@@ -239,9 +281,10 @@ async function initQuiz() {
     studentNome = nome;
     studentMatricola = matricola;
     startTime = new Date();
+    saveLocal();
     document.getElementById("cover").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
-    document.getElementById("student-info").innerHTML = "<strong>" + nome + "</strong>" + matricola;
+    document.getElementById("student-info").innerHTML = "<strong>" + nome + "</strong><br>" + matricola;
     buildGrid();
     renderQuestion();
   } catch(err) {
@@ -310,12 +353,14 @@ function renderQuestion() {
 
 function selectOption(i) {
   answers[current] = i;
+  saveLocal();
   saveProgress(current, i);
   renderQuestion();
 }
 
 function saveText(val) {
   answers[current] = val.trim();
+  saveLocal();
   saveProgress(current, val.trim());
 }
 
@@ -397,6 +442,7 @@ async function showResults() {
       tsEnd: endTime.toISOString(),
       elapsed: elapsedStr
     });
+    clearLocal();
     document.getElementById("send-status").textContent = "✓ Consegna registrata.";
   } catch(e) {
     document.getElementById("send-status").textContent = "⚠ Errore nel salvataggio. Mostra questa pagina al docente.";
@@ -407,10 +453,9 @@ async function showResults() {
 function callScript(payload) {
   return fetch(SCRIPT_URL, {
     method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload)
-  }).then(() => ({ status: "ok" }));
+  }).then(r => r.json());
 }
 </script>
 </body>
