@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz — Applicazioni di Bioinformatica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; }
+  
+  #cover, #quiz-section, #thankyou { max-width: 780px; margin: 40px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  
+  h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 6px; }
+  .subtitle { color: #555; font-size: 0.95em; margin-bottom: 32px; }
+  
+  label { display: block; font-size: 0.9em; color: #333; margin-bottom: 4px; margin-top: 16px; }
+  input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em; font-family: inherit; }
+  
+  .btn { display: inline-block; margin-top: 24px; padding: 10px 28px; background: #1a1a1a; color: #fff; border: none; font-size: 1em; font-family: inherit; cursor: pointer; }
+  .btn:hover { background: #333; }
+  .btn:disabled { background: #999; cursor: not-allowed; }
+
+  /* progress */
+  #progress-bar-wrap { background: #eee; height: 4px; margin-bottom: 32px; }
+  #progress-bar { background: #1a1a1a; height: 4px; transition: width 0.3s; }
+  #progress-label { font-size: 0.82em; color: #777; margin-bottom: 8px; }
+
+  /* question */
+  .q-number { font-size: 0.82em; color: #777; margin-bottom: 6px; }
+  .q-points { font-size: 0.82em; color: #777; margin-left: 8px; }
+  .q-text { font-size: 1.05em; line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
+  
+  /* blast output */
+  .blast-block { background: #f8f8f8; border: 1px solid #ddd; padding: 12px 14px; font-family: monospace; font-size: 0.78em; line-height: 1.5; overflow-x: auto; margin-bottom: 20px; white-space: pre; }
+
+  /* options */
+  .option { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+  .option:hover { background: #f5f5f0; }
+  .option.selected { background: #e8e8e0; border-color: #999; }
+  .option input[type=radio] { margin-top: 3px; flex-shrink: 0; }
+  .option-label { font-size: 0.95em; line-height: 1.5; }
+
+  /* fill in blank */
+  .fitb-input { width: 100%; padding: 9px 12px; border: 1px solid #bbb; font-size: 1em; font-family: monospace; margin-top: 4px; }
+  .fitb-hint { font-size: 0.82em; color: #777; margin-top: 6px; }
+
+  /* nav */
+  .nav { display: flex; justify-content: space-between; margin-top: 28px; }
+  
+  /* summary */
+  #score-display { font-size: 2em; font-weight: bold; margin: 16px 0 8px; }
+  #score-detail { font-size: 0.9em; color: #555; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-top: 16px; }
+  th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  td.correct { color: #2a7a2a; }
+  td.wrong { color: #b00; }
+  .sending-msg { color: #555; font-size: 0.9em; margin-top: 16px; }
+  #send-status { margin-top: 12px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div id="cover">
+  <h1>Quiz — Applicazioni di Bioinformatica</h1>
+  <p class="subtitle">Genetica Umana · MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
+  <label for="nome">Nome e cognome</label>
+  <input type="text" id="nome" placeholder="Es. Mario Rossi">
+  <label for="matricola">Matricola</label>
+  <input type="text" id="matricola" placeholder="Es. 123456">
+  <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati prima di iniziare. Non potrai tornare indietro dopo aver confermato una risposta.</p>
+  <button class="btn" onclick="startQuiz()">Inizia il quiz</button>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz-section" style="display:none">
+  <div id="progress-label"></div>
+  <div id="progress-bar-wrap"><div id="progress-bar" style="width:0%"></div></div>
+  <div id="question-container"></div>
+  <div class="nav">
+    <button class="btn" id="btn-prev" onclick="prevQ()" style="background:#888">← Precedente</button>
+    <button class="btn" id="btn-next" onclick="nextQ()">Avanti →</button>
+  </div>
+</div>
+
+<!-- THANK YOU -->
+<div id="thankyou" style="display:none">
+  <h1>Quiz completato</h1>
+  <div id="score-display"></div>
+  <div id="score-detail"></div>
+  <div id="send-status"></div>
+  <h2 style="margin-top:28px;font-size:1em;border-top:1px solid #ddd;padding-top:20px;">Riepilogo risposte</h2>
+  <table id="result-table">
+    <tr><th>#</th><th>La tua risposta</th><th>Esito</th><th>Punti</th></tr>
+  </table>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw7UT1qjD7sSVie0xXpqC-W-zgFYoN2Jr_P-uzKdJqI/exec";
+
+const questions = [
+  {
+    id: 1, pts: 2,
+    text: "Un ricercatore deve confrontare una nuova sequenza proteica con un database di milioni di proteine. Quale approccio è più appropriato?",
+    type: "mc",
+    options: [
+      "Algoritmo esatto di programmazione dinamica, perché garantisce il risultato ottimale",
+      "Algoritmo euristico come BLAST, perché offre un compromesso praticabile tra velocità e sensibilità su grandi database",
+      "Distanza di Hamming, perché è più veloce della edit distance",
+      "Smith-Waterman applicato a tutte le sequenze del database, perché l'allineamento locale è sempre superiore a quello globale"
+    ],
+    correct: 1
+  },
+  {
+    id: 2, pts: 2,
+    text: "In BLAST, se il parametro W (lunghezza del seed) viene aumentato da 3 a 5, qual è l'effetto atteso?",
+    type: "mc",
+    options: [
+      "La ricerca diventa più lenta ma più sensibile",
+      "La ricerca diventa più veloce ma meno sensibile alle sequenze molto divergenti",
+      "L'E-value di ogni hit diminuisce proporzionalmente",
+      "Il numero di falsi positivi aumenta"
+    ],
+    correct: 1
+  },
+  {
+    id: 3, pts: 2,
+    text: "Nel database gnomAD, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
+    type: "mc",
+    options: [
+      "Il 99% delle varianti nel gene sono patogeniche",
+      "Il gene è sotto forte pressione selettiva contro varianti che ne eliminano la funzione",
+      "La frequenza allelica media nel gene è del 99% nella popolazione generale",
+      "Il 99% degli individui nel database porta almeno una variante nel gene"
+    ],
+    correct: 1
+  },
+  {
+    id: 4, pts: 2,
+    text: "Nell'allineamento globale di Needleman-Wunsch, cosa rappresenta il valore nella cella in basso a destra della matrice DP?",
+    type: "mc",
+    options: [
+      "La edit distance tra le due sequenze",
+      "Lo score dell'allineamento locale ottimale",
+      "Lo score dell'allineamento globale ottimale",
+      "La lunghezza della sottosequenza comune più lunga (LCS)"
+    ],
+    correct: 2
+  },
+  {
+    id: 5, pts: 2,
+    text: "In RNA-seq, qual è il vantaggio della normalizzazione TPM rispetto a RPKM?",
+    type: "mc",
+    options: [
+      "È più veloce da calcolare computazionalmente",
+      "Rende i valori direttamente confrontabili tra campioni diversi, poiché la somma dei TPM è costante per campione",
+      "Non richiede la stima della lunghezza del trascritto",
+      "Elimina completamente l'effetto della coverage"
+    ],
+    correct: 1
+  },
+  {
+    id: 6, pts: 2,
+    text: "Una variante identificata in un paziente con una malattia dominante rara (prevalenza 1/50.000) ha una frequenza allelica del 4% in gnomAD. Quale conclusione è più ragionevole?",
+    type: "mc",
+    options: [
+      "La variante è probabilmente causativa, perché è rara nella popolazione generale",
+      "La variante è quasi certamente benigna, perché la sua frequenza nella popolazione sana è incompatibile con la malattia",
+      "La variante è di significato incerto perché non ci sono abbastanza dati",
+      "La variante è patogenica con penetranza ridotta"
+    ],
+    correct: 1
+  },
+  {
+    id: 7, pts: 2,
+    text: "Il framework ACMG/AMP è stato sviluppato principalmente per:",
+    type: "mc",
+    options: [
+      "Calcolare automaticamente la patogenicità di qualsiasi variante tramite algoritmo deterministico",
+      "Standardizzare il linguaggio e i criteri di classificazione tra laboratori di genetica clinica",
+      "Sostituire l'analisi clinica con un sistema di punteggio basato solo su dati di popolazione",
+      "Classificare esclusivamente le varianti somatiche nei tumori"
+    ],
+    correct: 1
+  },
+  {
+    id: 8, pts: 3,
+    text: "Nel confronto tra un frammento del gene VHL e un omologo in un'altra specie vengono estratti: Sequenza 1 = ATGCTC (colonne) · Sequenza 2 = ACTG (righe). Operazioni ammesse: inserzione, delezione, sostituzione (costo 1 ciascuna). Riporta i valori dell'ultima colonna della matrice DP (riga 0 → riga 4), separati da virgola.",
+    type: "fitb",
+    correct: "6,5,4,3,3",
+    placeholder: "es. 0,1,2,3,4"
+  },
+  {
+    id: 9, pts: 1,
+    text: "Output blastp — VHL umana vs RefSeq nr. Quale hit deve essere scartato perché non statisticamente significativo?",
+    blast: true,
+    type: "mc",
+    options: [
+      "VHL protein — Drosophila melanogaster",
+      "hypothetical protein — uncultured bacterium",
+      "VHL protein — Danio rerio",
+      "VHL disease protein — Pan troglodytes"
+    ],
+    correct: 1
+  },
+  {
+    id: 10, pts: 2,
+    text: "Nell'allineamento blastp con Danio rerio: Identities = 149/213 (70%), Positives = 175/213 (82%). La differenza tra i due valori indica che:",
+    type: "mc",
+    options: [
+      "26 posizioni hanno un gap nell'allineamento",
+      "26 posizioni hanno aminoacidi diversi ma con proprietà fisico-chimiche simili, che la matrice di sostituzione considera conservative",
+      "Il 12% della sequenza di zebrafish non è allineata alla sequenza umana",
+      "BLAST ha trovato 26 allineamenti alternativi con score diverso"
+    ],
+    correct: 1
+  },
+  {
+    id: 11, pts: 1,
+    text: "Nell'output BLAST, Mus musculus ha Score = 388 bits ed E-value = 3e-136; Danio rerio ha Score = 278 bits ed E-value = 2e-94. Quale affermazione è corretta?",
+    type: "mc",
+    options: [
+      "L'allineamento con il topo è più significativo perché ha E-value più basso e score più alto",
+      "L'allineamento con lo zebrafish è più significativo perché ha E-value più basso",
+      "I due allineamenti sono equivalenti perché entrambi significativi",
+      "L'allineamento con lo zebrafish è preferibile perché ha un numero di Gaps inferiore"
+    ],
+    correct: 0
+  },
+  {
+    id: 12, pts: 2,
+    text: "Cerca su ClinVar la variante NM_000551.4(VHL):c.500G>A (identificatore VCV000002216). Qual è la classificazione clinica attuale e il livello di revisione?",
+    type: "mc",
+    options: [
+      "Pathogenic — no assertion criteria provided",
+      "Likely pathogenic — reviewed by expert panel",
+      "Pathogenic — reviewed by expert panel",
+      "Variant of uncertain significance — single submitter"
+    ],
+    correct: 2
+  },
+  {
+    id: 13, pts: 2,
+    text: "Cerca l'entry P40337 (proteina VHL umana). In quale dominio funzionale cade il residuo Arg167, e come viene classificata la variante p.Arg167Gln nella sezione delle varianti patologiche?",
+    type: "mc",
+    options: [
+      "Dominio VHL box; variante associata a perdita di funzione",
+      "Dominio di legame con Elongin BC; variante associata a VHL disease tipo II e feocromocitoma",
+      "Dominio RING finger; variante associata a carcinoma renale sporadico",
+      "Regione C-terminale; variante di significato incerto"
+    ],
+    correct: 1
+  },
+  {
+    id: 14, pts: 3,
+    text: "Variante VHL p.Arg167Gln. Evidenze disponibili: • 2 Strong: studi funzionali in vitro; ≥19 casi in individui non correlati • 2 Moderate: hotspot germinale nel dominio funzionale; varianti patogeniche allo stesso codone • 2 Supporting: assente da gnomAD v4.1.0; REVEL = 0.874  Schema ACMG: Patogenica = 2 Strong, oppure 1 Strong + 3 Moderate, … Prob. Patogenica = 1 Strong + 1 Moderate + 1 Supporting, oppure 2 Moderate + 2 Supporting, …  Quale classificazione è corretta?",
+    type: "mc",
+    options: [
+      "VUS — le evidenze Strong non sono sufficienti senza un criterio Very Strong",
+      "Probably Pathogenic — Strong + Moderate + Supporting soddisfa LP ma non P",
+      "Pathogenic — la combinazione di evidenze soddisfa la soglia per Patogenica",
+      "Probably Pathogenic — i criteri Strong si annullano in assenza di conferma de novo"
+    ],
+    correct: 2
+  },
+  {
+    id: 15, pts: 2,
+    text: "Se i genitori risultassero entrambi negativi per la variante (de novo confermato), il nuovo dato aggiungerebbe un'evidenza di peso:",
+    type: "mc",
+    options: [
+      "Supporting — la classificazione finale salirebbe da LP a P",
+      "Moderate — la classificazione non cambierebbe",
+      "Strong — la classificazione rimarrebbe Patogenica, con un'evidenza Strong aggiuntiva",
+      "Very Strong — la variante verrebbe riclassificata con certezza assoluta"
+    ],
+    correct: 2
+  }
+];
+
+const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
+
+                                                           Score    E
+Sequences producing significant alignments:               (Bits)  Value
+
+NP_000542.1   VHL protein isoform 1 [Homo sapiens]         436    2e-155
+XP_016799693.1  VHL disease protein [Pan troglodytes]       434    4e-154
+XP_008974688.1  VHL disease protein [Mus musculus]          388    3e-136
+XP_015147021.1  VHL protein [Danio rerio]                   278    2e-94
+XP_033058812.1  VHL protein [Drosophila melanogaster]        52    7e-08
+hypothetical protein [uncultured bacterium]                  18    0.6
+
+> XP_015147021.1  VHL protein [Danio rerio]  Length=213
+  Score = 278 bits, Expect = 2e-94
+  Identities = 149/213 (70%), Positives = 175/213 (82%), Gaps = 1/213 (0%)`;
+
+let current = 0;
+let answers = new Array(questions.length).fill(null);
+
+function startQuiz() {
+  const nome = document.getElementById("nome").value.trim();
+  const matricola = document.getElementById("matricola").value.trim();
+  if (!nome || !matricola) { alert("Inserisci nome e matricola prima di iniziare."); return; }
+  document.getElementById("cover").style.display = "none";
+  document.getElementById("quiz-section").style.display = "block";
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const q = questions[current];
+  const total = questions.length;
+  document.getElementById("progress-label").textContent = `Domanda ${current+1} di ${total}`;
+  document.getElementById("progress-bar").style.width = `${((current+1)/total)*100}%`;
+
+  let html = `<div class="q-number">Domanda ${q.id} <span class="q-points">[${q.pts} pt]</span></div>`;
+
+  if (q.blast) html += `<div class="blast-block">${BLAST_OUTPUT}</div>`;
+
+  html += `<div class="q-text">${q.text}</div>`;
+
+  if (q.type === "mc") {
+    q.options.forEach((opt, i) => {
+      const sel = answers[current] === i ? "selected" : "";
+      html += `<div class="option ${sel}" onclick="selectOption(${i})">
+        <input type="radio" name="q" ${answers[current]===i?"checked":""} readonly>
+        <span class="option-label">${opt}</span>
+      </div>`;
+    });
+  } else if (q.type === "fitb") {
+    const val = answers[current] !== null ? answers[current] : "";
+    html += `<input class="fitb-input" type="text" id="fitb-input" value="${val}" placeholder="${q.placeholder}" oninput="saveText(this.value)">
+      <p class="fitb-hint">Inserisci i 5 valori separati da virgola, senza spazi (es. 0,1,2,3,4)</p>`;
+  }
+
+  document.getElementById("question-container").innerHTML = html;
+
+  document.getElementById("btn-prev").style.visibility = current === 0 ? "hidden" : "visible";
+  document.getElementById("btn-next").textContent = current === total-1 ? "Consegna →" : "Avanti →";
+}
+
+function selectOption(i) {
+  answers[current] = i;
+  renderQuestion();
+}
+
+function saveText(val) {
+  answers[current] = val.trim();
+}
+
+function nextQ() {
+  if (answers[current] === null || answers[current] === "") {
+    if (!confirm("Non hai risposto a questa domanda. Vuoi continuare?")) return;
+    answers[current] = null;
+  }
+  if (current < questions.length - 1) {
+    current++;
+    renderQuestion();
+  } else {
+    showResults();
+  }
+}
+
+function prevQ() {
+  if (current > 0) { current--; renderQuestion(); }
+}
+
+function normalizeAnswer(ans) {
+  if (ans === null || ans === undefined) return "";
+  return String(ans).replace(/\s/g,"").toLowerCase();
+}
+
+function showResults() {
+  document.getElementById("quiz-section").style.display = "none";
+  document.getElementById("thankyou").style.display = "block";
+
+  let score = 0;
+  let tableHTML = `<tr><th>#</th><th>La tua risposta</th><th>Esito</th><th>Punti</th></tr>`;
+  const resultRows = [];
+
+  questions.forEach((q, i) => {
+    let userAns = answers[i];
+    let correct = false;
+
+    if (q.type === "mc") {
+      correct = userAns === q.correct;
+    } else if (q.type === "fitb") {
+      correct = normalizeAnswer(userAns) === normalizeAnswer(q.correct);
+    }
+
+    const pts = correct ? q.pts : 0;
+    score += pts;
+
+    const userDisplay = q.type === "mc"
+      ? (userAns !== null ? q.options[userAns] : "—")
+      : (userAns || "—");
+
+    const esito = correct ? "✓" : "✗";
+    const cls = correct ? "correct" : "wrong";
+    tableHTML += `<tr><td>${q.id}</td><td>${userDisplay}</td><td class="${cls}">${esito}</td><td>${pts}/${q.pts}</td></tr>`;
+    resultRows.push(userDisplay);
+  });
+
+  const total = questions.reduce((s,q) => s+q.pts, 0);
+  document.getElementById("score-display").textContent = `${score} / ${total}`;
+  document.getElementById("score-detail").textContent = `Punteggio ottenuto su 30 punti totali`;
+  document.getElementById("result-table").innerHTML = tableHTML;
+
+  sendResults(score, resultRows);
+}
+
+function sendResults(score, resultRows) {
+  const nome = document.getElementById("nome").value.trim();
+  const matricola = document.getElementById("matricola").value.trim();
+
+  document.getElementById("send-status").textContent = "Invio risultati in corso…";
+
+  const payload = {
+    nome, matricola, score,
+    timestamp: new Date().toISOString(),
+    answers: resultRows
+  };
+
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).then(() => {
+    document.getElementById("send-status").textContent = "✓ Risultati registrati.";
+  }).catch(() => {
+    document.getElementById("send-status").textContent = "⚠ Invio non riuscito. Mostra questa pagina al docente.";
+  });
+}
+</script>
+</body>
+</html>
