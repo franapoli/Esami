@@ -76,12 +76,12 @@
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
   <p class="subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
-  <label for="cognome">Cognome</label>
-  <input type="text" id="cognome" placeholder="Es. Rossi">
-  <label for="nome">Nome</label>
-  <input type="text" id="nome" placeholder="Es. Mario">
+  <label for="cognome">Cognome e nome</label>
+  <input type="text" id="cognome" placeholder="Es. Rossi Mario">
   <label for="matricola">Matricola</label>
   <input type="text" id="matricola" placeholder="Es. 123456">
+  <label for="email">Email istituzionale</label>
+  <input type="text" id="email" placeholder="Es. m.rossi@studenti.unisannio.it">
   <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
   <div id="cover-error"></div>
   <button class="btn" id="btn-start" onclick="initQuiz()">Inizia il quiz</button>
@@ -214,18 +214,18 @@ const ACMG_SCHEMA = `<table class="acmg-table">
 
 let current = 0;
 let answers = new Array(questions.length).fill(null);
-let studentNome = "";
-let studentCognome = "";
+let studentNominativo = "";
 let studentMatricola = "";
+let studentEmail = "";
 
 const LS_KEY = "quiz_session_" + EXAM_DATE;
 
 // ---- LOCALSTORAGE ----
 function saveLocal() {
   localStorage.setItem(LS_KEY, JSON.stringify({
-    nome: studentNome,
-    cognome: studentCognome,
+    nominativo: studentNominativo,
     matricola: studentMatricola,
+    email: studentEmail,
     answers,
     current,
     startTime: startTime ? startTime.toISOString() : null
@@ -247,28 +247,28 @@ function clearLocal() {
 window.addEventListener("load", function() {
   const saved = loadLocal();
   if (!saved) return;
-  const resume = confirm("Trovata una sessione in corso per " + saved.cognome + " " + saved.nome + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
+  const resume = confirm("Trovata una sessione in corso per " + saved.nominativo + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
   if (!resume) { clearLocal(); return; }
-  studentNome = saved.nome;
-  studentCognome = saved.cognome || "";
+  studentNominativo = saved.nominativo || "";
   studentMatricola = saved.matricola;
+  studentEmail = saved.email || "";
   answers = saved.answers || new Array(questions.length).fill(null);
   current = saved.current || 0;
   startTime = saved.startTime ? new Date(saved.startTime) : new Date();
   document.getElementById("cover").style.display = "none";
   document.getElementById("quiz-wrapper").classList.add("active");
-  document.getElementById("student-info").innerHTML = "<strong>" + studentCognome + " " + studentNome + "</strong><br>" + studentMatricola;
+  document.getElementById("student-info").innerHTML = "<strong>" + studentNominativo + "</strong><br>" + studentMatricola + "<br><span style='font-size:0.85em;color:#888'>" + studentEmail + "</span>";
   buildGrid();
   renderQuestion();
 });
 
 // ---- INIT ----
 async function initQuiz() {
-  const cognome = document.getElementById("cognome").value.trim();
-  const nome = document.getElementById("nome").value.trim();
+  const nominativo = document.getElementById("cognome").value.trim();
   const matricola = document.getElementById("matricola").value.trim();
-  if (!cognome || !nome || !matricola) {
-    document.getElementById("cover-error").textContent = "Inserisci cognome, nome e matricola.";
+  const email = document.getElementById("email").value.trim();
+  if (!nominativo || !matricola || !email) {
+    document.getElementById("cover-error").textContent = "Inserisci tutti i campi richiesti.";
     return;
   }
   const btn = document.getElementById("btn-start");
@@ -277,21 +277,21 @@ async function initQuiz() {
   document.getElementById("cover-error").textContent = "";
 
   try {
-    const res = await callScript({ action:"init", cognome, nome, matricola, examDate: EXAM_DATE });
+    const res = await callScript({ action:"init", nominativo, matricola, email, examDate: EXAM_DATE });
     if (res.status === "duplicate") {
       document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
       btn.disabled = false;
       btn.textContent = "Inizia il quiz";
       return;
     }
-    studentNome = nome;
-    studentCognome = cognome;
+    studentNominativo = nominativo;
     studentMatricola = matricola;
+    studentEmail = email;
     startTime = new Date();
     saveLocal();
     document.getElementById("cover").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
-    document.getElementById("student-info").innerHTML = "<strong>" + cognome + " " + nome + "</strong><br>" + matricola;
+    document.getElementById("student-info").innerHTML = "<strong>" + nominativo + "</strong><br>" + matricola + "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
     buildGrid();
     renderQuestion();
   } catch(err) {
@@ -443,8 +443,8 @@ async function showResults() {
     await callScript({
       action: "finalize",
       matricola: studentMatricola,
-      cognome: studentCognome,
-      nome: studentNome,
+      nominativo: studentNominativo,
+      email: studentEmail,
       examDate: EXAM_DATE,
       score,
       answers: resultRows,
