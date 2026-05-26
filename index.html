@@ -75,6 +75,7 @@
 <div id="cover">
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
   <p class="subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
+  <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
   <label for="nome">Nome e cognome</label>
   <input type="text" id="nome" placeholder="Es. Mario Rossi">
   <label for="matricola">Matricola</label>
@@ -116,6 +117,12 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
+const EXAM_DATE = "2026-05-28";
+
+// Mostra data in copertina
+document.getElementById("cover-date").textContent = "Esame del " + EXAM_DATE;
+
+let startTime = null;
 
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
 
@@ -222,7 +229,7 @@ async function initQuiz() {
   document.getElementById("cover-error").textContent = "";
 
   try {
-    const res = await callScript({ action:"init", nome, matricola });
+    const res = await callScript({ action:"init", nome, matricola, examDate: EXAM_DATE });
     if (res.status === "duplicate") {
       document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
       btn.disabled = false;
@@ -231,6 +238,7 @@ async function initQuiz() {
     }
     studentNome = nome;
     studentMatricola = matricola;
+    startTime = new Date();
     document.getElementById("cover").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
     document.getElementById("student-info").innerHTML = "<strong>" + nome + "</strong>" + matricola;
@@ -371,9 +379,24 @@ async function showResults() {
     resultRows.push(userDisplay);
   });
 
+  const endTime = new Date();
+  const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : null;
+  const elapsedStr = elapsed !== null
+    ? Math.floor(elapsed/60) + "m " + (elapsed%60) + "s"
+    : "";
+
   document.getElementById("send-status").textContent = "Salvataggio in corso…";
   try {
-    await callScript({ action:"finalize", matricola: studentMatricola, score, answers: resultRows });
+    await callScript({
+      action: "finalize",
+      matricola: studentMatricola,
+      examDate: EXAM_DATE,
+      score,
+      answers: resultRows,
+      tsStart: startTime ? startTime.toISOString() : "",
+      tsEnd: endTime.toISOString(),
+      elapsed: elapsedStr
+    });
     document.getElementById("send-status").textContent = "✓ Consegna registrata.";
   } catch(e) {
     document.getElementById("send-status").textContent = "⚠ Errore nel salvataggio. Mostra questa pagina al docente.";
