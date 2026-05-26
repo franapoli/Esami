@@ -93,6 +93,7 @@
     <h2>Domande</h2>
     <div class="q-grid" id="q-grid"></div>
     <div id="save-status"></div>
+    <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
   </div>
   <!-- MAIN -->
   <div id="quiz-main">
@@ -109,13 +110,8 @@
 <!-- THANK YOU -->
 <div id="thankyou">
   <h1>Quiz completato</h1>
-  <div id="score-display"></div>
-  <div id="score-detail"></div>
+  <p style="color:#555;font-size:0.95em;margin-top:12px;">Il tuo quiz è stato consegnato. Puoi chiudere questa pagina.</p>
   <div id="send-status"></div>
-  <h2 style="margin-top:28px;font-size:1em;border-top:1px solid #ddd;padding-top:20px;">Riepilogo risposte</h2>
-  <table class="result" id="result-table">
-    <tr><th>#</th><th>La tua risposta</th><th>Esito</th><th>Punti</th></tr>
-  </table>
 </div>
 
 <script>
@@ -300,7 +296,7 @@ function renderQuestion() {
 
   document.getElementById("question-container").innerHTML = html;
   document.getElementById("btn-prev").style.visibility = current === 0 ? "hidden" : "visible";
-  document.getElementById("btn-next").textContent = current === total-1 ? "Consegna →" : "Avanti →";
+  document.getElementById("btn-next").style.visibility = current === total-1 ? "hidden" : "visible";
   updateGrid();
 }
 
@@ -320,13 +316,21 @@ function nextQ() {
   if (current < questions.length - 1) {
     current++;
     renderQuestion();
-  } else {
-    showResults();
   }
 }
 
 function prevQ() {
   if (current > 0) { current--; renderQuestion(); }
+}
+
+function confirmSubmit() {
+  const answered = answers.filter(a => a !== null).length;
+  const total = questions.length;
+  const unanswered = total - answered;
+  let msg = "Hai risposto a " + answered + " domande su " + total + ".";
+  if (unanswered > 0) msg += "\n\n" + unanswered + " domanda/e senza risposta verrà considerata errata.";
+  msg += "\n\nConfermi la consegna?";
+  if (confirm(msg)) showResults();
 }
 
 // ---- SAVE PROGRESS ----
@@ -355,7 +359,6 @@ async function showResults() {
   document.getElementById("thankyou").style.display = "block";
 
   let score = 0;
-  let tableHTML = "<tr><th>#</th><th>La tua risposta</th><th>Esito</th><th>Punti</th></tr>";
   const resultRows = [];
 
   questions.forEach((q, i) => {
@@ -363,26 +366,17 @@ async function showResults() {
     let correct = false;
     if (q.type === "mc") correct = userAns === q.correct;
     else if (q.type === "fitb") correct = normalizeAnswer(userAns) === normalizeAnswer(q.correct);
-    const pts = correct ? q.pts : 0;
-    score += pts;
+    score += correct ? q.pts : 0;
     const userDisplay = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
-    const esito = correct ? "✓" : "✗";
-    const cls = correct ? "correct" : "wrong";
-    tableHTML += "<tr><td>" + q.id + "</td><td>" + userDisplay + "</td><td class='" + cls + "'>" + esito + "</td><td>" + pts + "/" + q.pts + "</td></tr>";
     resultRows.push(userDisplay);
   });
 
-  const total = questions.reduce((s,q) => s+q.pts, 0);
-  document.getElementById("score-display").textContent = score + " / " + total;
-  document.getElementById("score-detail").textContent = "Punteggio ottenuto su 30 punti totali";
-  document.getElementById("result-table").innerHTML = tableHTML;
-
-  document.getElementById("send-status").textContent = "Finalizzazione in corso…";
+  document.getElementById("send-status").textContent = "Salvataggio in corso…";
   try {
     await callScript({ action:"finalize", matricola: studentMatricola, score, answers: resultRows });
-    document.getElementById("send-status").textContent = "✓ Risultati registrati.";
+    document.getElementById("send-status").textContent = "✓ Consegna registrata.";
   } catch(e) {
-    document.getElementById("send-status").textContent = "⚠ Errore nel salvataggio finale. Mostra questa pagina al docente.";
+    document.getElementById("send-status").textContent = "⚠ Errore nel salvataggio. Mostra questa pagina al docente.";
   }
 }
 
