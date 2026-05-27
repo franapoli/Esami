@@ -411,7 +411,9 @@ async function initQuiz() {
   try {
     const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
     if (res.status === "duplicate") {
-      document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
+      document.getElementById("cover-error").textContent = res.finalized
+        ? "Hai già consegnato il quiz con questa matricola."
+        : "Questa matricola è già registrata per l'esame in corso.";
       btn.disabled = false;
       btn.textContent = "Inizia il quiz";
       return;
