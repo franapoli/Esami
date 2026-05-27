@@ -87,13 +87,18 @@
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
   <p class="subtitle" id="cover-subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
-  <label for="cognome">Cognome e nome</label>
-  <input type="text" id="cognome" placeholder="Es. Rossi Mario">
-  <label for="matricola">Matricola</label>
-  <input type="text" id="matricola" placeholder="Es. 123456">
-  <label for="email">Email istituzionale</label>
-  <input type="text" id="email" placeholder="Es. m.rossi@studenti.unisannio.it">
-  <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
+  <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
+    ⚙ Modalità esercitazione — i risultati non vengono registrati
+  </div>
+  <div id="exam-fields">
+    <label for="cognome">Cognome e nome</label>
+    <input type="text" id="cognome" placeholder="Es. Rossi Mario">
+    <label for="matricola">Matricola</label>
+    <input type="text" id="matricola" placeholder="Es. 123456">
+    <label for="email">Email istituzionale</label>
+    <input type="text" id="email" placeholder="Es. m.rossi@studenti.unisannio.it">
+    <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
+  </div>
   <div id="cover-error"></div>
   <div id="cover-status" style="font-size:0.88em;color:#777;margin-top:10px;">Caricamento configurazione…</div>
   <button class="btn" id="btn-start" onclick="initQuiz()" disabled>Inizia il quiz</button>
@@ -142,6 +147,7 @@ let EXAM_DATE = "";
 let EXAM_ID = "";
 let EXAM_NAME = "";
 let EXAM_DURATION_MIN = 60;
+let EXAM_MODE = "exam"; // "exam" | "practice"
 
 let startTime = null;
 let timerInterval = null;
@@ -264,6 +270,7 @@ async function loadConfig() {
       EXAM_ID           = res.exam_id       || "";
       EXAM_NAME         = res.exam_name     || "";
       EXAM_DURATION_MIN = parseInt(res.exam_duration) || 60;
+      EXAM_MODE         = res.exam_mode     || "exam";
       const examStatus  = res.status_exam   || "closed";
 
       // Titolo cover: "Nome esame — 28 maggio 2026"
@@ -274,6 +281,14 @@ async function loadConfig() {
       document.getElementById("cover-subtitle").innerHTML =
         "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-status").textContent = "";
+
+      // Modalità practice: nascondi form dati, mostra badge
+      if (EXAM_MODE === "practice") {
+        document.getElementById("exam-fields").style.display = "none";
+        document.getElementById("practice-badge").style.display = "block";
+        document.getElementById("btn-start").disabled = false;
+        return;
+      }
 
       const saved = localStorage.getItem(getLSKey());
       if (examStatus === "closed" && !saved) {
@@ -396,17 +411,37 @@ window.addEventListener("load", async function() {
 
 // ---- INIT ----
 async function initQuiz() {
-  const nominativo = document.getElementById("cognome").value.trim();
-  const matricola = document.getElementById("matricola").value.trim();
-  const email = document.getElementById("email").value.trim();
-  if (!nominativo || !matricola || !email) {
-    document.getElementById("cover-error").textContent = "Inserisci tutti i campi richiesti.";
-    return;
-  }
   const btn = document.getElementById("btn-start");
   btn.disabled = true;
-  btn.textContent = "Verifica in corso…";
   document.getElementById("cover-error").textContent = "";
+
+  // ---- MODALITÀ ESERCITAZIONE ----
+  if (EXAM_MODE === "practice") {
+    studentNominativo = "Esercitazione";
+    studentMatricola  = "";
+    studentEmail      = "";
+    startTime = new Date();
+    buildShuffleMap();
+    document.getElementById("cover").style.display = "none";
+    document.getElementById("quiz-wrapper").classList.add("active");
+    document.getElementById("student-info").innerHTML =
+      "<span style='font-size:0.85em;color:#888;font-style:italic;'>Modalità esercitazione</span>";
+    buildGrid();
+    renderQuestion();
+    startTimer();
+    return;
+  }
+
+  // ---- MODALITÀ ESAME ----
+  const nominativo = document.getElementById("cognome").value.trim();
+  const matricola  = document.getElementById("matricola").value.trim();
+  const email      = document.getElementById("email").value.trim();
+  if (!nominativo || !matricola || !email) {
+    document.getElementById("cover-error").textContent = "Inserisci tutti i campi richiesti.";
+    btn.disabled = false;
+    return;
+  }
+  btn.textContent = "Verifica in corso…";
 
   try {
     const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
@@ -419,14 +454,16 @@ async function initQuiz() {
       return;
     }
     studentNominativo = nominativo;
-    studentMatricola = matricola;
-    studentEmail = email;
+    studentMatricola  = matricola;
+    studentEmail      = email;
     startTime = new Date();
     buildShuffleMap();
     saveLocal();
     document.getElementById("cover").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
-    document.getElementById("student-info").innerHTML = "<strong>" + nominativo + "</strong><br>" + matricola + "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
+    document.getElementById("student-info").innerHTML =
+      "<strong>" + nominativo + "</strong><br>" + matricola +
+      "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
     buildGrid();
     renderQuestion();
     startTimer();
@@ -536,6 +573,7 @@ function setSaveStatus(msg) {
 }
 
 async function saveProgress(qIndex, value) {
+  if (EXAM_MODE === "practice") return; // practice: nessun salvataggio
   setSaveStatus("Salvataggio…");
   try {
     await callScript({ action:"update", matricola: studentMatricola, qIndex: qIndex+1, value: String(value) });
@@ -569,9 +607,42 @@ async function showResults() {
     const pts = correct ? q.pts : 0;
     score += pts;
     const userDisplay = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
-    resultRows.push({ ans: userDisplay, pts });
+    const correctDisplay = q.type === "mc" ? q.options[q.correct] : q.correct;
+    resultRows.push({ ans: userDisplay, pts, correct, correctDisplay, qText: q.text, qPts: q.pts });
   });
 
+  // ---- MODALITÀ ESERCITAZIONE ----
+  if (EXAM_MODE === "practice") {
+    const totalPts = questions.reduce((s, q) => s + q.pts, 0);
+    const scoreEl = document.getElementById("send-status");
+    scoreEl.innerHTML =
+      "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + score + " / " + totalPts + "</div>" +
+      "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione — risultato non registrato</div>" +
+      "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
+      "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>Dom.</th>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>La tua risposta</th>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>Risposta corretta</th>" +
+      "<th style='padding:8px;text-align:center;font-weight:normal;'>Pt</th>" +
+      "</tr></thead><tbody>" +
+      resultRows.map((r, i) => {
+        const bg = r.correct ? "#f0f7f0" : (r.ans === "—" ? "#fff" : "#fdf0f0");
+        const icon = r.correct ? "✓" : (r.ans === "—" ? "–" : "✗");
+        const iconColor = r.correct ? "#2e7d32" : (r.ans === "—" ? "#888" : "#b00");
+        return "<tr style='border-bottom:1px solid #eee;background:" + bg + ";'>" +
+          "<td style='padding:8px;color:#777;'>" + (i+1) + "</td>" +
+          "<td style='padding:8px;'><span style='color:" + iconColor + ";margin-right:6px;'>" + icon + "</span>" + escHtml(r.ans) + "</td>" +
+          "<td style='padding:8px;color:#1a5c1a;'>" + (r.correct ? "" : escHtml(r.correctDisplay)) + "</td>" +
+          "<td style='padding:8px;text-align:center;'>" + r.pts + "/" + r.qPts + "</td>" +
+          "</tr>";
+      }).join("") +
+      "</tbody></table>";
+    document.getElementById("send-done").style.display = "none";
+    document.getElementById("btn-retry").style.display = "none";
+    return;
+  }
+
+  // ---- MODALITÀ ESAME ----
   const endTime = new Date();
   const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : null;
   const elapsedStr = elapsed !== null ? Math.floor(elapsed/60) + "m " + (elapsed%60) + "s" : "";
@@ -590,6 +661,10 @@ async function showResults() {
   };
 
   await doFinalize();
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
 async function doFinalize() {

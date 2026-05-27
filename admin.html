@@ -118,10 +118,20 @@
       </div>
     </div>
 
-    <div class="field" style="margin-top:14px;">
-      <label for="cfg-id">ID traccia <span style="font-weight:normal;color:#888">(generato automaticamente, modificabile)</span></label>
-      <input type="text" id="cfg-id" class="mono" placeholder="es. prova-itinere-1-2026-05-28">
-      <p class="hint">Questo ID identifica univocamente la traccia e verrà usato come nome del foglio Google Sheets.</p>
+    <div class="card-row" style="margin-top:14px;">
+      <div class="field">
+        <label for="cfg-id">ID traccia <span style="font-weight:normal;color:#888">(generato automaticamente, modificabile)</span></label>
+        <input type="text" id="cfg-id" class="mono" placeholder="es. prova-itinere-1-2026-05-28">
+        <p class="hint">Identifica univocamente la traccia. Usato come nome del foglio Google Sheets (solo in modalità esame).</p>
+      </div>
+      <div class="field" style="min-width:160px;max-width:200px;">
+        <label for="cfg-mode">Modalità</label>
+        <select id="cfg-mode" style="width:100%;padding:8px 10px;border:1px solid #bbb;font-size:1em;font-family:inherit;background:#fff;">
+          <option value="exam">Esame</option>
+          <option value="practice">Esercitazione</option>
+        </select>
+        <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
+      </div>
     </div>
 
     <button class="btn btn-sm" style="margin-top:20px;" onclick="saveConfig()">Salva configurazione e prepara foglio</button>
@@ -195,6 +205,7 @@ async function loadCurrentConfig() {
       document.getElementById("cfg-date").value = res.exam_date || "";
       document.getElementById("cfg-dur").value  = res.exam_duration || "60";
       document.getElementById("cfg-id").value   = res.exam_id || "";
+      document.getElementById("cfg-mode").value = res.exam_mode || "exam";
     }
   } catch(e) { console.error(e); }
 }
@@ -211,8 +222,11 @@ function formatDateIt(dateStr) {
 function renderStatus(cfg) {
   const isOpen = cfg.status_exam === "open";
   document.getElementById("status-dot").className = "status-dot " + (isOpen ? "open" : "closed");
+  const modeLbl = cfg.exam_mode === "practice"
+    ? "<span style='color:#7b5e00;background:#fff8e1;padding:1px 7px;font-size:0.82em;'>Esercitazione</span>"
+    : "<span style='color:#1a3c5c;background:#e3f0ff;padding:1px 7px;font-size:0.82em;'>Esame</span>";
   document.getElementById("status-text").innerHTML =
-    "Stato: <strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong><br>" +
+    "Stato: <strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong> " + modeLbl + "<br>" +
     "Esame: <strong>" + (cfg.exam_name || "—") + "</strong><br>" +
     "Data: <strong>" + formatDateIt(cfg.exam_date) + "</strong> &nbsp;|&nbsp; " +
     "Durata: <strong>" + (cfg.exam_duration || "—") + " min</strong><br>" +
@@ -252,13 +266,15 @@ async function saveConfig() {
   msg.className = "ok-msg";
   msg.textContent = "Salvataggio e preparazione foglio…";
   try {
+    const mode = document.getElementById("cfg-mode").value;
     const res = await callScript({
       action: "setConfig",
       password: adminPassword,
       exam_name: name,
       exam_date: date,
       exam_id:   id || generateExamId(name, date),
-      exam_duration: dur
+      exam_duration: dur,
+      exam_mode: mode
     });
     if (res.status === "ok") {
       msg.textContent = "✓ Configurazione salvata. Foglio \"" + (res.exam_id || id) + "\" pronto su Google Sheets.";
