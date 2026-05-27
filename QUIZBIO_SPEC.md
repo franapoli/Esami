@@ -27,8 +27,7 @@ Università degli Studi del Sannio — DST
 | File | Scopo |
 |------|-------|
 | `<traccia>.html` | Una per ogni traccia (quiz + logica client) |
-| `admin.html` | Pannello admin: gestisce attributi delle tracce |
-| `monitor.html` | Monitor in tempo reale degli studenti per traccia |
+| `admin.html` | Pannello admin con due tab: Gestione tracce + Monitor studenti |
 | `logo_unisannio.png` | Logo header (100KB, 1512×535px) |
 | `quiz_apps_script.js` | Codice Apps Script (sorgente locale) |
 | `QUIZBIO_SPEC.md` | Questo documento |
