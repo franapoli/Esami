@@ -14,6 +14,7 @@
   input[type=password], input[type=text], input[type=date], input[type=number] {
     width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em; font-family: inherit;
   }
+  input[type=text].mono { font-family: monospace; font-size: 0.9em; }
   .btn { display: inline-block; margin-top: 20px; padding: 9px 26px; background: #1a1a1a; color: #fff;
          border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; }
   .btn:hover { background: #333; }
@@ -39,17 +40,16 @@
 
   .status-display { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding: 16px; background: #f8f8f4; border: 1px solid #eee; }
   .status-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
-  .status-dot.open { background: #4caf50; }
+  .status-dot.open   { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
   .status-dot.closed { background: #f44336; }
-  .status-text { font-size: 0.95em; }
-  .status-text strong { text-transform: uppercase; letter-spacing: 0.05em; }
+  .status-text { font-size: 0.92em; line-height: 1.7; }
+  .status-text strong { letter-spacing: 0.03em; }
 
   .action-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-  hr-divider { display: block; border: none; border-top: 1px solid #eee; margin: 20px 0; }
   .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
   .admin-header h1 { font-size: 1.2em; }
-
-  .note { font-size: 0.82em; color: #777; margin-top: 8px; line-height: 1.5; }
+  .note { font-size: 0.82em; color: #777; margin-top: 10px; line-height: 1.5; }
+  .hint { font-size: 0.78em; color: #888; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -76,45 +76,54 @@
 
   <!-- STATO ESAME -->
   <div class="card">
-    <h2>Stato esame</h2>
+    <h2>Stato esame attivo</h2>
     <div class="status-display">
       <div class="status-dot" id="status-dot"></div>
-      <div class="status-text">
-        Stato: <strong id="status-label">—</strong> &nbsp;|&nbsp;
-        Data: <strong id="status-date">—</strong> &nbsp;|&nbsp;
-        Durata: <strong id="status-duration">—</strong> min
-      </div>
+      <div class="status-text" id="status-text">—</div>
     </div>
     <div class="action-row">
       <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri esame</button>
-      <button class="btn btn-sm btn-red" onclick="setStatus('closed')">■ Chiudi esame</button>
+      <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi esame</button>
     </div>
     <p class="note">
-      Quando l'esame è <strong>chiuso</strong>, gli studenti non possono accedere al quiz.<br>
-      Quando è <strong>aperto</strong>, è possibile inserire i dati personali e iniziare.
+      Quando l'esame è <strong>chiuso</strong> gli studenti non possono accedere al quiz.<br>
+      Quando è <strong>aperto</strong> possono inserire i dati e iniziare.
     </p>
-    <div id="status-msg" class="ok-msg" style="margin-top:12px;"></div>
+    <div id="status-msg" class="ok-msg"></div>
   </div>
 
-  <!-- CONFIGURA ESAME -->
+  <!-- CONFIGURA PROSSIMO ESAME -->
   <div class="card">
-    <h2>Configura prossimo esame</h2>
-    <div class="card-row">
+    <h2>Configura esame</h2>
+
+    <div class="field">
+      <label for="cfg-name">Nome esame</label>
+      <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1" oninput="autoExamId()">
+    </div>
+
+    <div class="card-row" style="margin-top:14px;">
       <div class="field">
-        <label for="cfg-date">Data esame</label>
-        <input type="date" id="cfg-date">
+        <label for="cfg-date">Data</label>
+        <input type="date" id="cfg-date" oninput="autoExamId()">
       </div>
       <div class="field">
         <label for="cfg-dur">Durata (minuti)</label>
         <input type="number" id="cfg-dur" min="10" max="180" step="5" value="60">
       </div>
     </div>
-    <button class="btn btn-sm" style="margin-top:20px;" onclick="saveConfig()">Salva configurazione</button>
+
+    <div class="field" style="margin-top:14px;">
+      <label for="cfg-id">ID traccia <span style="font-weight:normal;color:#888">(generato automaticamente, modificabile)</span></label>
+      <input type="text" id="cfg-id" class="mono" placeholder="es. prova-itinere-1-2026-05-28">
+      <p class="hint">Questo ID identifica univocamente la traccia e verrà usato come nome del foglio Google Sheets.</p>
+    </div>
+
+    <button class="btn btn-sm" style="margin-top:20px;" onclick="saveConfig()">Salva configurazione e prepara foglio</button>
     <p class="note">
-      La data viene usata come nome del foglio Google Sheets dove vengono salvati i risultati.<br>
-      Cambiare la data crea automaticamente un nuovo foglio la prima volta che uno studente si connette.
+      Salvando si crea automaticamente il foglio dati su Google Sheets e si registra la traccia nel foglio <em>_meta</em>.<br>
+      Cambiare nome o data e salvare di nuovo crea una nuova traccia — quella precedente rimane intatta.
     </p>
-    <div id="cfg-msg" class="ok-msg" style="margin-top:12px;"></div>
+    <div id="cfg-msg" class="ok-msg"></div>
   </div>
 
 </div>
@@ -132,12 +141,31 @@ async function callScript(payload) {
   return resp.json();
 }
 
+// Genera slug da nome + data (stesso algoritmo di Apps Script)
+function generateExamId(name, date) {
+  const slug = (name || "esame")
+    .toLowerCase()
+    .replace(/[àáâãäå]/g, "a").replace(/[èéêë]/g, "e")
+    .replace(/[ìíîï]/g, "i").replace(/[òóôõö]/g, "o")
+    .replace(/[ùúûü]/g, "u")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug + (date ? "-" + date : "");
+}
+
+function autoExamId() {
+  const name = document.getElementById("cfg-name").value.trim();
+  const date = document.getElementById("cfg-date").value.trim();
+  if (name || date) {
+    document.getElementById("cfg-id").value = generateExamId(name, date);
+  }
+}
+
 async function doLogin() {
   const pwd = document.getElementById("pwd").value.trim();
   if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
   document.getElementById("login-error").textContent = "Verifica…";
   try {
-    // Use getMonitor to verify password (also works with setConfig, but getMonitor gives us current state)
     const res = await callScript({ action: "getMonitor", password: pwd });
     if (res.status === "error") {
       document.getElementById("login-error").textContent = res.message || "Errore.";
@@ -157,21 +185,32 @@ async function loadCurrentConfig() {
     const res = await callScript({ action: "getConfig" });
     if (res.status === "ok") {
       renderStatus(res);
-      // Pre-fill form
+      document.getElementById("cfg-name").value = res.exam_name || "";
       document.getElementById("cfg-date").value = res.exam_date || "";
-      document.getElementById("cfg-dur").value = res.exam_duration || "60";
+      document.getElementById("cfg-dur").value  = res.exam_duration || "60";
+      document.getElementById("cfg-id").value   = res.exam_id || "";
     }
-  } catch(e) {
-    console.error("loadCurrentConfig error:", e);
-  }
+  } catch(e) { console.error(e); }
+}
+
+function formatDateIt(dateStr) {
+  if (!dateStr) return "—";
+  const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+                "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  return parseInt(parts[2]) + " " + (mesi[parseInt(parts[1])-1] || parts[1]) + " " + parts[0];
 }
 
 function renderStatus(cfg) {
   const isOpen = cfg.status_exam === "open";
   document.getElementById("status-dot").className = "status-dot " + (isOpen ? "open" : "closed");
-  document.getElementById("status-label").textContent = isOpen ? "APERTO" : "CHIUSO";
-  document.getElementById("status-date").textContent = cfg.exam_date || "—";
-  document.getElementById("status-duration").textContent = cfg.exam_duration || "—";
+  document.getElementById("status-text").innerHTML =
+    "Stato: <strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong><br>" +
+    "Esame: <strong>" + (cfg.exam_name || "—") + "</strong><br>" +
+    "Data: <strong>" + formatDateIt(cfg.exam_date) + "</strong> &nbsp;|&nbsp; " +
+    "Durata: <strong>" + (cfg.exam_duration || "—") + " min</strong><br>" +
+    "ID traccia: <code style='font-size:0.9em'>" + (cfg.exam_id || "—") + "</code>";
 }
 
 async function setStatus(newStatus) {
@@ -179,11 +218,7 @@ async function setStatus(newStatus) {
   msg.className = "ok-msg";
   msg.textContent = "Aggiornamento…";
   try {
-    const res = await callScript({
-      action: "setConfig",
-      password: adminPassword,
-      status_exam: newStatus
-    });
+    const res = await callScript({ action: "setConfig", password: adminPassword, status_exam: newStatus });
     if (res.status === "ok") {
       msg.textContent = newStatus === "open" ? "✓ Esame aperto." : "✓ Esame chiuso.";
       await loadCurrentConfig();
@@ -198,22 +233,29 @@ async function setStatus(newStatus) {
 }
 
 async function saveConfig() {
+  const name = document.getElementById("cfg-name").value.trim();
   const date = document.getElementById("cfg-date").value.trim();
-  const dur = document.getElementById("cfg-dur").value.trim();
-  const msg = document.getElementById("cfg-msg");
+  const dur  = document.getElementById("cfg-dur").value.trim();
+  const id   = document.getElementById("cfg-id").value.trim();
+  const msg  = document.getElementById("cfg-msg");
+
+  if (!name) { msg.className = "error-msg"; msg.textContent = "Inserisci il nome dell'esame."; return; }
   if (!date) { msg.className = "error-msg"; msg.textContent = "Inserisci una data."; return; }
   if (!dur || isNaN(dur) || Number(dur) < 1) { msg.className = "error-msg"; msg.textContent = "Durata non valida."; return; }
+
   msg.className = "ok-msg";
-  msg.textContent = "Salvataggio…";
+  msg.textContent = "Salvataggio e preparazione foglio…";
   try {
     const res = await callScript({
       action: "setConfig",
       password: adminPassword,
+      exam_name: name,
       exam_date: date,
+      exam_id:   id || generateExamId(name, date),
       exam_duration: dur
     });
     if (res.status === "ok") {
-      msg.textContent = "✓ Configurazione salvata.";
+      msg.textContent = "✓ Configurazione salvata. Foglio \"" + (res.exam_id || id) + "\" pronto su Google Sheets.";
       await loadCurrentConfig();
     } else {
       msg.className = "error-msg";

@@ -128,10 +128,25 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYI
 
 // Questi valori vengono sovrascritti da _config al caricamento
 let EXAM_DATE = "";
+let EXAM_ID = "";
+let EXAM_NAME = "";
 let EXAM_DURATION_MIN = 60;
 
 let startTime = null;
 let timerInterval = null;
+
+// Converte "2026-05-28" → "28 maggio 2026"
+function formatDateIt(dateStr) {
+  if (!dateStr) return "";
+  const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+                "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  const d = parseInt(parts[2], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const y = parts[0];
+  return d + " " + (mesi[m] || parts[1]) + " " + y;
+}
 
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
 
@@ -234,13 +249,19 @@ async function loadConfig() {
   try {
     const res = await callScript({ action: "getConfig" });
     if (res.status === "ok") {
-      EXAM_DATE = res.exam_date || "";
+      EXAM_DATE         = res.exam_date     || "";
+      EXAM_ID           = res.exam_id       || "";
+      EXAM_NAME         = res.exam_name     || "";
       EXAM_DURATION_MIN = parseInt(res.exam_duration) || 60;
-      const examStatus = res.status_exam || "open";
-      document.getElementById("cover-date").textContent = "Esame del " + EXAM_DATE;
+      const examStatus  = res.status_exam   || "closed";
+
+      // Titolo cover: "Nome esame — 28 maggio 2026"
+      const dateIt = formatDateIt(EXAM_DATE);
+      document.getElementById("cover-date").textContent =
+        (EXAM_NAME ? EXAM_NAME + " — " : "") + dateIt;
       document.getElementById("cover-status").textContent = "";
-      const LS_KEY_CHECK = "quiz_session_" + EXAM_DATE;
-      const saved = localStorage.getItem(LS_KEY_CHECK);
+
+      const saved = localStorage.getItem(getLSKey());
       if (examStatus === "closed" && !saved) {
         document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
         return;
@@ -306,8 +327,8 @@ function buildShuffleMap() {
   });
 }
 
-// LS_KEY è dinamico — basato su EXAM_DATE caricato da _config
-function getLSKey() { return "quiz_session_" + EXAM_DATE; }
+// LS_KEY è dinamico — basato su EXAM_ID caricato da _config
+function getLSKey() { return "quiz_session_" + (EXAM_ID || EXAM_DATE); }
 
 // ---- LOCALSTORAGE ----
 function saveLocal() {
@@ -374,7 +395,7 @@ async function initQuiz() {
   document.getElementById("cover-error").textContent = "";
 
   try {
-    const res = await callScript({ action:"init", nominativo, matricola, email, examDate: EXAM_DATE });
+    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
     if (res.status === "duplicate") {
       document.getElementById("cover-error").textContent = "Matricola già registrata. Contatta il docente.";
       btn.disabled = false;
@@ -544,7 +565,7 @@ async function showResults() {
     matricola: studentMatricola,
     nominativo: studentNominativo,
     email: studentEmail,
-    examDate: EXAM_DATE,
+    examId: EXAM_ID,
     score,
     answers: resultRows,
     tsStart: startTime ? startTime.toISOString() : "",

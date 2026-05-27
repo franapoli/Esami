@@ -72,8 +72,11 @@
     <div>
       <h2>Monitor in tempo reale</h2>
       <div class="monitor-meta">
-        <span>Data esame: <strong id="lbl-date">—</strong></span>
-        <span id="last-update"></span>
+        <span id="lbl-name" style="font-weight:bold;color:#1a1a1a;margin-right:8px;"></span>
+        <span>Data: <strong id="lbl-date">—</strong></span>
+        &nbsp;|&nbsp;
+        <span>ID: <code id="lbl-id" style="font-size:0.85em">—</code></span>
+        <span id="last-update" style="margin-left:16px;"></span>
       </div>
     </div>
     <div class="controls">
@@ -155,7 +158,9 @@ async function loadData() {
 }
 
 function renderData(res) {
+  document.getElementById("lbl-name").textContent = res.examName || "";
   document.getElementById("lbl-date").textContent = res.examDate || "—";
+  document.getElementById("lbl-id").textContent   = res.examId   || "—";
   document.getElementById("last-update").textContent = "Ultimo aggiornamento: " + new Date().toLocaleTimeString("it-IT");
 
   const rows = res.rows || [];
