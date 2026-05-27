@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Esame — Bioinformatica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; }
+  #login-panel { max-width: 420px; margin: 80px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  h1 { font-size: 1.3em; font-weight: bold; margin-bottom: 6px; }
+  .subtitle { color: #555; font-size: 0.9em; margin-bottom: 28px; }
+  label { display: block; font-size: 0.88em; color: #333; margin-bottom: 4px; margin-top: 14px; }
+  input[type=password] { width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em; font-family: inherit; }
+  .btn { display: inline-block; margin-top: 20px; padding: 9px 26px; background: #1a1a1a; color: #fff; border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; }
+  .btn:hover { background: #333; }
+  .btn-sm { padding: 5px 14px; font-size: 0.82em; }
+  .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
+  .btn-outline:hover { background: #f5f5f0; }
+  #login-error { color: #b00; font-size: 0.85em; margin-top: 10px; min-height: 1em; }
+
+  #monitor-panel { display: none; max-width: 1100px; margin: 30px auto; padding: 0 16px 60px; }
+  #monitor-panel.active { display: block; }
+
+  .monitor-header { background: #fff; border: 1px solid #ddd; padding: 20px 28px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .monitor-header h2 { font-size: 1.15em; }
+  .monitor-meta { font-size: 0.85em; color: #555; }
+  .monitor-meta span { margin-right: 16px; }
+
+  .stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-card { background: #fff; border: 1px solid #ddd; padding: 16px 22px; flex: 1; min-width: 140px; }
+  .stat-card .num { font-size: 2em; font-weight: bold; line-height: 1; }
+  .stat-card .lbl { font-size: 0.78em; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .stat-card.green .num { color: #2e7d32; }
+  .stat-card.blue .num { color: #1565c0; }
+  .stat-card.orange .num { color: #e65100; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; font-size: 0.88em; }
+  thead tr { background: #1a1a1a; color: #fff; }
+  thead th { padding: 10px 12px; text-align: left; font-weight: normal; font-size: 0.82em; text-transform: uppercase; letter-spacing: 0.04em; }
+  tbody tr { border-bottom: 1px solid #eee; transition: background 0.1s; }
+  tbody tr:hover { background: #f8f8f4; }
+  tbody tr.finalized { background: #f0f7f0; }
+  tbody td { padding: 9px 12px; }
+  .badge { display: inline-block; padding: 2px 8px; font-size: 0.78em; border-radius: 2px; }
+  .badge-done { background: #c8e6c9; color: #1b5e20; }
+  .badge-prog { background: #fff9c4; color: #f57f17; }
+  .badge-wait { background: #f5f5f5; color: #666; }
+  .progress-mini { height: 6px; background: #eee; border-radius: 3px; width: 100px; display: inline-block; vertical-align: middle; }
+  .progress-mini-fill { height: 100%; background: #81c784; border-radius: 3px; }
+
+  #refresh-info { font-size: 0.78em; color: #888; margin-left: 12px; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #last-update { font-size: 0.78em; color: #888; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-panel">
+  <h1>Monitor Esame</h1>
+  <p class="subtitle">Applicazioni di Bioinformatica — Genetica Umana — MedTec</p>
+  <label for="pwd">Password amministratore</label>
+  <input type="password" id="pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
+  <div id="login-error"></div>
+  <button class="btn" onclick="doLogin()">Accedi</button>
+</div>
+
+<!-- MONITOR -->
+<div id="monitor-panel">
+  <div class="monitor-header">
+    <div>
+      <h2>Monitor in tempo reale</h2>
+      <div class="monitor-meta">
+        <span>Data esame: <strong id="lbl-date">—</strong></span>
+        <span id="last-update"></span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn btn-sm" onclick="loadData()">↻ Aggiorna ora</button>
+      <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+      <span id="refresh-info">Aggiornamento automatico ogni 30s</span>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card blue"><div class="num" id="stat-total">0</div><div class="lbl">Studenti connessi</div></div>
+    <div class="stat-card orange"><div class="num" id="stat-prog">0</div><div class="lbl">In corso</div></div>
+    <div class="stat-card green"><div class="num" id="stat-done">0</div><div class="lbl">Consegnati</div></div>
+  </div>
+
+  <table id="monitor-table">
+    <thead>
+      <tr>
+        <th>Matricola</th>
+        <th>Nominativo</th>
+        <th>Email</th>
+        <th>Inizio</th>
+        <th>Fine</th>
+        <th>Durata</th>
+        <th>Risposte</th>
+        <th>Voto</th>
+        <th>Stato</th>
+      </tr>
+    </thead>
+    <tbody id="monitor-body">
+      <tr><td colspan="9" style="text-align:center;padding:40px;color:#888;">Nessun dato disponibile</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
+const N_QUESTIONS = 15;
+let adminPassword = "";
+let refreshTimer = null;
+
+async function callScript(payload) {
+  const resp = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload)
+  });
+  return resp.json();
+}
+
+async function doLogin() {
+  const pwd = document.getElementById("pwd").value.trim();
+  if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
+  document.getElementById("login-error").textContent = "Verifica in corso…";
+  try {
+    const res = await callScript({ action: "getMonitor", password: pwd });
+    if (res.status === "error") {
+      document.getElementById("login-error").textContent = res.message || "Errore.";
+      return;
+    }
+    adminPassword = pwd;
+    document.getElementById("login-panel").style.display = "none";
+    document.getElementById("monitor-panel").classList.add("active");
+    renderData(res);
+    startAutoRefresh();
+  } catch(e) {
+    document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
+  }
+}
+
+async function loadData() {
+  try {
+    const res = await callScript({ action: "getMonitor", password: adminPassword });
+    if (res.status === "ok") renderData(res);
+    document.getElementById("last-update").textContent = "Ultimo aggiornamento: " + new Date().toLocaleTimeString("it-IT");
+  } catch(e) {
+    console.error("Refresh error:", e);
+  }
+}
+
+function renderData(res) {
+  document.getElementById("lbl-date").textContent = res.examDate || "—";
+  document.getElementById("last-update").textContent = "Ultimo aggiornamento: " + new Date().toLocaleTimeString("it-IT");
+
+  const rows = res.rows || [];
+  const total = rows.length;
+  const done = rows.filter(r => r.finalized).length;
+  const prog = total - done;
+
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-prog").textContent = prog;
+  document.getElementById("stat-done").textContent = done;
+
+  const tbody = document.getElementById("monitor-body");
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#888;">Nessuno studente ancora connesso</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const pct = Math.round((r.answered / N_QUESTIONS) * 100);
+    const statusBadge = r.finalized
+      ? '<span class="badge badge-done">Consegnato</span>'
+      : r.answered > 0
+        ? '<span class="badge badge-prog">In corso</span>'
+        : '<span class="badge badge-wait">Connesso</span>';
+    const score = r.finalized && r.score !== "" ? r.score + "/30" : "—";
+
+    return `<tr class="${r.finalized ? 'finalized' : ''}">
+      <td>${escHtml(String(r.matricola))}</td>
+      <td>${escHtml(String(r.nominativo || ""))}</td>
+      <td>${escHtml(String(r.email || ""))}</td>
+      <td>${formatTs(r.tsStart)}</td>
+      <td>${r.finalized ? formatTs(r.tsEnd) : "—"}</td>
+      <td>${r.finalized ? escHtml(String(r.elapsed || "")) : "—"}</td>
+      <td>
+        <span style="margin-right:8px;">${r.answered}/${N_QUESTIONS}</span>
+        <span class="progress-mini"><span class="progress-mini-fill" style="width:${pct}%"></span></span>
+      </td>
+      <td>${score}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join("");
+}
+
+function formatTs(ts) {
+  if (!ts) return "—";
+  const s = String(ts);
+  // Already formatted as DD/MM/YYYY HH:MM:SS from Apps Script
+  return s || "—";
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadData, 30000);
+}
+
+function logout() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  adminPassword = "";
+  document.getElementById("monitor-panel").classList.remove("active");
+  document.getElementById("login-panel").style.display = "";
+  document.getElementById("pwd").value = "";
+  document.getElementById("login-error").textContent = "";
+}
+</script>
+</body>
+</html>
