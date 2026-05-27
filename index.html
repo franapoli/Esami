@@ -175,8 +175,8 @@ function formatDateIt(dateStr) {
 
 const VHL_CONTEXT = `<div style="background:#f8f8f8;border:1px solid #ddd;border-left:4px solid #1a1a1a;padding:14px 18px;margin-bottom:20px;font-size:0.88em;line-height:1.7;color:#333;">
 <strong>Caso applicativo — il gene VHL</strong><br>
-Il gene VHL (von Hippel-Lindau tumor suppressor) codifica per una proteina di 213 aminoacidi che agisce come componente di un complesso E3-ubiquitina-ligasi. In normossia, il complesso VHL riconosce HIF-1α idrossilato e ne media la poliubiquitinazione e la successiva degradazione proteasomica. In ipossia, o quando VHL è non funzionale, HIF-1α si accumula, traslocano nel nucleo e attivano la trascrizione di geni pro-angiogenici (VEGF, PDGF) e metabolici. Mutazioni germinali in VHL causano la sindrome di von Hippel-Lindau, una sindrome tumorale ereditaria autosomica dominante caratterizzata da emangioblastomi, carcinoma renale a cellule chiare e feocromocitoma.<br><br>
-<em>Un paziente di 28 anni con emangioblastoma cerebellare bilaterale porta la variante NM_000551.4(VHL):c.500G&gt;A (p.Arg167Gln) in eterozigosi. L'identificatore della variante è VCV000002216; la proteina VHL umana ha accession P40337.</em>
+Il gene VHL (von Hippel-Lindau) codifica per una proteina che agisce come soppressore tumorale. Mutazioni germinali in VHL causano la sindrome di von Hippel-Lindau, una sindrome tumorale ereditaria autosomica dominante caratterizzata da emangioblastomi, carcinoma renale a cellule chiare e feocromocitoma. Nelle sezioni seguenti vengono utilizzati dati reali relativi a questo gene.<br><br>
+<em>Un paziente di 28 anni con emangioblastoma cerebellare bilaterale porta la variante NM_000551.4(VHL):c.500G&gt;A (p.Arg167Gln) in eterozigosi.</em>
 </div>`;
 
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
@@ -198,15 +198,24 @@ hypothetical protein [uncultured bacterium]                    18    0.6
 const questions = [
   // ── PARTE 1 — Domande teoriche ──────────────────────────────────────────
   { id:1, pts:1, type:"mc",
-    text:"Un ricercatore deve confrontare una nuova sequenza proteica con un database di milioni di proteine. Quale approccio è più appropriato?",
+    text:"L'effettività è una proprietà fondamentale degli algoritmi. Quale delle seguenti situazioni rappresenta una sua violazione?",
     options:[
-      "Algoritmo esatto di programmazione dinamica, perché garantisce l'allineamento ottimale su qualsiasi database",
-      "Algoritmo euristico come BLAST, perché offre un compromesso praticabile tra velocità e sensibilità su grandi database",
-      "Distanza di Hamming, perché è applicabile a sequenze di lunghezza diversa senza gap",
-      "Smith-Waterman su tutte le sequenze del database, perché l'allineamento locale è sempre superiore a quello globale"
-    ], correct:1 },
+      "Un programma che non termina su input molto grandi",
+      "Lo stesso algoritmo produce risultati diversi eseguito due volte sugli stessi dati",
+      "Un'istruzione che richiede un sottoalgoritmo per essere eseguita",
+      "Un algoritmo che richiede più dati di quelli forniti in ingresso"
+    ], correct:2 },
 
   { id:2, pts:1, type:"mc",
+    text:"Secondo il teorema di Böhm-Jacopini, qualsiasi algoritmo può essere espresso usando esclusivamente tre strutture fondamentali. Quali sono?",
+    options:[
+      "Lettura, scrittura e confronto",
+      "Sequenziale, condizionale e iterativa",
+      "Ricorsiva, iterativa e parallela",
+      "Assegnamento, selezione e funzione"
+    ], correct:1 },
+
+  { id:3, pts:1, type:"mc",
     text:"In BLAST, se il parametro W (lunghezza del seed) viene aumentato da 3 a 5, qual è l'effetto atteso?",
     options:[
       "La ricerca diventa più lenta ma più sensibile, perché vengono confrontati più k-mers per ogni posizione",
@@ -215,7 +224,7 @@ const questions = [
       "Il numero di falsi positivi aumenta, perché seeds più lunghi generano più estensioni da valutare"
     ], correct:1 },
 
-  { id:3, pts:2, type:"mc",
+  { id:4, pts:2, type:"mc",
     text:"Qual è il limite fondamentale dei reads corti (short reads) nell'assemblaggio de novo di un genoma?",
     options:[
       "Hanno un tasso di errore sistematico che cresce con la lunghezza del read, rendendo necessaria la correzione prima dell'assemblaggio",
@@ -224,7 +233,7 @@ const questions = [
       "Sono prodotti in quantità insufficiente per coprire genomi eucariotici in modo uniforme"
     ], correct:1 },
 
-  { id:4, pts:2, type:"mc",
+  { id:5, pts:2, type:"mc",
     text:"Nell'allineamento multiplo di sequenze (MSA), cosa si intende per \"posizione conservata\" e quale informazione biologica fornisce?",
     options:[
       "Una posizione in cui tutte le sequenze hanno lo stesso residuo; indica un sito funzionalmente o strutturalmente vincolato dalla selezione purificante",
@@ -233,7 +242,7 @@ const questions = [
       "Una posizione presente solo nelle sequenze omologhe più vicine; indica un caso di evoluzione convergente indipendente"
     ], correct:0 },
 
-  { id:5, pts:2, type:"mc",
+  { id:6, pts:2, type:"mc",
     text:"Qual è il presupposto dell'algoritmo UPGMA che ne limita l'applicabilità rispetto a Neighbor-Joining?",
     options:[
       "UPGMA richiede che tutte le sequenze abbiano la stessa lunghezza, mentre NJ gestisce sequenze di lunghezze diverse",
@@ -242,7 +251,7 @@ const questions = [
       "UPGMA utilizza una matrice Q rielaborata che penalizza i rami lunghi, introducendo un bias sistematico verso alberi non ultrametrici"
     ], correct:1 },
 
-  { id:6, pts:2, type:"mc",
+  { id:7, pts:1, type:"mc",
     text:"Nel sequenziamento NGS, cosa si intende per \"coverage\" (o profondità di copertura) e quale impatto ha sulla chiamata delle varianti?",
     options:[
       "Il numero totale di reads prodotti dal sequenziatore; non influisce sulla qualità della chiamata ma solo sulla velocità di analisi",
@@ -269,23 +278,14 @@ const questions = [
       "SNV e indel si distinguono per frequenza allelica, non per dimensione; SV indica invece qualsiasi variante che altera il numero di copie di un gene"
     ], correct:0 },
 
-  { id:9, pts:1, type:"mc",
-    text:"In un database di popolazione, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
+  { id:10, pts:1, type:"mc",
+    text:"Nel database gnomAD, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
     options:[
       "Il 99% delle varianti osservate nel gene sono state classificate come patogeniche nei database clinici",
       "Il gene è sotto forte pressione selettiva contro varianti che ne eliminano la funzione, essendo quasi completamente privo di tali varianti nella popolazione sana",
       "La frequenza allelica media delle varianti nel gene è del 99% nella popolazione generale analizzata",
       "Il 99% degli individui nel database porta almeno una variante missenso nel gene, suggerendo alta tolleranza alla variazione"
     ], correct:1 },
-
-  { id:10, pts:1, type:"mc",
-    text:"Nell'allineamento globale di Needleman-Wunsch, cosa rappresenta il valore nella cella in basso a destra della matrice DP?",
-    options:[
-      "La edit distance minima tra le due sequenze, calcolata con costi uniformi per tutte le operazioni",
-      "Lo score ottimale dell'allineamento locale, corrispondente alla sottosequenza più simile tra le due",
-      "Lo score ottimale dell'allineamento globale, che tiene conto dell'intera lunghezza di entrambe le sequenze",
-      "La lunghezza della sottosequenza comune più lunga (LCS), indipendentemente dalla posizione"
-    ], correct:2 },
 
   { id:11, pts:1, type:"mc",
     text:"In RNA-seq, qual è il vantaggio della normalizzazione TPM rispetto a RPKM?",
@@ -317,12 +317,12 @@ const questions = [
   // ── PARTE 2 — Caso applicativo: il gene VHL ────────────────────────────
 
   { id:14, pts:2, type:"mc", context:true,
-    text:"In base al meccanismo VHL–HIF-1α descritto nel testo, perché la perdita di funzione di VHL predispone al carcinoma renale a cellule chiare?",
+    text:"L'output BLAST mostra che la proteina VHL umana (213 aa) e l'omologo di Danio rerio (213 aa) hanno il 70% di identità sull'intera lunghezza, con 1 gap. BLAST utilizza un algoritmo di allineamento locale. Quale sarebbe la differenza se si applicasse invece un allineamento globale (Needleman-Wunsch) alle stesse due sequenze?",
     options:[
-      "VHL degrada direttamente i fattori di crescita circolanti; la sua perdita causa accumulo di mitogeni nel microcircolo renale",
-      "In assenza di VHL, HIF-1α non viene degradato, portando alla sovraespressione costitutiva di VEGF e altri fattori angiogenici che promuovono la crescita tumorale anche in normossia",
-      "VHL reprime direttamente i geni del ciclo cellulare nelle cellule renali; la sua perdita determina una progressione incontrollata in fase S",
-      "Senza VHL, il proteasoma perde selettività nei confronti delle cellule renali, portando all'accumulo di oncoproteìne normalmente degradate"
+      "L'allineamento globale produrrebbe uno score sempre più alto, perché somma i contributi di ogni posizione lungo l'intera lunghezza delle sequenze",
+      "L'allineamento globale includerebbe obbligatoriamente le estremità di entrambe le sequenze, producendo potenzialmente uno score inferiore se le regioni terminali sono poco conservate",
+      "L'allineamento globale richiederebbe di penalizzare tutti i gap interni, rendendo impossibile il confronto quando una delle due sequenze è più corta dell'altra",
+      "L'allineamento globale e locale producono risultati identici quando le sequenze hanno la stessa lunghezza e non ci sono gap alle estremità"
     ], correct:1 },
 
   { id:15, pts:3, type:"fitb",
@@ -339,7 +339,7 @@ const questions = [
     ], correct:1 },
 
   { id:17, pts:2, type:"mc",
-    text:"Cerca nei database di varianti cliniche la variante con identificatore VCV000002216. Qual è la classificazione clinica attuale e il livello di revisione?",
+    text:"Cerca nei database di varianti cliniche la variante descritta. Qual è la classificazione clinica attuale e il livello di revisione?",
     options:[
       "Pathogenic — no assertion criteria provided",
       "Likely pathogenic — reviewed by expert panel",
@@ -348,15 +348,15 @@ const questions = [
     ], correct:2 },
 
   { id:18, pts:2, type:"mc",
-    text:"Cerca nei database di sequenze proteiche l'entry con accession P40337. In quale dominio funzionale cade il residuo Arg167, e come viene classificata la variante p.Arg167Gln nella sezione delle varianti patologiche?",
+    text:"Cerca nei database di sequenze proteiche la proteina VHL umana (Homo sapiens). In quale regione funzionale annotata cade il residuo Arg161, e quale funzione è associata a quella regione?",
     options:[
-      "Dominio VHL box; variante associata a perdita di funzione",
-      "Dominio di legame con Elongin BC; variante associata a VHL disease tipo II e feocromocitoma",
-      "Dominio RING finger; variante associata a carcinoma renale sporadico",
-      "Regione C-terminale; variante di significato incerto"
-    ], correct:1 },
+      "Regione di interazione con il complesso Elongin BC",
+      "Dominio di legame con HIF-1α idrossilato",
+      "Sito catalitico dell'attività ubiquitina-ligasica",
+      "Regione di ancoraggio alla membrana del reticolo endoplasmatico"
+    ], correct:0 },
 
-  { id:19, pts:3, type:"mc", acmg:true,
+  { id:19, pts:3, type:"mc", acmg_combo:true,
     text:"Variante NM_000551.4(VHL):c.500G>A (p.Arg167Gln). Evidenze disponibili: PS3 (studi funzionali), PS4 (≥19 casi non correlati), PM1 (hotspot), PM5 (codone noto), PM2 (assente da gnomAD), PP3 (REVEL 0.874). Applicando lo schema di combinazione fornito, quale classificazione è corretta?",
     options:[
       "VUS — le evidenze Strong non sono sufficienti in assenza di un criterio Very Strong come PVS1",
@@ -410,6 +410,16 @@ const ACMG_SCHEMA = `<table class="acmg-table">
 <tr><td>BP7</td><td>Supporting</td><td>Variante sinonima senza impatto predetto su splicing</td></tr>
 <tr><th colspan="3" style="background:#f0f0e8;text-align:center;padding-top:10px;">Classificazioni e combinazioni minime</th></tr>
 <tr><th>Classificazione</th><th colspan="2">Combinazione minima richiesta (criteri patogenici)</th></tr>
+<tr><td>Pathogenic</td><td colspan="2">PVS1 + &ge;1 PS/PM &nbsp;|&nbsp; &ge;2 PS &nbsp;|&nbsp; 1 PS + &ge;3 PM &nbsp;|&nbsp; 1 PS + 2 PM + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM + &ge;2 PP</td></tr>
+<tr><td>Likely Pathogenic</td><td colspan="2">PVS1 solo &nbsp;|&nbsp; 1 PS + 1&ndash;2 PM &nbsp;|&nbsp; 1 PS + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM &nbsp;|&nbsp; 2 PM + &ge;2 PP &nbsp;|&nbsp; 1 PM + &ge;4 PP</td></tr>
+<tr><td>Likely Benign</td><td colspan="2">BA1 &nbsp;|&nbsp; &ge;2 BS &nbsp;|&nbsp; 1 BS + 1 BP</td></tr>
+<tr><td>Benign</td><td colspan="2">1 BS + &ge;2 BP &nbsp;|&nbsp; &ge;3 BP</td></tr>
+<tr><td>VUS</td><td colspan="2">Evidenze insufficienti, in conflitto, o non classificabili nelle categorie sopra</td></tr>
+</table>`;
+
+const ACMG_COMBO = `<table class="acmg-table">
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;">Combinazioni minime per la classificazione ACMG/AMP</th></tr>
+<tr><th>Classificazione</th><th colspan="2">Combinazione minima richiesta</th></tr>
 <tr><td>Pathogenic</td><td colspan="2">PVS1 + &ge;1 PS/PM &nbsp;|&nbsp; &ge;2 PS &nbsp;|&nbsp; 1 PS + &ge;3 PM &nbsp;|&nbsp; 1 PS + 2 PM + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM + &ge;2 PP</td></tr>
 <tr><td>Likely Pathogenic</td><td colspan="2">PVS1 solo &nbsp;|&nbsp; 1 PS + 1&ndash;2 PM &nbsp;|&nbsp; 1 PS + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM &nbsp;|&nbsp; 2 PM + &ge;2 PP &nbsp;|&nbsp; 1 PM + &ge;4 PP</td></tr>
 <tr><td>Likely Benign</td><td colspan="2">BA1 &nbsp;|&nbsp; &ge;2 BS &nbsp;|&nbsp; 1 BS + 1 BP</td></tr>
@@ -686,6 +696,7 @@ function renderQuestion() {
 
   if (q.context) html += VHL_CONTEXT;
   if (q.acmg) html += ACMG_SCHEMA;
+  if (q.acmg_combo) html += ACMG_COMBO;
   if (q.blast) html += "<div class='blast-block'>" + BLAST_OUTPUT + "</div>";
 
   html += "<div class='q-text'>" + q.text + "</div>";
