@@ -187,6 +187,8 @@ function getResultSheet(examId) {
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
+    // Colonna matricola sempre come testo (preserva zeri iniziali)
+    sheet.getRange(1, COL_MATRICOLA, sheet.getMaxRows(), 1).setNumberFormat("@");
   }
   return sheet;
 }
@@ -359,10 +361,13 @@ function doPost(e) {
           return corsResponse({ status: "duplicate", finalized });
         }
       }
-      const row = [data.matricola, data.nominativo || "", data.email || "", "", 30,
+      const row = [String(data.matricola), data.nominativo || "", data.email || "", "", 30,
                    formatTs(new Date().toISOString()), "", ""];
       for (let i = 0; i < N_QUESTIONS; i++) { row.push(""); row.push(""); }
       sheet.appendRow(row);
+      // Forza la colonna matricola come testo per preservare gli zeri iniziali
+      const newRowIndex = sheet.getLastRow();
+      sheet.getRange(newRowIndex, COL_MATRICOLA).setNumberFormat("@");
       return corsResponse({ status: "ok" });
     }
 
