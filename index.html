@@ -200,118 +200,118 @@ const questions = [
   { id:1, pts:1, type:"mc",
     text:"Un ricercatore deve confrontare una nuova sequenza proteica con un database di milioni di proteine. Quale approccio è più appropriato?",
     options:[
-      "Algoritmo esatto di programmazione dinamica, perché garantisce il risultato ottimale",
+      "Algoritmo esatto di programmazione dinamica, perché garantisce l'allineamento ottimale su qualsiasi database",
       "Algoritmo euristico come BLAST, perché offre un compromesso praticabile tra velocità e sensibilità su grandi database",
-      "Distanza di Hamming, perché è più veloce della edit distance",
-      "Smith-Waterman applicato a tutte le sequenze del database, perché l'allineamento locale è sempre superiore a quello globale"
+      "Distanza di Hamming, perché è applicabile a sequenze di lunghezza diversa senza gap",
+      "Smith-Waterman su tutte le sequenze del database, perché l'allineamento locale è sempre superiore a quello globale"
     ], correct:1 },
 
   { id:2, pts:1, type:"mc",
     text:"In BLAST, se il parametro W (lunghezza del seed) viene aumentato da 3 a 5, qual è l'effetto atteso?",
     options:[
-      "La ricerca diventa più lenta ma più sensibile",
-      "La ricerca diventa più veloce ma meno sensibile alle sequenze molto divergenti",
-      "L'E-value di ogni hit diminuisce proporzionalmente",
-      "Il numero di falsi positivi aumenta"
+      "La ricerca diventa più lenta ma più sensibile, perché vengono confrontati più k-mers per ogni posizione",
+      "La ricerca diventa più veloce ma meno sensibile alle sequenze molto divergenti, perché seeds più lunghi trovano meno corrispondenze iniziali",
+      "L'E-value di ogni hit diminuisce proporzionalmente, perché il database effettivo di confronto si riduce",
+      "Il numero di falsi positivi aumenta, perché seeds più lunghi generano più estensioni da valutare"
     ], correct:1 },
 
   { id:3, pts:2, type:"mc",
     text:"Qual è il limite fondamentale dei reads corti (short reads) nell'assemblaggio de novo di un genoma?",
     options:[
-      "Hanno un tasso di errore troppo alto per essere usati senza correzione",
+      "Hanno un tasso di errore sistematico che cresce con la lunghezza del read, rendendo necessaria la correzione prima dell'assemblaggio",
       "Non possono attraversare regioni ripetute più lunghe del read stesso, rendendo impossibile stabilire come tali regioni si colleghino al resto del genoma",
-      "Richiedono una coverage molto bassa, il che aumenta il rischio di perdere varianti rare",
-      "Sono compatibili solo con genomi batterici, non con genomi eucariotici"
+      "Richiedono una coverage molto elevata per produrre contigs affidabili, aumentando i costi computazionali",
+      "Sono prodotti in quantità insufficiente per coprire genomi eucariotici in modo uniforme"
     ], correct:1 },
 
   { id:4, pts:2, type:"mc",
     text:"Nell'allineamento multiplo di sequenze (MSA), cosa si intende per \"posizione conservata\" e quale informazione biologica fornisce?",
     options:[
       "Una posizione in cui tutte le sequenze hanno lo stesso residuo; indica un sito funzionalmente o strutturalmente vincolato dalla selezione purificante",
-      "Una posizione con gap in almeno una sequenza; indica un'inserzione recente in quel lineaggio",
-      "Una posizione con alta variabilità; indica un sito sotto selezione positiva in tutte le specie",
-      "Una posizione presente solo nelle sequenze omologhe più vicine; indica un'evoluzione convergente"
+      "Una posizione con gap in almeno una sequenza; indica un'inserzione recente avvenuta in uno specifico lineaggio evolutivo",
+      "Una posizione con alta variabilità tra le sequenze; indica un sito sottoposto a selezione positiva in tutte le specie analizzate",
+      "Una posizione presente solo nelle sequenze omologhe più vicine; indica un caso di evoluzione convergente indipendente"
     ], correct:0 },
 
   { id:5, pts:2, type:"mc",
     text:"In filogenesi molecolare, un albero filogenetico costruito da un MSA è considerato robusto quando:",
     options:[
-      "Il numero di sequenze allineate è superiore a 100",
+      "Il numero di sequenze allineate è superiore a 100, garantendo una rappresentazione statistica sufficiente",
       "I valori di bootstrap ai nodi chiave sono ≥70%, indicando che quella bipartizione è ricorrente nel ricampionamento",
-      "Tutti i rami hanno la stessa lunghezza, indicando un orologio molecolare perfetto",
-      "L'albero è stato costruito con il metodo UPGMA, considerato il più accurato"
+      "Tutti i rami hanno la stessa lunghezza, indicando che tutte le sequenze evolvono a velocità costante",
+      "L'albero è stato costruito con il metodo UPGMA, che minimizza la somma delle distanze tra tutti i rami"
     ], correct:1 },
 
   { id:6, pts:2, type:"mc",
     text:"Nel sequenziamento NGS, cosa si intende per \"coverage\" (o profondità di copertura) e quale impatto ha sulla chiamata delle varianti?",
     options:[
-      "Il numero totale di reads prodotti dal sequenziatore; non influisce sulla qualità della chiamata",
+      "Il numero totale di reads prodotti dal sequenziatore; non influisce sulla qualità della chiamata ma solo sulla velocità di analisi",
       "Il numero medio di reads che coprono ciascuna base del genoma; una coverage più alta aumenta la confidenza nella chiamata delle varianti, specialmente per le varianti a bassa frequenza allelica",
-      "La percentuale del genoma coperta da almeno un read; determina solo la completezza dell'assemblaggio",
-      "La lunghezza media dei reads; reads più lunghi aumentano la coverage indipendentemente dal numero"
+      "La percentuale del genoma coperta da almeno un read; determina solo la completezza dell'assemblaggio, non la qualità della genotipizzazione",
+      "La lunghezza media dei reads generati; reads più lunghi aumentano la coverage totale indipendentemente dal numero di reads prodotti"
     ], correct:1 },
 
   { id:7, pts:1, type:"mc",
     text:"Qual è la principale differenza tra Whole Genome Sequencing (WGS) e Whole Exome Sequencing (WES) nell'identificazione di varianti patogene?",
     options:[
-      "WGS sequenzia solo i geni codificanti, WES sequenzia l'intero genoma",
+      "WGS sequenzia solo i geni codificanti, mentre WES sequenzia l'intero genoma incluse le regioni non codificanti",
       "WES è più economico e sufficiente per varianti codificanti, ma manca varianti introniche, regolatorie e strutturali rilevabili solo con WGS",
-      "WGS produce reads più corti di WES, rendendolo meno preciso per la chiamata degli SNV",
-      "WES è preferibile per la diagnosi di tumori, WGS per le malattie mendeliane"
+      "WGS produce reads più corti rispetto a WES, rendendolo meno preciso per la chiamata puntuale degli SNV",
+      "WES è preferibile per la diagnosi delle malattie mendeliane, mentre WGS è lo standard per i tumori"
     ], correct:1 },
 
   { id:8, pts:1, type:"mc",
     text:"Quale delle seguenti affermazioni descrive correttamente la differenza tra SNV, indel e variante strutturale (SV)?",
     options:[
       "SNV è una sostituzione di singola base; indel è un'inserzione o delezione di 1–50 bp; SV è un riarrangiamento genomico ≥50 bp (CNV, inversione, traslocazione)",
-      "SNV e indel sono sinonimi; SV indica qualsiasi variante in regioni non codificanti",
-      "SNV riguarda solo le varianti benigne; indel e SV sono sempre patogene",
-      "Le SV sono rilevabili solo con array CGH, non con sequenziamento NGS"
+      "SNV e indel sono sinonimi per varianti puntiformi; SV indica qualsiasi variante localizzata in regioni non codificanti del genoma",
+      "SNV riguarda le varianti a bassa frequenza allelica; indel e SV sono invece sempre varianti ad alta frequenza nella popolazione",
+      "Le SV comprendono esclusivamente delezioni e duplicazioni rilevabili con array CGH, non identificabili con sequenziamento NGS"
     ], correct:0 },
 
   { id:9, pts:1, type:"mc",
-    text:"Nel database gnomAD, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
+    text:"In un database di popolazione, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
     options:[
-      "Il 99% delle varianti nel gene sono patogeniche",
-      "Il gene è sotto forte pressione selettiva contro varianti che ne eliminano la funzione",
-      "La frequenza allelica media nel gene è del 99% nella popolazione generale",
-      "Il 99% degli individui nel database porta almeno una variante nel gene"
+      "Il 99% delle varianti osservate nel gene sono state classificate come patogeniche nei database clinici",
+      "Il gene è sotto forte pressione selettiva contro varianti che ne eliminano la funzione, essendo quasi completamente privo di tali varianti nella popolazione sana",
+      "La frequenza allelica media delle varianti nel gene è del 99% nella popolazione generale analizzata",
+      "Il 99% degli individui nel database porta almeno una variante missenso nel gene, suggerendo alta tolleranza alla variazione"
     ], correct:1 },
 
   { id:10, pts:1, type:"mc",
     text:"Nell'allineamento globale di Needleman-Wunsch, cosa rappresenta il valore nella cella in basso a destra della matrice DP?",
     options:[
-      "La edit distance tra le due sequenze",
-      "Lo score dell'allineamento locale ottimale",
-      "Lo score dell'allineamento globale ottimale",
-      "La lunghezza della sottosequenza comune più lunga (LCS)"
+      "La edit distance minima tra le due sequenze, calcolata con costi uniformi per tutte le operazioni",
+      "Lo score ottimale dell'allineamento locale, corrispondente alla sottosequenza più simile tra le due",
+      "Lo score ottimale dell'allineamento globale, che tiene conto dell'intera lunghezza di entrambe le sequenze",
+      "La lunghezza della sottosequenza comune più lunga (LCS), indipendentemente dalla posizione"
     ], correct:2 },
 
   { id:11, pts:1, type:"mc",
     text:"In RNA-seq, qual è il vantaggio della normalizzazione TPM rispetto a RPKM?",
     options:[
-      "È più veloce da calcolare computazionalmente",
-      "Rende i valori direttamente confrontabili tra campioni diversi, poiché la somma dei TPM è costante per campione",
-      "Non richiede la stima della lunghezza del trascritto",
-      "Elimina completamente l'effetto della coverage"
+      "È computazionalmente più efficiente, richiedendo un solo passaggio sui dati invece di due normalizzazioni successive",
+      "Rende i valori direttamente confrontabili tra campioni diversi, poiché la somma dei TPM è costante per campione indipendentemente dalla profondità di sequenziamento",
+      "Non richiede la stima della lunghezza del trascritto, eliminando così una fonte di incertezza sistematica",
+      "Elimina completamente l'effetto della coverage, rendendo superflua la normalizzazione per la profondità di lettura"
     ], correct:1 },
 
   { id:12, pts:1, type:"mc",
     text:"Una variante identificata in un paziente con una malattia dominante rara (prevalenza 1/50.000) ha una frequenza allelica del 4% in gnomAD. Quale conclusione è più ragionevole?",
     options:[
-      "La variante è probabilmente causativa, perché è rara nella popolazione generale",
-      "La variante è quasi certamente benigna, perché la sua frequenza nella popolazione sana è incompatibile con la malattia",
-      "La variante è di significato incerto perché non ci sono abbastanza dati",
-      "La variante è patogenica con penetranza ridotta"
+      "La variante è probabilmente causativa, perché la sua presenza in pazienti affetti supera quella nei controlli sani",
+      "La variante è quasi certamente benigna, perché la sua frequenza nella popolazione sana è incompatibile con una malattia rara ad alta penetranza",
+      "La variante è di significato incerto, perché la frequenza in gnomAD non è direttamente confrontabile con la prevalenza della malattia",
+      "La variante è patogenica con penetranza ridotta, perché è presente sia in pazienti che in individui apparentemente sani"
     ], correct:1 },
 
   { id:13, pts:1, type:"mc",
     text:"Il framework ACMG/AMP è stato sviluppato principalmente per:",
     options:[
-      "Calcolare automaticamente la patogenicità di qualsiasi variante tramite algoritmo deterministico",
-      "Standardizzare il linguaggio e i criteri di classificazione tra laboratori di genetica clinica",
-      "Sostituire l'analisi clinica con un sistema di punteggio basato solo su dati di popolazione",
-      "Classificare esclusivamente le varianti somatiche nei tumori"
+      "Calcolare automaticamente la patogenicità di qualsiasi variante tramite un algoritmo deterministico basato su dati genomici",
+      "Standardizzare il linguaggio e i criteri di classificazione delle varianti tra laboratori di genetica clinica",
+      "Sostituire la valutazione clinica con un sistema di punteggio quantitativo basato esclusivamente su dati di popolazione",
+      "Classificare le varianti somatiche nei tumori secondo criteri di rilevanza terapeutica e prognostica"
     ], correct:1 },
 
   // ── PARTE 2 — Caso applicativo: il gene VHL ────────────────────────────
@@ -319,10 +319,10 @@ const questions = [
   { id:14, pts:2, type:"mc", context:true,
     text:"In base al meccanismo VHL–HIF-1α descritto nel testo, perché la perdita di funzione di VHL predispone al carcinoma renale a cellule chiare?",
     options:[
-      "VHL degrada direttamente i fattori di crescita nel sangue; senza VHL aumentano le mitosi renali",
+      "VHL degrada direttamente i fattori di crescita circolanti; la sua perdita causa accumulo di mitogeni nel microcircolo renale",
       "In assenza di VHL, HIF-1α non viene degradato, portando alla sovraespressione costitutiva di VEGF e altri fattori angiogenici che promuovono la crescita tumorale anche in normossia",
-      "VHL reprime direttamente i geni del ciclo cellulare; la sua perdita attiva p53",
-      "Senza VHL, il proteasoma non funziona correttamente in nessun tessuto, rendendo le cellule renali particolarmente vulnerabili"
+      "VHL reprime direttamente i geni del ciclo cellulare nelle cellule renali; la sua perdita determina una progressione incontrollata in fase S",
+      "Senza VHL, il proteasoma perde selettività nei confronti delle cellule renali, portando all'accumulo di oncoproteìne normalmente degradate"
     ], correct:1 },
 
   { id:15, pts:3, type:"fitb",
@@ -332,10 +332,10 @@ const questions = [
   { id:16, pts:1, type:"mc", blast:true,
     text:"Output blastp — VHL umana (NP_000542.1) vs RefSeq nr. Quale hit deve essere scartato perché non statisticamente significativo, e perché?",
     options:[
-      "VHL protein — Drosophila melanogaster, perché l'identità è inferiore al 30%",
+      "VHL protein — Drosophila melanogaster, perché la percentuale di identità è inferiore alla soglia minima accettabile del 30%",
       "hypothetical protein — uncultured bacterium, perché l'E-value (0.6) è maggiore della soglia convenzionale di 0.001",
-      "VHL protein — Danio rerio, perché il bit score è troppo basso",
-      "VHL disease protein — Pan troglodytes, perché è un organismo troppo distante dall'uomo"
+      "VHL protein — Danio rerio, perché il bit score è inferiore al valore minimo raccomandato per allineamenti affidabili",
+      "VHL disease protein — Pan troglodytes, perché la distanza evolutiva dall'uomo rende l'omologia non informativa"
     ], correct:1 },
 
   { id:17, pts:2, type:"mc",
@@ -359,19 +359,19 @@ const questions = [
   { id:19, pts:3, type:"mc", acmg:true,
     text:"Variante NM_000551.4(VHL):c.500G>A (p.Arg167Gln). Evidenze disponibili: PS3 (studi funzionali), PS4 (≥19 casi non correlati), PM1 (hotspot), PM5 (codone noto), PM2 (assente da gnomAD), PP3 (REVEL 0.874). Applicando lo schema di combinazione fornito, quale classificazione è corretta?",
     options:[
-      "VUS — le evidenze Strong non sono sufficienti senza un criterio Very Strong",
-      "Probably Pathogenic — una combinazione di Strong + Moderate + Supporting soddisfa la soglia LP ma non P",
-      "Pathogenic — la combinazione di evidenze soddisfa la soglia per la classificazione Patogenica (2 PS + 3 PM + 1 PP)",
-      "Probably Pathogenic — i criteri Strong si annullano in assenza di conferma de novo"
+      "VUS — le evidenze Strong non sono sufficienti in assenza di un criterio Very Strong come PVS1",
+      "Likely Pathogenic — la combinazione di 2 PS + 3 PM + 1 PP soddisfa la soglia LP ma non raggiunge quella per Pathogenic",
+      "Pathogenic — la combinazione di 2 PS + 3 PM + 1 PP soddisfa la regola ≥2 PS prevista per la classificazione Patogenica",
+      "Likely Pathogenic — i criteri Strong vengono declassati a Moderate in assenza di conferma de novo verificata"
     ], correct:2 },
 
   { id:20, pts:1, type:"mc", acmg:true,
     text:"Se i test familiari confermassero che entrambi i genitori non portano la variante (de novo confermato con paternità verificata), questo nuovo dato corrisponde al criterio PS2 (Strong patogenico). Quale effetto ha sulla classificazione della variante già Pathogenic?",
     options:[
-      "Nessun effetto pratico sulla categoria — la variante rimane Pathogenic, ma con un'evidenza Strong aggiuntiva che rafforza ulteriormente la classificazione",
-      "La variante sale di categoria da Pathogenic a una nuova classe \"Definitively Pathogenic\"",
-      "PS2 trasforma automaticamente la classificazione in Very Strong, richiedendo una rivalutazione",
-      "La classificazione scende a Likely Pathogenic perché PS2 da solo non è sufficiente"
+      "Nessun effetto sulla categoria — la variante rimane Pathogenic, con un'evidenza Strong aggiuntiva che consolida ulteriormente la classificazione già raggiunta",
+      "La variante sale a una nuova classe superiore, \"Definitively Pathogenic\", prevista per varianti con ≥3 criteri Strong",
+      "PS2 viene automaticamente elevato a Very Strong quando confermato con test di paternità, modificando il calcolo complessivo",
+      "La classificazione scende a Likely Pathogenic perché PS2 da solo, senza altri criteri Strong, non è sufficiente per Pathogenic"
     ], correct:0 }
 ];
 
