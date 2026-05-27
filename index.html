@@ -92,7 +92,7 @@
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
     ⚙ Modalità esercitazione — i risultati non vengono registrati
   </div>
-  <div id="exam-fields">
+  <div id="exam-fields" style="display:none;">
     <label for="cognome">Cognome e nome</label>
     <input type="text" id="cognome" placeholder="Es. Rossi Mario">
     <label for="matricola">Matricola</label>
@@ -103,7 +103,7 @@
   </div>
   <div id="cover-error"></div>
   <div id="cover-status" style="font-size:0.88em;color:#777;margin-top:10px;">Caricamento configurazione…</div>
-  <button class="btn" id="btn-start" onclick="initQuiz()" disabled>Inizia il quiz</button>
+  <button class="btn" id="btn-start" onclick="initQuiz()" disabled style="display:none;">Inizia il quiz</button>
 </div>
 
 <!-- QUIZ -->
@@ -289,21 +289,25 @@ async function loadTrack() {
         "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-status").textContent = "";
 
-      // Modalità practice: nascondi form dati, mostra badge
+      // Modalità practice: mostra solo badge, nessun form
       if (EXAM_MODE === "practice") {
-        document.getElementById("exam-fields").style.display = "none";
         document.getElementById("practice-badge").style.display = "block";
-        document.getElementById("btn-start").disabled = false;
+        const btn = document.getElementById("btn-start");
+        btn.style.display = "inline-block";
+        btn.disabled = false;
         return;
       }
 
-      // Modalità exam: controlla stato
+      // Modalità exam: mostra form, controlla stato
       const saved = localStorage.getItem(getLSKey());
       if (examStatus === "closed" && !saved) {
         document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
         return;
       }
-      document.getElementById("btn-start").disabled = false;
+      document.getElementById("exam-fields").style.display = "block";
+      const btn = document.getElementById("btn-start");
+      btn.style.display = "inline-block";
+      btn.disabled = false;
     } else {
       document.getElementById("cover-status").textContent = "⚠ Impossibile caricare la configurazione. Ricarica la pagina.";
     }
