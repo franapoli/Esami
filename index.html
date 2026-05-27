@@ -234,12 +234,12 @@ const questions = [
     ], correct:0 },
 
   { id:5, pts:2, type:"mc",
-    text:"In filogenesi molecolare, un albero filogenetico costruito da un MSA è considerato robusto quando:",
+    text:"Qual è il presupposto dell'algoritmo UPGMA che ne limita l'applicabilità rispetto a Neighbor-Joining?",
     options:[
-      "Il numero di sequenze allineate è superiore a 100, garantendo una rappresentazione statistica sufficiente",
-      "I valori di bootstrap ai nodi chiave sono ≥70%, indicando che quella bipartizione è ricorrente nel ricampionamento",
-      "Tutti i rami hanno la stessa lunghezza, indicando che tutte le sequenze evolvono a velocità costante",
-      "L'albero è stato costruito con il metodo UPGMA, che minimizza la somma delle distanze tra tutti i rami"
+      "UPGMA richiede che tutte le sequenze abbiano la stessa lunghezza, mentre NJ gestisce sequenze di lunghezze diverse",
+      "UPGMA assume che tutte le sequenze evolvano a velocità costante (orologio molecolare), un'ipotesi spesso non verificata nei dati reali",
+      "UPGMA esplora tutti gli alberi possibili per trovare quello ottimale, rendendo il calcolo proibitivo per molte sequenze",
+      "UPGMA utilizza una matrice Q rielaborata che penalizza i rami lunghi, introducendo un bias sistematico verso alberi non ultrametrici"
     ], correct:1 },
 
   { id:6, pts:2, type:"mc",
