@@ -216,12 +216,12 @@ const questions = [
     ], correct:1 },
 
   { id:3, pts:2, type:"mc",
-    text:"Nell'assemblaggio de novo di un genoma con reads short (Illumina), quale problema principale impedisce la ricostruzione di regioni ripetute più lunghe del read?",
+    text:"Qual è il limite fondamentale dei reads corti (short reads) nell'assemblaggio de novo di un genoma?",
     options:[
-      "Il grafo di De Bruijn genera nodi duplicati che aumentano il consumo di memoria",
-      "Le ripetizioni creano percorsi ambigui nel grafo: non è possibile stabilire da quale copia proviene un read, generando contig spezzati o chimere",
-      "L'allineatore non riesce a mappare reads con più di un mismatch",
-      "Le regioni ripetute hanno coverage troppo bassa per essere assemblate"
+      "Hanno un tasso di errore troppo alto per essere usati senza correzione",
+      "Non possono attraversare regioni ripetute più lunghe del read stesso, rendendo impossibile stabilire come tali regioni si colleghino al resto del genoma",
+      "Richiedono una coverage molto bassa, il che aumenta il rischio di perdere varianti rare",
+      "Sono compatibili solo con genomi batterici, non con genomi eucariotici"
     ], correct:1 },
 
   { id:4, pts:2, type:"mc",
