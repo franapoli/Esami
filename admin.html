@@ -34,13 +34,21 @@
   #main-panel { display: none; max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
   #main-panel.active { display: block; }
 
-  /* HEADER BAR */
+  /* TOP BAR */
   .panel-header { display: flex; align-items: center; justify-content: space-between;
-                  padding: 18px 0 0; margin-bottom: 0; flex-wrap: wrap; gap: 12px; }
+                  padding: 18px 0 16px; flex-wrap: wrap; gap: 12px; }
   .panel-header h1 { font-size: 1.2em; }
 
-  /* TABS */
-  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin-bottom: 24px; margin-top: 16px; }
+  /* TRACK SELECTOR — condiviso, sopra i tab */
+  .track-selector-bar { background: #fff; border: 1px solid #ddd; padding: 16px 24px;
+                        display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 0; }
+  .track-selector-bar label { margin: 0; font-size: 0.88em; white-space: nowrap; color: #555; }
+  .track-selector-bar select { flex: 1; min-width: 260px; padding: 8px 10px; border: 1px solid #bbb;
+                                font-size: 0.95em; font-family: inherit; background: #fff; cursor: pointer; }
+  #no-tracks { font-size: 0.85em; color: #888; font-style: italic; }
+
+  /* TABS — attaccati al selettore */
+  .tab-bar { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; margin-top: 16px; }
   .tab { padding: 10px 24px; font-size: 0.92em; font-family: inherit; cursor: pointer;
          background: none; border: none; border-bottom: 3px solid transparent;
          margin-bottom: -2px; color: #666; transition: color 0.15s; }
@@ -59,10 +67,6 @@
   .row2 .field { flex: 1; min-width: 140px; }
   .field label { margin-top: 0; margin-bottom: 5px; }
 
-  /* Track selector (admin tab) */
-  #track-select { font-size: 1em; padding: 9px 12px; border: 1px solid #bbb;
-                  width: 100%; font-family: inherit; background: #fff; cursor: pointer; }
-
   /* Status display */
   .status-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
                 background: #f8f8f4; border: 1px solid #eee; margin-bottom: 16px; font-size: 0.9em; }
@@ -75,17 +79,13 @@
   .badge-practice { background: #fff8e1; color: #7b5e00; }
   .note { font-size: 0.8em; color: #888; margin-top: 8px; line-height: 1.5; }
   .hint { font-size: 0.76em; color: #999; margin-top: 3px; }
-  #no-tracks { color: #888; font-size: 0.9em; font-style: italic; }
 
-  /* MONITOR TAB */
-  .monitor-header-bar { background: #fff; border: 1px solid #ddd; padding: 18px 24px; margin-bottom: 14px;
-                        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-  .monitor-header-bar h2 { font-size: 1em; }
-  .monitor-meta { font-size: 0.85em; color: #555; margin-top: 4px; }
-  .track-bar { background: #fff; border: 1px solid #ddd; padding: 14px 24px; margin-bottom: 14px;
-               display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .track-bar select { flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid #bbb;
-                      font-size: 0.92em; font-family: inherit; background: #fff; }
+  /* MONITOR */
+  .monitor-info-bar { background: #fff; border: 1px solid #ddd; padding: 14px 24px; margin-bottom: 14px;
+                      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .monitor-meta { font-size: 0.88em; color: #555; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #last-update { font-size: 0.78em; color: #888; }
   .stats-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
   .stat-card { background: #fff; border: 1px solid #ddd; padding: 14px 20px; flex: 1; min-width: 130px; }
   .stat-card .num { font-size: 1.9em; font-weight: bold; line-height: 1; }
@@ -106,8 +106,6 @@
   .badge-wait { background: #f5f5f5; color: #666; }
   .progress-mini { height: 6px; background: #eee; border-radius: 3px; width: 90px; display: inline-block; vertical-align: middle; }
   .progress-mini-fill { height: 100%; background: #81c784; border-radius: 3px; }
-  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  #last-update { font-size: 0.78em; color: #888; }
 </style>
 </head>
 <body>
@@ -134,65 +132,72 @@
     <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
   </div>
 
+  <!-- SELEZIONE TRACCIA — condivisa tra i tab -->
+  <div class="track-selector-bar">
+    <label for="track-select">Traccia:</label>
+    <select id="track-select" onchange="onTrackChange()">
+      <option value="">— caricamento… —</option>
+    </select>
+    <span id="no-tracks" style="display:none;">Nessuna traccia registrata. Le tracce vengono create automaticamente alla prima apertura del file HTML.</span>
+  </div>
+
   <!-- TAB BAR -->
   <div class="tab-bar">
-    <button class="tab active" id="tab-admin" onclick="switchTab('admin')">Gestione tracce</button>
-    <button class="tab" id="tab-monitor" onclick="switchTab('monitor')">Monitor studenti</button>
+    <button class="tab active" id="tab-admin"   onclick="switchTab('admin')">Gestione traccia</button>
+    <button class="tab"        id="tab-monitor" onclick="switchTab('monitor')">Monitor studenti</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       TAB: GESTIONE TRACCE
+       TAB: GESTIONE TRACCIA
   ═══════════════════════════════════════════════ -->
   <div class="tab-panel active" id="panel-admin">
 
-    <div class="card">
-      <h2>Seleziona traccia</h2>
-      <select id="track-select" onchange="onTrackChange()">
-        <option value="">— caricamento… —</option>
-      </select>
-      <p id="no-tracks" style="display:none;margin-top:10px;">Nessuna traccia registrata. Le tracce vengono create automaticamente alla prima apertura del file HTML.</p>
+    <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per gestirla.
     </div>
 
-    <div class="card" id="track-card" style="display:none;">
-      <h2>Stato e controllo</h2>
-      <div class="status-bar">
-        <div class="dot" id="status-dot"></div>
-        <div id="status-text"></div>
+    <div id="track-card" style="display:none;">
+      <div class="card">
+        <h2>Stato e controllo</h2>
+        <div class="status-bar">
+          <div class="dot" id="status-dot"></div>
+          <div id="status-text"></div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
+          <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
+        </div>
+        <div id="status-msg" class="ok-msg"></div>
       </div>
-      <div class="action-row">
-        <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
-        <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
-      </div>
-      <div id="status-msg" class="ok-msg"></div>
-    </div>
 
-    <div class="card" id="edit-card" style="display:none;">
-      <h2>Modifica attributi traccia</h2>
-      <div class="field">
-        <label for="cfg-name">Nome visualizzato</label>
-        <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1 — VHL">
-      </div>
-      <div class="row2" style="margin-top:12px;">
+      <div class="card">
+        <h2>Modifica attributi traccia</h2>
         <div class="field">
-          <label for="cfg-date">Data</label>
-          <input type="date" id="cfg-date">
+          <label for="cfg-name">Nome visualizzato</label>
+          <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1 — VHL">
         </div>
-        <div class="field">
-          <label for="cfg-dur">Durata (minuti)</label>
-          <input type="number" id="cfg-dur" min="10" max="180" step="5">
+        <div class="row2" style="margin-top:12px;">
+          <div class="field">
+            <label for="cfg-date">Data</label>
+            <input type="date" id="cfg-date">
+          </div>
+          <div class="field">
+            <label for="cfg-dur">Durata (minuti)</label>
+            <input type="number" id="cfg-dur" min="10" max="180" step="5">
+          </div>
+          <div class="field" style="min-width:150px;max-width:180px;">
+            <label for="cfg-mode">Modalità</label>
+            <select id="cfg-mode">
+              <option value="exam">Esame</option>
+              <option value="practice">Esercitazione</option>
+            </select>
+            <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
+          </div>
         </div>
-        <div class="field" style="min-width:150px;max-width:180px;">
-          <label for="cfg-mode">Modalità</label>
-          <select id="cfg-mode">
-            <option value="exam">Esame</option>
-            <option value="practice">Esercitazione</option>
-          </select>
-          <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
-        </div>
+        <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
+        <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
+        <div id="edit-msg" class="ok-msg"></div>
       </div>
-      <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
-      <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
-      <div id="edit-msg" class="ok-msg"></div>
     </div>
 
   </div><!-- /panel-admin -->
@@ -202,43 +207,37 @@
   ═══════════════════════════════════════════════ -->
   <div class="tab-panel" id="panel-monitor">
 
-    <div class="monitor-header-bar">
-      <div>
-        <h2>Monitor in tempo reale</h2>
-        <div class="monitor-meta" id="monitor-meta">Seleziona una traccia</div>
+    <div id="monitor-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per monitorare gli studenti.
+    </div>
+
+    <div id="monitor-content" style="display:none;">
+      <div class="monitor-info-bar">
+        <div class="monitor-meta" id="monitor-meta"></div>
+        <div class="controls">
+          <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
+          <span id="last-update"></span>
+          <span style="font-size:0.78em;color:#aaa;">auto ogni 30s</span>
+        </div>
       </div>
-      <div class="controls">
-        <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
-        <span id="last-update"></span>
+
+      <div class="stats-row">
+        <div class="stat-card blue">  <div class="num" id="stat-total">—</div><div class="lbl">Connessi</div></div>
+        <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
+        <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
       </div>
-    </div>
 
-    <div class="track-bar">
-      <label style="margin:0;white-space:nowrap;font-size:0.88em;">Traccia:</label>
-      <select id="monitor-track-select" onchange="onMonitorTrackChange()">
-        <option value="">— seleziona —</option>
-      </select>
-      <span style="font-size:0.8em;color:#888;">Aggiornamento automatico ogni 30s</span>
+      <table>
+        <thead>
+          <tr>
+            <th>Matricola</th><th>Nominativo</th><th>Email</th>
+            <th>Inizio</th><th>Fine</th><th>Durata</th>
+            <th>Risposte</th><th>Voto</th><th>Stato</th>
+          </tr>
+        </thead>
+        <tbody id="monitor-body"></tbody>
+      </table>
     </div>
-
-    <div class="stats-row">
-      <div class="stat-card blue">  <div class="num" id="stat-total">—</div><div class="lbl">Connessi</div></div>
-      <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
-      <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
-    </div>
-
-    <table id="monitor-table">
-      <thead>
-        <tr>
-          <th>Matricola</th><th>Nominativo</th><th>Email</th>
-          <th>Inizio</th><th>Fine</th><th>Durata</th>
-          <th>Risposte</th><th>Voto</th><th>Stato</th>
-        </tr>
-      </thead>
-      <tbody id="monitor-body">
-        <tr><td colspan="9" style="text-align:center;padding:40px;color:#888;">Seleziona una traccia</td></tr>
-      </tbody>
-    </table>
 
   </div><!-- /panel-monitor -->
 
@@ -250,9 +249,9 @@ const N_QUESTIONS = 15;
 
 let adminPassword = "";
 let allTracks = [];
-let currentTrack = null;       // gestione tracce
-let currentMonitorId = "";     // monitor
+let currentTrack = null;
 let refreshTimer = null;
+let activeTab = "admin";
 
 // ---- UTILS ----
 async function callScript(payload) {
@@ -292,8 +291,7 @@ async function doLogin() {
     allTracks = res.tracks || [];
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
-    loadTracks(allTracks);
-    populateMonitorSelect(allTracks);
+    populateTrackSelect(allTracks);
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
   }
@@ -301,67 +299,86 @@ async function doLogin() {
 
 function logout() {
   if (refreshTimer) clearInterval(refreshTimer);
-  adminPassword = ""; currentTrack = null; currentMonitorId = "";
+  adminPassword = ""; currentTrack = null; refreshTimer = null;
   document.getElementById("main-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
   document.getElementById("pwd").value = "";
   document.getElementById("login-error").textContent = "";
-  document.getElementById("track-card").style.display = "none";
-  document.getElementById("edit-card").style.display = "none";
   switchTab("admin");
 }
 
-// ---- TABS ----
-function switchTab(name) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-  document.getElementById("tab-" + name).classList.add("active");
-  document.getElementById("panel-" + name).classList.add("active");
-
-  if (name === "monitor") {
-    startAutoRefresh();
-  } else {
-    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-  }
-}
-
-// ════════════════════════════════════════════════
-// TAB: GESTIONE TRACCE
-// ════════════════════════════════════════════════
-function loadTracks(tracks) {
-  allTracks = tracks;
+// ---- TRACK SELECT (condiviso) ----
+function populateTrackSelect(tracks) {
   const sel = document.getElementById("track-select");
   sel.innerHTML = "";
   if (tracks.length === 0) {
     sel.innerHTML = '<option value="">— nessuna traccia —</option>';
-    document.getElementById("no-tracks").style.display = "block";
+    document.getElementById("no-tracks").style.display = "inline";
     return;
   }
+  // Aperte prima, poi chiuse; stessa data → ordine originale
+  const sorted = [...tracks].sort((a, b) => {
+    if (a.status === b.status) return 0;
+    return a.status === "open" ? -1 : 1;
+  });
   sel.innerHTML = '<option value="">— seleziona una traccia —</option>';
-  tracks.forEach(t => {
+  sorted.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t.exam_id;
+    const statusIcon = t.status === "open" ? "▶ " : "■ ";
     const modeLbl = t.mode === "practice" ? " [esercitazione]" : " [esame]";
-    const statusLbl = t.status === "open" ? " ▶" : " ■";
     const displayName = t.exam_name && t.exam_name.trim() ? t.exam_name : "⚠ " + t.exam_id + " (non configurata)";
-    opt.textContent = displayName + " — " + formatDateIt(t.exam_date) + modeLbl + statusLbl;
+    opt.textContent = statusIcon + displayName + " — " + formatDateIt(t.exam_date) + modeLbl;
     sel.appendChild(opt);
   });
 }
 
 function onTrackChange() {
   const examId = document.getElementById("track-select").value;
-  if (!examId) {
-    document.getElementById("track-card").style.display = "none";
-    document.getElementById("edit-card").style.display = "none";
-    return;
+  currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
+
+  // Aggiorna entrambe le tab in base alla nuova selezione
+  updateAdminTab();
+  if (activeTab === "monitor") {
+    updateMonitorTab();
   }
-  currentTrack = allTracks.find(t => t.exam_id === examId) || null;
-  if (!currentTrack) return;
+}
+
+function updateTrackInList(t) {
+  const idx = allTracks.findIndex(x => x.exam_id === t.exam_id);
+  if (idx >= 0) allTracks[idx] = { ...allTracks[idx], ...t };
+  const prev = t.exam_id;
+  populateTrackSelect(allTracks);
+  document.getElementById("track-select").value = prev;
+}
+
+// ---- TABS ----
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  document.getElementById("panel-" + name).classList.add("active");
+
+  if (name === "monitor") {
+    updateMonitorTab();
+    startAutoRefresh();
+  } else {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    updateAdminTab();
+  }
+}
+
+// ════════════════════════════════════════════════
+// TAB: GESTIONE TRACCIA
+// ════════════════════════════════════════════════
+function updateAdminTab() {
+  const hasTrack = !!currentTrack;
+  document.getElementById("admin-placeholder").style.display = hasTrack ? "none" : "block";
+  document.getElementById("track-card").style.display = hasTrack ? "block" : "none";
+  if (!hasTrack) return;
   renderTrackStatus(currentTrack);
   populateEditForm(currentTrack);
-  document.getElementById("track-card").style.display = "block";
-  document.getElementById("edit-card").style.display = "block";
   document.getElementById("status-msg").textContent = "";
   document.getElementById("edit-msg").textContent = "";
 }
@@ -443,54 +460,20 @@ async function saveTrack() {
   }
 }
 
-function updateTrackInList(t) {
-  const idx = allTracks.findIndex(x => x.exam_id === t.exam_id);
-  if (idx >= 0) allTracks[idx] = { ...allTracks[idx], ...t };
-  const prev = t.exam_id;
-  loadTracks(allTracks);
-  document.getElementById("track-select").value = prev;
-  // Aggiorna anche il select del monitor
-  populateMonitorSelect(allTracks);
-  if (currentMonitorId) document.getElementById("monitor-track-select").value = currentMonitorId;
-}
-
 // ════════════════════════════════════════════════
 // TAB: MONITOR STUDENTI
 // ════════════════════════════════════════════════
-function populateMonitorSelect(tracks) {
-  const sel = document.getElementById("monitor-track-select");
-  sel.innerHTML = '<option value="">— seleziona traccia —</option>';
-  const sorted = [...tracks].sort((a,b) => {
-    if (a.status === b.status) return 0;
-    return a.status === "open" ? -1 : 1;
-  });
-  sorted.forEach(t => {
-    const opt = document.createElement("option");
-    opt.value = t.exam_id;
-    const statusIcon = t.status === "open" ? "▶ " : "■ ";
-    const modeLbl = t.mode === "practice" ? " [esercitazione]" : "";
-    const displayName = t.exam_name && t.exam_name.trim() ? t.exam_name : t.exam_id + " ⚠";
-    opt.textContent = statusIcon + displayName + " — " + formatDateIt(t.exam_date) + modeLbl;
-    sel.appendChild(opt);
-  });
-}
-
-function onMonitorTrackChange() {
-  currentMonitorId = document.getElementById("monitor-track-select").value;
-  if (!currentMonitorId) {
-    document.getElementById("monitor-meta").textContent = "Seleziona una traccia";
-    document.getElementById("monitor-body").innerHTML =
-      '<tr><td colspan="9" style="text-align:center;padding:40px;color:#888;">Seleziona una traccia</td></tr>';
-    ["stat-total","stat-prog","stat-done"].forEach(id => document.getElementById(id).textContent = "—");
-    return;
-  }
-  loadMonitorData();
+function updateMonitorTab() {
+  const hasTrack = !!currentTrack;
+  document.getElementById("monitor-placeholder").style.display = hasTrack ? "none" : "block";
+  document.getElementById("monitor-content").style.display = hasTrack ? "block" : "none";
+  if (hasTrack) loadMonitorData();
 }
 
 async function loadMonitorData() {
-  if (!currentMonitorId) return;
+  if (!currentTrack) return;
   try {
-    const res = await callScript({ action: "getMonitor", password: adminPassword, examId: currentMonitorId });
+    const res = await callScript({ action: "getMonitor", password: adminPassword, examId: currentTrack.exam_id });
     if (res.status === "ok") renderMonitorData(res);
     document.getElementById("last-update").textContent = new Date().toLocaleTimeString("it-IT");
   } catch(e) { console.error("Monitor refresh error:", e); }
@@ -541,8 +524,7 @@ function renderMonitorData(res) {
 
 function startAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(loadMonitorData, 30000);
-  if (currentMonitorId) loadMonitorData();
+  refreshTimer = setInterval(() => { if (activeTab === "monitor") loadMonitorData(); }, 30000);
 }
 </script>
 </body>
