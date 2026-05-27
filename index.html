@@ -84,7 +84,8 @@
   <input type="text" id="email" placeholder="Es. m.rossi@studenti.unisannio.it">
   <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
   <div id="cover-error"></div>
-  <button class="btn" id="btn-start" onclick="initQuiz()">Inizia il quiz</button>
+  <div id="cover-status" style="font-size:0.88em;color:#777;margin-top:10px;">Caricamento configurazione…</div>
+  <button class="btn" id="btn-start" onclick="initQuiz()" disabled>Inizia il quiz</button>
 </div>
 
 <!-- QUIZ -->
@@ -96,6 +97,10 @@
     <h2>Domande</h2>
     <div class="q-grid" id="q-grid"></div>
     <div id="save-status"></div>
+    <div id="timer-wrap" style="margin-top:20px;text-align:center;">
+      <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.05em;color:#777;margin-bottom:4px;">Tempo rimanente</div>
+      <div id="timer" style="font-size:1.6em;font-weight:bold;font-family:monospace;color:#1a1a1a;letter-spacing:2px;">--:--</div>
+    </div>
     <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
   </div>
   <!-- MAIN -->
@@ -120,12 +125,13 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
-const EXAM_DATE = "2026-05-28";
 
-// Mostra data in copertina
-document.getElementById("cover-date").textContent = "Esame del " + EXAM_DATE;
+// Questi valori vengono sovrascritti da _config al caricamento
+let EXAM_DATE = "";
+let EXAM_DURATION_MIN = 60;
 
 let startTime = null;
+let timerInterval = null;
 
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
 
@@ -223,6 +229,66 @@ let studentEmail = "";
 // es. shuffleMap[2] = [2,0,3,1] significa che la dom.3 mostra opzioni in quell'ordine
 let shuffleMap = [];
 
+// ---- CONFIG ----
+async function loadConfig() {
+  try {
+    const res = await callScript({ action: "getConfig" });
+    if (res.status === "ok") {
+      EXAM_DATE = res.exam_date || "";
+      EXAM_DURATION_MIN = parseInt(res.exam_duration) || 60;
+      const examStatus = res.status_exam || "open";
+      document.getElementById("cover-date").textContent = "Esame del " + EXAM_DATE;
+      document.getElementById("cover-status").textContent = "";
+      const LS_KEY_CHECK = "quiz_session_" + EXAM_DATE;
+      const saved = localStorage.getItem(LS_KEY_CHECK);
+      if (examStatus === "closed" && !saved) {
+        document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
+        return;
+      }
+      document.getElementById("btn-start").disabled = false;
+    } else {
+      document.getElementById("cover-status").textContent = "⚠ Impossibile caricare la configurazione. Ricarica la pagina.";
+    }
+  } catch(e) {
+    document.getElementById("cover-status").textContent = "⚠ Errore di connessione. Ricarica la pagina.";
+  }
+}
+
+// ---- TIMER ----
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
+}
+
+function updateTimer() {
+  if (!startTime) return;
+  const elapsed = Math.floor((new Date() - startTime) / 1000);
+  const totalSec = EXAM_DURATION_MIN * 60;
+  const remaining = totalSec - elapsed;
+
+  if (remaining <= 0) {
+    clearInterval(timerInterval);
+    document.getElementById("timer").textContent = "00:00";
+    document.getElementById("timer").style.color = "#b00";
+    showResults(); // consegna automatica
+    return;
+  }
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+  document.getElementById("timer").textContent = mm + ":" + ss;
+
+  const timerEl = document.getElementById("timer");
+  if (remaining <= 3 * 60) {
+    timerEl.style.color = "#b00";
+  } else if (remaining <= 10 * 60) {
+    timerEl.style.color = "#e67e00";
+  } else {
+    timerEl.style.color = "#1a1a1a";
+  }
+}
+
 // ---- SHUFFLE ----
 function fisherYates(arr) {
   const a = [...arr];
@@ -240,11 +306,12 @@ function buildShuffleMap() {
   });
 }
 
-const LS_KEY = "quiz_session_" + EXAM_DATE;
+// LS_KEY è dinamico — basato su EXAM_DATE caricato da _config
+function getLSKey() { return "quiz_session_" + EXAM_DATE; }
 
 // ---- LOCALSTORAGE ----
 function saveLocal() {
-  localStorage.setItem(LS_KEY, JSON.stringify({
+  localStorage.setItem(getLSKey(), JSON.stringify({
     nominativo: studentNominativo,
     matricola: studentMatricola,
     email: studentEmail,
@@ -257,17 +324,21 @@ function saveLocal() {
 
 function loadLocal() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(getLSKey());
     return raw ? JSON.parse(raw) : null;
   } catch(e) { return null; }
 }
 
 function clearLocal() {
-  localStorage.removeItem(LS_KEY);
+  localStorage.removeItem(getLSKey());
 }
 
 // ---- AUTO-RESTORE on page load ----
-window.addEventListener("load", function() {
+window.addEventListener("load", async function() {
+  // Prima carica la config (imposta EXAM_DATE e EXAM_DURATION_MIN)
+  await loadConfig();
+
+  // Poi controlla se c'è una sessione locale da ripristinare
   const saved = loadLocal();
   if (!saved) return;
   const resume = confirm("Trovata una sessione in corso per " + saved.nominativo + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
@@ -285,6 +356,7 @@ window.addEventListener("load", function() {
   document.getElementById("student-info").innerHTML = "<strong>" + studentNominativo + "</strong><br>" + studentMatricola + "<br><span style='font-size:0.85em;color:#888'>" + studentEmail + "</span>";
   buildGrid();
   renderQuestion();
+  startTimer();
 });
 
 // ---- INIT ----
@@ -320,6 +392,7 @@ async function initQuiz() {
     document.getElementById("student-info").innerHTML = "<strong>" + nominativo + "</strong><br>" + matricola + "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
     buildGrid();
     renderQuestion();
+    startTimer();
   } catch(err) {
     document.getElementById("cover-error").textContent = "Errore di connessione. Riprova.";
     btn.disabled = false;
