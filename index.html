@@ -24,6 +24,8 @@
   .btn { display: inline-block; margin-top: 24px; padding: 10px 28px; background: #1a1a1a; color: #fff; border: none; font-size: 1em; font-family: inherit; cursor: pointer; }
   .btn:hover { background: #333; }
   .btn:disabled { background: #999; cursor: not-allowed; }
+  .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
+  .btn-outline:hover { background: #f5f5f0; }
   #cover-error { color: #b00; font-size: 0.88em; margin-top: 10px; min-height: 1.2em; }
 
   /* QUIZ LAYOUT */
@@ -118,6 +120,9 @@
       <div id="timer" style="font-size:1.6em;font-weight:bold;font-family:monospace;color:#1a1a1a;letter-spacing:2px;">--:--</div>
     </div>
     <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
+    <div id="practice-hint" style="display:none;margin-top:14px;font-size:0.78em;color:#7b5e00;background:#fff8e1;border:1px solid #ffe082;padding:8px 10px;line-height:1.5;">
+      Puoi ricominciare il quiz tutte le volte che vuoi.
+    </div>
   </div>
   <!-- MAIN -->
   <div id="quiz-main">
@@ -137,6 +142,7 @@
   <div id="send-status" style="font-size:1em;margin-top:16px;"></div>
   <div id="send-done" style="display:none;color:#2a7a2a;font-size:1em;margin-top:12px;">✓ Consegna registrata. Puoi chiudere questa pagina.</div>
   <button id="btn-retry" style="display:none;margin-top:16px;" class="btn" onclick="retryFinalize()">Riprova invio</button>
+  <button id="btn-restart" style="display:none;margin-top:24px;" class="btn btn-outline" onclick="restartQuiz()">↺ Ricomincia il quiz</button>
 </div>
 
 <script>
@@ -422,12 +428,16 @@ async function initQuiz() {
     studentNominativo = "Esercitazione";
     studentMatricola  = "";
     studentEmail      = "";
+    answers = new Array(questions.length).fill(null);
+    current = 0;
     startTime = new Date();
     buildShuffleMap();
     document.getElementById("cover").style.display = "none";
+    document.getElementById("thankyou").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
     document.getElementById("student-info").innerHTML =
       "<span style='font-size:0.85em;color:#888;font-style:italic;'>Modalità esercitazione</span>";
+    document.getElementById("practice-hint").style.display = "block";
     buildGrid();
     renderQuestion();
     startTimer();
@@ -616,8 +626,7 @@ async function showResults() {
   // ---- MODALITÀ ESERCITAZIONE ----
   if (EXAM_MODE === "practice") {
     const totalPts = questions.reduce((s, q) => s + q.pts, 0);
-    const scoreEl = document.getElementById("send-status");
-    scoreEl.innerHTML =
+    document.getElementById("send-status").innerHTML =
       "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + score + " / " + totalPts + "</div>" +
       "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione — risultato non registrato</div>" +
       "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
@@ -641,6 +650,8 @@ async function showResults() {
       "</tbody></table>";
     document.getElementById("send-done").style.display = "none";
     document.getElementById("btn-retry").style.display = "none";
+    // Mostra pulsante per ricominciare
+    document.getElementById("btn-restart").style.display = "inline-block";
     return;
   }
 
@@ -719,6 +730,14 @@ function callScript(payload) {
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload)
   }).then(r => r.json());
+}
+
+// ---- RICOMINCIA (solo practice) ----
+function restartQuiz() {
+  if (timerInterval) clearInterval(timerInterval);
+  document.getElementById("thankyou").style.display = "none";
+  document.getElementById("btn-restart").style.display = "none";
+  initQuiz(); // riavvia dall'inizio, già in practice mode
 }
 </script>
 </body>
