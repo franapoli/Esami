@@ -113,8 +113,9 @@
 <!-- THANK YOU -->
 <div id="thankyou">
   <h1>Quiz completato</h1>
-  <p style="color:#555;font-size:0.95em;margin-top:12px;">Il tuo quiz è stato consegnato. Puoi chiudere questa pagina.</p>
-  <div id="send-status"></div>
+  <div id="send-status" style="font-size:1em;margin-top:16px;"></div>
+  <div id="send-done" style="display:none;color:#2a7a2a;font-size:1em;margin-top:12px;">✓ Consegna registrata. Puoi chiudere questa pagina.</div>
+  <button id="btn-retry" style="display:none;margin-top:16px;" class="btn" onclick="retryFinalize()">Riprova invio</button>
 </div>
 
 <script>
@@ -414,12 +415,15 @@ function normalizeAnswer(ans) {
   return String(ans).replace(/\s/g,"").toLowerCase();
 }
 
+// Payload dell'ultimo finalize — tenuto in memoria per il retry
+let lastFinalizePayload = null;
+
 async function showResults() {
   document.getElementById("quiz-wrapper").classList.remove("active");
   document.getElementById("thankyou").style.display = "block";
 
   let score = 0;
-  const resultRows = []; // { ans, pts }
+  const resultRows = [];
 
   questions.forEach((q, i) => {
     let userAns = answers[i];
@@ -434,32 +438,68 @@ async function showResults() {
 
   const endTime = new Date();
   const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : null;
-  const elapsedStr = elapsed !== null
-    ? Math.floor(elapsed/60) + "m " + (elapsed%60) + "s"
-    : "";
+  const elapsedStr = elapsed !== null ? Math.floor(elapsed/60) + "m " + (elapsed%60) + "s" : "";
 
-  document.getElementById("send-status").textContent = "Salvataggio in corso…";
-  try {
-    await callScript({
-      action: "finalize",
-      matricola: studentMatricola,
-      nominativo: studentNominativo,
-      email: studentEmail,
-      examDate: EXAM_DATE,
-      score,
-      answers: resultRows,
-      tsStart: startTime ? startTime.toISOString() : "",
-      tsEnd: endTime.toISOString(),
-      elapsed: elapsedStr
-    });
+  lastFinalizePayload = {
+    action: "finalize",
+    matricola: studentMatricola,
+    nominativo: studentNominativo,
+    email: studentEmail,
+    examDate: EXAM_DATE,
+    score,
+    answers: resultRows,
+    tsStart: startTime ? startTime.toISOString() : "",
+    tsEnd: endTime.toISOString(),
+    elapsed: elapsedStr
+  };
+
+  await doFinalize();
+}
+
+async function doFinalize() {
+  const statusEl = document.getElementById("send-status");
+  const doneEl = document.getElementById("send-done");
+  const retryBtn = document.getElementById("btn-retry");
+
+  statusEl.textContent = "Salvataggio in corso…";
+  statusEl.style.color = "#555";
+  doneEl.style.display = "none";
+  retryBtn.style.display = "none";
+
+  const ok = await callScriptWithRetry(lastFinalizePayload, 3);
+
+  if (ok) {
     clearLocal();
-    document.getElementById("send-status").textContent = "✓ Consegna registrata.";
-  } catch(e) {
-    document.getElementById("send-status").textContent = "⚠ Errore nel salvataggio. Mostra questa pagina al docente.";
+    statusEl.textContent = "";
+    doneEl.style.display = "block";
+  } else {
+    statusEl.textContent = "⚠ Salvataggio non riuscito. I tuoi dati sono al sicuro in questo browser.";
+    statusEl.style.color = "#b00";
+    retryBtn.style.display = "inline-block";
   }
 }
 
-// ---- HTTP ----
+async function retryFinalize() {
+  await doFinalize();
+}
+
+// ---- HTTP con retry automatico ----
+async function callScriptWithRetry(payload, maxRetries) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+      document.getElementById("send-status").textContent =
+        "Nuovo tentativo " + attempt + "/" + maxRetries + "…";
+      await new Promise(r => setTimeout(r, delay));
+    }
+    try {
+      const res = await callScript(payload);
+      if (res && res.status === "ok") return true;
+    } catch(e) { /* riprova */ }
+  }
+  return false;
+}
+
 function callScript(payload) {
   return fetch(SCRIPT_URL, {
     method: "POST",
