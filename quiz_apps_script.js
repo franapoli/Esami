@@ -9,7 +9,7 @@
 // ============================================================
 
 const SHEET_ID = "1hj1SAiPSKIhYcMCPC9h-1Y9Vtvs8bJdHFSmsXKfL3Hw";
-const N_QUESTIONS = 15;
+const N_QUESTIONS = 20;
 
 // Indici colonne foglio risultati (1-based)
 const COL_MATRICOLA  = 1;

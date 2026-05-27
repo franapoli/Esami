@@ -233,4 +233,4 @@ Dopo modifiche a `quiz_apps_script.js`:
 
 | EXAM_ID | File | Note |
 |---------|------|------|
-| `quiz-vhl-2026-05-28-j94owo` | `index.html` | Prima traccia d'esame VHL |
+| `quiz-vhl-2026-05-28-j94owo` | `index.html` | Prima traccia d'esame VHL — 20 domande, 30 pt |

@@ -87,7 +87,7 @@
 <!-- COVER -->
 <div id="cover">
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
-  <p class="subtitle" id="cover-subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
+  <p class="subtitle" id="cover-subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 20 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~70 minuti</p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
     ⚙ Modalità esercitazione — i risultati non vengono registrati
@@ -173,6 +173,12 @@ function formatDateIt(dateStr) {
   return d + " " + (mesi[m] || match[2]) + " " + y;
 }
 
+const VHL_CONTEXT = `<div style="background:#f8f8f8;border:1px solid #ddd;border-left:4px solid #1a1a1a;padding:14px 18px;margin-bottom:20px;font-size:0.88em;line-height:1.7;color:#333;">
+<strong>Caso applicativo — il gene VHL</strong><br>
+Il gene VHL (von Hippel-Lindau tumor suppressor) codifica per una proteina di 213 aminoacidi che agisce come componente di un complesso E3-ubiquitina-ligasi. In normossia, il complesso VHL riconosce HIF-1α idrossilato e ne media la poliubiquitinazione e la successiva degradazione proteasomica. In ipossia, o quando VHL è non funzionale, HIF-1α si accumula, traslocano nel nucleo e attivano la trascrizione di geni pro-angiogenici (VEGF, PDGF) e metabolici. Mutazioni germinali in VHL causano la sindrome di von Hippel-Lindau, una sindrome tumorale ereditaria autosomica dominante caratterizzata da emangioblastomi, carcinoma renale a cellule chiare e feocromocitoma.<br><br>
+<em>Un paziente di 28 anni con emangioblastoma cerebellare bilaterale porta la variante NM_000551.4(VHL):c.500G&gt;A (p.Arg167Gln) in eterozigosi. L'identificatore della variante è VCV000002216; la proteina VHL umana ha accession P40337.</em>
+</div>`;
+
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
 
                                                              Score    E
@@ -190,67 +196,183 @@ hypothetical protein [uncultured bacterium]                    18    0.6
   Identities = 149/213 (70%), Positives = 175/213 (82%), Gaps = 1/213 (0%)`;
 
 const questions = [
-  { id:1, pts:2, type:"mc",
-    text:"Un ricercatore deve confrontare una nuova sequenza proteica con un database di milioni di proteine. Quale approccio e' piu' appropriato?",
-    options:["Algoritmo esatto di programmazione dinamica, perche' garantisce il risultato ottimale","Algoritmo euristico come BLAST, perche' offre un compromesso praticabile tra velocita' e sensibilita' su grandi database","Distanza di Hamming, perche' e' piu' veloce della edit distance","Smith-Waterman applicato a tutte le sequenze del database, perche' l'allineamento locale e' sempre superiore a quello globale"],
-    correct:1 },
-  { id:2, pts:2, type:"mc",
-    text:"In BLAST, se il parametro W (lunghezza del seed) viene aumentato da 3 a 5, qual e' l'effetto atteso?",
-    options:["La ricerca diventa piu' lenta ma piu' sensibile","La ricerca diventa piu' veloce ma meno sensibile alle sequenze molto divergenti","L'E-value di ogni hit diminuisce proporzionalmente","Il numero di falsi positivi aumenta"],
-    correct:1 },
+  // ── PARTE 1 — Domande teoriche ──────────────────────────────────────────
+  { id:1, pts:1, type:"mc",
+    text:"Un ricercatore deve confrontare una nuova sequenza proteica con un database di milioni di proteine. Quale approccio è più appropriato?",
+    options:[
+      "Algoritmo esatto di programmazione dinamica, perché garantisce il risultato ottimale",
+      "Algoritmo euristico come BLAST, perché offre un compromesso praticabile tra velocità e sensibilità su grandi database",
+      "Distanza di Hamming, perché è più veloce della edit distance",
+      "Smith-Waterman applicato a tutte le sequenze del database, perché l'allineamento locale è sempre superiore a quello globale"
+    ], correct:1 },
+
+  { id:2, pts:1, type:"mc",
+    text:"In BLAST, se il parametro W (lunghezza del seed) viene aumentato da 3 a 5, qual è l'effetto atteso?",
+    options:[
+      "La ricerca diventa più lenta ma più sensibile",
+      "La ricerca diventa più veloce ma meno sensibile alle sequenze molto divergenti",
+      "L'E-value di ogni hit diminuisce proporzionalmente",
+      "Il numero di falsi positivi aumenta"
+    ], correct:1 },
+
   { id:3, pts:2, type:"mc",
-    text:"Nel database gnomAD, un gene ha pLI = 0.99. Qual e' l'interpretazione corretta?",
-    options:["Il 99% delle varianti nel gene sono patogeniche","Il gene e' sotto forte pressione selettiva contro varianti che ne eliminano la funzione","La frequenza allelica media nel gene e' del 99% nella popolazione generale","Il 99% degli individui nel database porta almeno una variante nel gene"],
-    correct:1 },
+    text:"Nell'assemblaggio de novo di un genoma con reads short (Illumina), quale problema principale impedisce la ricostruzione di regioni ripetute più lunghe del read?",
+    options:[
+      "Il grafo di De Bruijn genera nodi duplicati che aumentano il consumo di memoria",
+      "Le ripetizioni creano percorsi ambigui nel grafo: non è possibile stabilire da quale copia proviene un read, generando contig spezzati o chimere",
+      "L'allineatore non riesce a mappare reads con più di un mismatch",
+      "Le regioni ripetute hanno coverage troppo bassa per essere assemblate"
+    ], correct:1 },
+
   { id:4, pts:2, type:"mc",
-    text:"Nell'allineamento globale di Needleman-Wunsch, cosa rappresenta il valore nella cella in basso a destra della matrice DP?",
-    options:["La edit distance tra le due sequenze","Lo score dell'allineamento locale ottimale","Lo score dell'allineamento globale ottimale","La lunghezza della sottosequenza comune piu' lunga (LCS)"],
-    correct:2 },
+    text:"Nell'allineamento multiplo di sequenze (MSA), cosa si intende per \"posizione conservata\" e quale informazione biologica fornisce?",
+    options:[
+      "Una posizione in cui tutte le sequenze hanno lo stesso residuo; indica un sito funzionalmente o strutturalmente vincolato dalla selezione purificante",
+      "Una posizione con gap in almeno una sequenza; indica un'inserzione recente in quel lineaggio",
+      "Una posizione con alta variabilità; indica un sito sotto selezione positiva in tutte le specie",
+      "Una posizione presente solo nelle sequenze omologhe più vicine; indica un'evoluzione convergente"
+    ], correct:0 },
+
   { id:5, pts:2, type:"mc",
-    text:"In RNA-seq, qual e' il vantaggio della normalizzazione TPM rispetto a RPKM?",
-    options:["E' piu' veloce da calcolare computazionalmente","Rende i valori direttamente confrontabili tra campioni diversi, poiche' la somma dei TPM e' costante per campione","Non richiede la stima della lunghezza del trascritto","Elimina completamente l'effetto della coverage"],
-    correct:1 },
+    text:"In filogenesi molecolare, un albero filogenetico costruito da un MSA è considerato robusto quando:",
+    options:[
+      "Il numero di sequenze allineate è superiore a 100",
+      "I valori di bootstrap ai nodi chiave sono ≥70%, indicando che quella bipartizione è ricorrente nel ricampionamento",
+      "Tutti i rami hanno la stessa lunghezza, indicando un orologio molecolare perfetto",
+      "L'albero è stato costruito con il metodo UPGMA, considerato il più accurato"
+    ], correct:1 },
+
   { id:6, pts:2, type:"mc",
-    text:"Una variante identificata in un paziente con una malattia dominante rara (prevalenza 1/50.000) ha una frequenza allelica del 4% in gnomAD. Quale conclusione e' piu' ragionevole?",
-    options:["La variante e' probabilmente causativa, perche' e' rara nella popolazione generale","La variante e' quasi certamente benigna, perche' la sua frequenza nella popolazione sana e' incompatibile con la malattia","La variante e' di significato incerto perche' non ci sono abbastanza dati","La variante e' patogenica con penetranza ridotta"],
-    correct:1 },
-  { id:7, pts:2, type:"mc",
-    text:"Il framework ACMG/AMP e' stato sviluppato principalmente per:",
-    options:["Calcolare automaticamente la patogenicita' di qualsiasi variante tramite algoritmo deterministico","Standardizzare il linguaggio e i criteri di classificazione tra laboratori di genetica clinica","Sostituire l'analisi clinica con un sistema di punteggio basato solo su dati di popolazione","Classificare esclusivamente le varianti somatiche nei tumori"],
-    correct:1 },
-  { id:8, pts:3, type:"fitb",
-    text:"Nel confronto tra un frammento del gene VHL e un omologo in un'altra specie vengono estratti: Sequenza 1 = ATGCTC (colonne) · Sequenza 2 = ACTG (righe). Operazioni ammesse: inserzione, delezione, sostituzione (costo 1 ciascuna). Riporta i valori dell'ultima colonna della matrice DP (riga 0 → riga 4), separati da virgola.",
+    text:"Nel sequenziamento NGS, cosa si intende per \"coverage\" (o profondità di copertura) e quale impatto ha sulla chiamata delle varianti?",
+    options:[
+      "Il numero totale di reads prodotti dal sequenziatore; non influisce sulla qualità della chiamata",
+      "Il numero medio di reads che coprono ciascuna base del genoma; una coverage più alta aumenta la confidenza nella chiamata delle varianti, specialmente per le varianti a bassa frequenza allelica",
+      "La percentuale del genoma coperta da almeno un read; determina solo la completezza dell'assemblaggio",
+      "La lunghezza media dei reads; reads più lunghi aumentano la coverage indipendentemente dal numero"
+    ], correct:1 },
+
+  { id:7, pts:1, type:"mc",
+    text:"Qual è la principale differenza tra Whole Genome Sequencing (WGS) e Whole Exome Sequencing (WES) nell'identificazione di varianti patogene?",
+    options:[
+      "WGS sequenzia solo i geni codificanti, WES sequenzia l'intero genoma",
+      "WES è più economico e sufficiente per varianti codificanti, ma manca varianti introniche, regolatorie e strutturali rilevabili solo con WGS",
+      "WGS produce reads più corti di WES, rendendolo meno preciso per la chiamata degli SNV",
+      "WES è preferibile per la diagnosi di tumori, WGS per le malattie mendeliane"
+    ], correct:1 },
+
+  { id:8, pts:1, type:"mc",
+    text:"Quale delle seguenti affermazioni descrive correttamente la differenza tra SNV, indel e variante strutturale (SV)?",
+    options:[
+      "SNV è una sostituzione di singola base; indel è un'inserzione o delezione di 1–50 bp; SV è un riarrangiamento genomico ≥50 bp (CNV, inversione, traslocazione)",
+      "SNV e indel sono sinonimi; SV indica qualsiasi variante in regioni non codificanti",
+      "SNV riguarda solo le varianti benigne; indel e SV sono sempre patogene",
+      "Le SV sono rilevabili solo con array CGH, non con sequenziamento NGS"
+    ], correct:0 },
+
+  { id:9, pts:1, type:"mc",
+    text:"Nel database gnomAD, un gene ha pLI = 0.99. Qual è l'interpretazione corretta?",
+    options:[
+      "Il 99% delle varianti nel gene sono patogeniche",
+      "Il gene è sotto forte pressione selettiva contro varianti che ne eliminano la funzione",
+      "La frequenza allelica media nel gene è del 99% nella popolazione generale",
+      "Il 99% degli individui nel database porta almeno una variante nel gene"
+    ], correct:1 },
+
+  { id:10, pts:1, type:"mc",
+    text:"Nell'allineamento globale di Needleman-Wunsch, cosa rappresenta il valore nella cella in basso a destra della matrice DP?",
+    options:[
+      "La edit distance tra le due sequenze",
+      "Lo score dell'allineamento locale ottimale",
+      "Lo score dell'allineamento globale ottimale",
+      "La lunghezza della sottosequenza comune più lunga (LCS)"
+    ], correct:2 },
+
+  { id:11, pts:1, type:"mc",
+    text:"In RNA-seq, qual è il vantaggio della normalizzazione TPM rispetto a RPKM?",
+    options:[
+      "È più veloce da calcolare computazionalmente",
+      "Rende i valori direttamente confrontabili tra campioni diversi, poiché la somma dei TPM è costante per campione",
+      "Non richiede la stima della lunghezza del trascritto",
+      "Elimina completamente l'effetto della coverage"
+    ], correct:1 },
+
+  { id:12, pts:1, type:"mc",
+    text:"Una variante identificata in un paziente con una malattia dominante rara (prevalenza 1/50.000) ha una frequenza allelica del 4% in gnomAD. Quale conclusione è più ragionevole?",
+    options:[
+      "La variante è probabilmente causativa, perché è rara nella popolazione generale",
+      "La variante è quasi certamente benigna, perché la sua frequenza nella popolazione sana è incompatibile con la malattia",
+      "La variante è di significato incerto perché non ci sono abbastanza dati",
+      "La variante è patogenica con penetranza ridotta"
+    ], correct:1 },
+
+  { id:13, pts:1, type:"mc",
+    text:"Il framework ACMG/AMP è stato sviluppato principalmente per:",
+    options:[
+      "Calcolare automaticamente la patogenicità di qualsiasi variante tramite algoritmo deterministico",
+      "Standardizzare il linguaggio e i criteri di classificazione tra laboratori di genetica clinica",
+      "Sostituire l'analisi clinica con un sistema di punteggio basato solo su dati di popolazione",
+      "Classificare esclusivamente le varianti somatiche nei tumori"
+    ], correct:1 },
+
+  // ── PARTE 2 — Caso applicativo: il gene VHL ────────────────────────────
+
+  { id:14, pts:2, type:"mc", context:true,
+    text:"In base al meccanismo VHL–HIF-1α descritto nel testo, perché la perdita di funzione di VHL predispone al carcinoma renale a cellule chiare?",
+    options:[
+      "VHL degrada direttamente i fattori di crescita nel sangue; senza VHL aumentano le mitosi renali",
+      "In assenza di VHL, HIF-1α non viene degradato, portando alla sovraespressione costitutiva di VEGF e altri fattori angiogenici che promuovono la crescita tumorale anche in normossia",
+      "VHL reprime direttamente i geni del ciclo cellulare; la sua perdita attiva p53",
+      "Senza VHL, il proteasoma non funziona correttamente in nessun tessuto, rendendo le cellule renali particolarmente vulnerabili"
+    ], correct:1 },
+
+  { id:15, pts:3, type:"fitb",
+    text:"Nel confronto tra un frammento del gene VHL e la sequenza corrispondente di un omologo in un'altra specie vengono estratti due brevi frammenti nucleotidici: Sequenza 1 = ATGCTC (colonne) · Sequenza 2 = ACTG (righe). Operazioni ammesse: inserzione, delezione, sostituzione (costo 1 ciascuna). Riporta i valori dell'ultima colonna della matrice DP (riga 0 → riga 4), separati da virgola, e la Edit Distance finale.",
     correct:"6,5,4,3,3", placeholder:"es. 0,1,2,3,4" },
-  { id:9, pts:2, type:"mc", blast:true,
-    text:"Output blastp — VHL umana vs RefSeq nr. Quale hit deve essere scartato perche' non statisticamente significativo, e perche'?",
-    options:["VHL protein — Drosophila melanogaster, perche' l'identita' e' inferiore al 30%","hypothetical protein — uncultured bacterium, perche' l'E-value (0.6) e' maggiore della soglia convenzionale di 0.001","VHL protein — Danio rerio, perche' il bit score e' troppo basso","VHL disease protein — Pan troglodytes, perche' e' un organismo troppo distante dall'uomo"],
-    correct:1 },
-  { id:10, pts:2, type:"mc",
-    text:"Nell'assemblaggio de novo di un genoma con reads short (Illumina), quale problema principale impedisce la ricostruzione di regioni ripetute piu' lunghe del read?",
-    options:["Il grafo di De Bruijn genera nodi duplicati che aumentano il consumo di memoria","Le ripetizioni creano percorsi ambigui nel grafo: non e' possibile stabilire da quale copia proviene un read, generando contig spezzati o chimere","L'allineatore non riesce a mappare reads con piu' di un mismatch","Le regioni ripetute hanno coverage troppo bassa per essere assemblate"],
-    correct:1 },
-  { id:11, pts:2, type:"mc",
-    text:"Nell'allineamento multiplo di sequenze (MSA), cosa si intende per 'posizione conservata' e quale informazione biologica fornisce?",
-    options:["Una posizione in cui tutte le sequenze hanno lo stesso residuo; indica un sito funzionalmente o strutturalmente vincolato dalla selezione purificante","Una posizione con gap in almeno una sequenza; indica un'inserzione recente in quel lineaggio","Una posizione con alta variabilita'; indica un sito sotto selezione positiva in tutte le specie","Una posizione presente solo nelle sequenze omologhe piu' vicine; indica un'evoluzione convergente"],
-    correct:0 },
-  { id:12, pts:2, type:"mc",
-    text:"Cerca su ClinVar la variante NM_000551.4(VHL):c.500G>A (identificatore VCV000002216). Qual e' la classificazione clinica attuale e il livello di revisione?",
-    options:["Pathogenic — no assertion criteria provided","Likely pathogenic — reviewed by expert panel","Pathogenic — reviewed by expert panel","Variant of uncertain significance — single submitter"],
-    correct:2 },
-  { id:13, pts:2, type:"mc",
-    text:"Cerca l'entry P40337 (proteina VHL umana). In quale dominio funzionale cade il residuo Arg167, e come viene classificata la variante p.Arg167Gln nella sezione delle varianti patologiche?",
-    options:["Dominio VHL box; variante associata a perdita di funzione","Dominio di legame con Elongin BC; variante associata a VHL disease tipo II e feocromocitoma","Dominio RING finger; variante associata a carcinoma renale sporadico","Regione C-terminale; variante di significato incerto"],
-    correct:1 },
-  { id:14, pts:3, type:"mc",
-    acmg: true,
-    text:"Variante VHL p.Arg167Gln. Evidenze disponibili: 2 Strong (studi funzionali + casistica), 2 Moderate (hotspot + codone noto), 2 Supporting (gnomAD + in silico). Applicando lo schema fornito, quale classificazione e' corretta?",
-    options:["VUS — le evidenze Strong non sono sufficienti senza un criterio Very Strong","Probably Pathogenic — Strong + Moderate + Supporting soddisfa LP ma non P","Pathogenic — la combinazione di evidenze soddisfa la soglia Patogenica","Probably Pathogenic — i criteri Strong si annullano in assenza di conferma de novo"],
-    correct:2 },
-  { id:15, pts:2, type:"mc",
-    acmg: true,
-    text:"Se i test familiari confermassero che entrambi i genitori non portano la variante (de novo confermato con paternita' verificata), questo nuovo dato corrisponde al criterio PS2 (Strong patogenico). Applicando lo schema ACMG, quale effetto ha sulla classificazione della variante VHL p.Arg167Gln, gia' classificata Pathogenic nella domanda 14?",
-    options:["Nessun effetto — la classificazione e' gia' Pathogenic e non puo' essere rafforzata ulteriormente","La classificazione sale da Pathogenic a Pathogenic con evidenza aggiuntiva, senza cambiamento di categoria","La variante verrebbe riclassificata Very Strong e uscirebbe dalla categoria Pathogenic","La classificazione scenderebbe a Likely Pathogenic perche' PS2 da solo non e' sufficiente"],
-    correct:1 }
+
+  { id:16, pts:1, type:"mc", blast:true,
+    text:"Output blastp — VHL umana (NP_000542.1) vs RefSeq nr. Quale hit deve essere scartato perché non statisticamente significativo, e perché?",
+    options:[
+      "VHL protein — Drosophila melanogaster, perché l'identità è inferiore al 30%",
+      "hypothetical protein — uncultured bacterium, perché l'E-value (0.6) è maggiore della soglia convenzionale di 0.001",
+      "VHL protein — Danio rerio, perché il bit score è troppo basso",
+      "VHL disease protein — Pan troglodytes, perché è un organismo troppo distante dall'uomo"
+    ], correct:1 },
+
+  { id:17, pts:2, type:"mc",
+    text:"Cerca la variante su ClinVar (identificatore VCV000002216). Qual è la classificazione clinica attuale e il livello di revisione?",
+    options:[
+      "Pathogenic — no assertion criteria provided",
+      "Likely pathogenic — reviewed by expert panel",
+      "Pathogenic — reviewed by expert panel",
+      "Variant of uncertain significance — single submitter"
+    ], correct:2 },
+
+  { id:18, pts:2, type:"mc",
+    text:"Cerca l'entry P40337 su UniProtKB. In quale dominio funzionale cade il residuo Arg167, e come viene classificata la variante p.Arg167Gln nella sezione delle varianti patologiche?",
+    options:[
+      "Dominio VHL box; variante associata a perdita di funzione",
+      "Dominio di legame con Elongin BC; variante associata a VHL disease tipo II e feocromocitoma",
+      "Dominio RING finger; variante associata a carcinoma renale sporadico",
+      "Regione C-terminale; variante di significato incerto"
+    ], correct:1 },
+
+  { id:19, pts:3, type:"mc", acmg:true,
+    text:"Variante NM_000551.4(VHL):c.500G>A (p.Arg167Gln). Evidenze disponibili: PS3 (studi funzionali), PS4 (≥19 casi non correlati), PM1 (hotspot), PM5 (codone noto), PM2 (assente da gnomAD), PP3 (REVEL 0.874). Applicando lo schema di combinazione fornito, quale classificazione è corretta?",
+    options:[
+      "VUS — le evidenze Strong non sono sufficienti senza un criterio Very Strong",
+      "Probably Pathogenic — una combinazione di Strong + Moderate + Supporting soddisfa la soglia LP ma non P",
+      "Pathogenic — la combinazione di evidenze soddisfa la soglia per la classificazione Patogenica (2 PS + 3 PM + 1 PP)",
+      "Probably Pathogenic — i criteri Strong si annullano in assenza di conferma de novo"
+    ], correct:2 },
+
+  { id:20, pts:1, type:"mc", acmg:true,
+    text:"Se i test familiari confermassero che entrambi i genitori non portano la variante (de novo confermato con paternità verificata), questo nuovo dato corrisponde al criterio PS2 (Strong patogenico). Quale effetto ha sulla classificazione della variante già Pathogenic?",
+    options:[
+      "Nessun effetto pratico sulla categoria — la variante rimane Pathogenic, ma con un'evidenza Strong aggiuntiva che rafforza ulteriormente la classificazione",
+      "La variante sale di categoria da Pathogenic a una nuova classe \"Definitively Pathogenic\"",
+      "PS2 trasforma automaticamente la classificazione in Very Strong, richiedendo una rivalutazione",
+      "La classificazione scende a Likely Pathogenic perché PS2 da solo non è sufficiente"
+    ], correct:0 }
 ];
 
 const ACMG_SCHEMA = `<table class="acmg-table">
@@ -322,7 +444,7 @@ async function loadTrack() {
         (EXAM_NAME ? EXAM_NAME + " — " : "") + formatDateIt(EXAM_DATE);
       // Subtitle con durata reale
       document.getElementById("cover-subtitle").innerHTML =
-        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
+        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 20 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-status").textContent = "";
 
       // Modalità practice: mostra solo badge, nessun form
@@ -562,6 +684,7 @@ function renderQuestion() {
 
   let html = "<div class='q-number'>Domanda " + q.id + " <span class='q-points'>[" + q.pts + " pt]</span></div>";
 
+  if (q.context) html += VHL_CONTEXT;
   if (q.acmg) html += ACMG_SCHEMA;
   if (q.blast) html += "<div class='blast-block'>" + BLAST_OUTPUT + "</div>";
 
