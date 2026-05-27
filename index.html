@@ -221,17 +221,17 @@ const questions = [
   { id:8, pts:3, type:"fitb",
     text:"Nel confronto tra un frammento del gene VHL e un omologo in un'altra specie vengono estratti: Sequenza 1 = ATGCTC (colonne) · Sequenza 2 = ACTG (righe). Operazioni ammesse: inserzione, delezione, sostituzione (costo 1 ciascuna). Riporta i valori dell'ultima colonna della matrice DP (riga 0 → riga 4), separati da virgola.",
     correct:"6,5,4,3,3", placeholder:"es. 0,1,2,3,4" },
-  { id:9, pts:1, type:"mc", blast:true,
-    text:"Output blastp — VHL umana vs RefSeq nr. Quale hit deve essere scartato perche' non statisticamente significativo?",
-    options:["VHL protein — Drosophila melanogaster","hypothetical protein — uncultured bacterium","VHL protein — Danio rerio","VHL disease protein — Pan troglodytes"],
+  { id:9, pts:2, type:"mc", blast:true,
+    text:"Output blastp — VHL umana vs RefSeq nr. Quale hit deve essere scartato perche' non statisticamente significativo, e perche'?",
+    options:["VHL protein — Drosophila melanogaster, perche' l'identita' e' inferiore al 30%","hypothetical protein — uncultured bacterium, perche' l'E-value (0.6) e' maggiore della soglia convenzionale di 0.001","VHL protein — Danio rerio, perche' il bit score e' troppo basso","VHL disease protein — Pan troglodytes, perche' e' un organismo troppo distante dall'uomo"],
     correct:1 },
-  { id:10, pts:2, type:"mc", blast:true,
-    text:"Nell'allineamento con Danio rerio: Identities = 149/213 (70%), Positives = 175/213 (82%). La differenza tra i due valori indica che:",
-    options:["26 posizioni hanno un gap nell'allineamento","26 posizioni hanno aminoacidi diversi ma con proprieta' fisico-chimiche simili, che la matrice di sostituzione considera conservative","Il 12% della sequenza di zebrafish non e' allineata alla sequenza umana","BLAST ha trovato 26 allineamenti alternativi con score diverso"],
+  { id:10, pts:2, type:"mc",
+    text:"Nell'assemblaggio de novo di un genoma con reads short (Illumina), quale problema principale impedisce la ricostruzione di regioni ripetute piu' lunghe del read?",
+    options:["Il grafo di De Bruijn genera nodi duplicati che aumentano il consumo di memoria","Le ripetizioni creano percorsi ambigui nel grafo: non e' possibile stabilire da quale copia proviene un read, generando contig spezzati o chimere","L'allineatore non riesce a mappare reads con piu' di un mismatch","Le regioni ripetute hanno coverage troppo bassa per essere assemblate"],
     correct:1 },
-  { id:11, pts:1, type:"mc", blast:true,
-    text:"Nell'output BLAST, Mus musculus ha Score = 388 bits ed E-value = 3e-136, mentre Danio rerio ha Score = 278 bits ed E-value = 2e-94. Quale affermazione e' corretta?",
-    options:["L'allineamento con il topo e' piu' significativo perche' ha E-value piu' basso e score piu' alto","L'allineamento con lo zebrafish e' piu' significativo perche' ha E-value piu' basso","I due allineamenti sono equivalenti perche' entrambi significativi","L'allineamento con lo zebrafish e' preferibile perche' ha un numero di Gaps inferiore"],
+  { id:11, pts:2, type:"mc",
+    text:"Nell'allineamento multiplo di sequenze (MSA), cosa si intende per 'posizione conservata' e quale informazione biologica fornisce?",
+    options:["Una posizione in cui tutte le sequenze hanno lo stesso residuo; indica un sito funzionalmente o strutturalmente vincolato dalla selezione purificante","Una posizione con gap in almeno una sequenza; indica un'inserzione recente in quel lineaggio","Una posizione con alta variabilita'; indica un sito sotto selezione positiva in tutte le specie","Una posizione presente solo nelle sequenze omologhe piu' vicine; indica un'evoluzione convergente"],
     correct:0 },
   { id:12, pts:2, type:"mc",
     text:"Cerca su ClinVar la variante NM_000551.4(VHL):c.500G>A (identificatore VCV000002216). Qual e' la classificazione clinica attuale e il livello di revisione?",
@@ -247,16 +247,52 @@ const questions = [
     options:["VUS — le evidenze Strong non sono sufficienti senza un criterio Very Strong","Probably Pathogenic — Strong + Moderate + Supporting soddisfa LP ma non P","Pathogenic — la combinazione di evidenze soddisfa la soglia Patogenica","Probably Pathogenic — i criteri Strong si annullano in assenza di conferma de novo"],
     correct:2 },
   { id:15, pts:2, type:"mc",
-    text:"Se i test familiari confermassero che entrambi i genitori non portano la variante (de novo confermato), questo nuovo dato aggiungerebbe un'evidenza di peso:",
-    options:["Supporting — la classificazione finale salirebbe da LP a P","Moderate — la classificazione non cambierebbe","Strong — la classificazione rimarrebbe Patogenica, con un'evidenza Strong aggiuntiva","Very Strong — la variante verrebbe riclassificata con certezza assoluta"],
-    correct:2 }
+    acmg: true,
+    text:"Se i test familiari confermassero che entrambi i genitori non portano la variante (de novo confermato con paternita' verificata), questo nuovo dato corrisponde al criterio PS2 (Strong patogenico). Applicando lo schema ACMG, quale effetto ha sulla classificazione della variante VHL p.Arg167Gln, gia' classificata Pathogenic nella domanda 14?",
+    options:["Nessun effetto — la classificazione e' gia' Pathogenic e non puo' essere rafforzata ulteriormente","La classificazione sale da Pathogenic a Pathogenic con evidenza aggiuntiva, senza cambiamento di categoria","La variante verrebbe riclassificata Very Strong e uscirebbe dalla categoria Pathogenic","La classificazione scenderebbe a Likely Pathogenic perche' PS2 da solo non e' sufficiente"],
+    correct:1 }
 ];
 
 const ACMG_SCHEMA = `<table class="acmg-table">
-<tr><th>Classificazione</th><th>Combinazione minima richiesta</th></tr>
-<tr><td>Patogenica</td><td>1 Very Strong + 1 Strong, oppure 2 Strong, oppure 1 Strong + 3 Moderate, oppure &hellip;</td></tr>
-<tr><td>Prob. Patogenica</td><td>1 Very Strong + 1 Moderate, oppure 1 Strong + 1 Moderate + 1 Supporting, oppure 2 Moderate + 2 Supporting, oppure &hellip;</td></tr>
-<tr><td>VUS</td><td>Evidenze insufficienti o in conflitto</td></tr>
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;">Criteri patogenici</th></tr>
+<tr><th>Codice</th><th>Peso</th><th>Descrizione sintetica</th></tr>
+<tr><td>PVS1</td><td>Very Strong</td><td>Variante loss-of-function in gene dove la LOF e' meccanismo noto di malattia</td></tr>
+<tr><td>PS1</td><td>Strong</td><td>Stesso aminoacido di variante patogenica nota (diversa alterazione nucleotidica)</td></tr>
+<tr><td>PS2</td><td>Strong</td><td>De novo confermato (paternita' verificata) in paziente con malattia, nessuna storia familiare</td></tr>
+<tr><td>PS3</td><td>Strong</td><td>Studi funzionali validati dimostrano effetto deletério</td></tr>
+<tr><td>PS4</td><td>Strong</td><td>Prevalenza significativamente aumentata nei pazienti rispetto ai controlli</td></tr>
+<tr><td>PM1</td><td>Moderate</td><td>Localizzata in hotspot mutazionale o dominio funzionale critico senza varianti benigne</td></tr>
+<tr><td>PM2</td><td>Moderate</td><td>Assente o a frequenza estremamente bassa in gnomAD (per malattie recessive: recessiva)</td></tr>
+<tr><td>PM3</td><td>Moderate</td><td>In trans con variante patogenica (per malattie recessive)</td></tr>
+<tr><td>PM4</td><td>Moderate</td><td>Variante in-frame o stop-loss in regione non ripetuta</td></tr>
+<tr><td>PM5</td><td>Moderate</td><td>Nuova variante missenso allo stesso residuo di variante patogenica nota</td></tr>
+<tr><td>PM6</td><td>Moderate</td><td>De novo presunto (paternita' non verificata)</td></tr>
+<tr><td>PP1</td><td>Supporting</td><td>Co-segregazione con malattia in piu' familiari affetti</td></tr>
+<tr><td>PP2</td><td>Supporting</td><td>Missenso in gene con bassa tolleranza alle varianti missenso e meccanismo missenso noto</td></tr>
+<tr><td>PP3</td><td>Supporting</td><td>Predizione in silico concordemente deleteria (SIFT, PolyPhen, CADD…)</td></tr>
+<tr><td>PP4</td><td>Supporting</td><td>Fenotipo del paziente altamente specifico per il gene</td></tr>
+<tr><td>PP5</td><td>Supporting</td><td>Segnalata come patogenica da fonte attendibile, senza criteri pubblicati</td></tr>
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;padding-top:10px;">Criteri benigni</th></tr>
+<tr><th>Codice</th><th>Peso</th><th>Descrizione sintetica</th></tr>
+<tr><td>BA1</td><td>Stand-alone</td><td>Frequenza allelica &gt;5% in gnomAD (malattia comune esclusa)</td></tr>
+<tr><td>BS1</td><td>Strong</td><td>Frequenza allelica superiore a quella attesa per la malattia</td></tr>
+<tr><td>BS2</td><td>Strong</td><td>Osservata in individui sani con malattia recessiva/dominante ad alta penetranza</td></tr>
+<tr><td>BS3</td><td>Strong</td><td>Studi funzionali dimostrano nessun effetto deletério</td></tr>
+<tr><td>BS4</td><td>Strong</td><td>Non segregazione con malattia in familiari affetti</td></tr>
+<tr><td>BP1</td><td>Supporting</td><td>Missenso in gene dove solo varianti troncanti sono patogeniche</td></tr>
+<tr><td>BP2</td><td>Supporting</td><td>Osservata in trans con variante patogenica dominante, o in cis con patogenica</td></tr>
+<tr><td>BP3</td><td>Supporting</td><td>In-frame in regione ripetuta senza funzione nota</td></tr>
+<tr><td>BP4</td><td>Supporting</td><td>Predizione in silico concordemente benigna</td></tr>
+<tr><td>BP5</td><td>Supporting</td><td>Trovata in caso con diagnosi molecolare alternativa</td></tr>
+<tr><td>BP6</td><td>Supporting</td><td>Segnalata come benigna da fonte attendibile, senza criteri pubblicati</td></tr>
+<tr><td>BP7</td><td>Supporting</td><td>Variante sinonima senza impatto predetto su splicing</td></tr>
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;padding-top:10px;">Classificazioni e combinazioni minime</th></tr>
+<tr><th>Classificazione</th><th colspan="2">Combinazione minima richiesta (criteri patogenici)</th></tr>
+<tr><td>Pathogenic</td><td colspan="2">PVS1 + &ge;1 PS/PM &nbsp;|&nbsp; &ge;2 PS &nbsp;|&nbsp; 1 PS + &ge;3 PM &nbsp;|&nbsp; 1 PS + 2 PM + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM + &ge;2 PP</td></tr>
+<tr><td>Likely Pathogenic</td><td colspan="2">PVS1 solo &nbsp;|&nbsp; 1 PS + 1&ndash;2 PM &nbsp;|&nbsp; 1 PS + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM &nbsp;|&nbsp; 2 PM + &ge;2 PP &nbsp;|&nbsp; 1 PM + &ge;4 PP</td></tr>
+<tr><td>Likely Benign</td><td colspan="2">BA1 &nbsp;|&nbsp; &ge;2 BS &nbsp;|&nbsp; 1 BS + 1 BP</td></tr>
+<tr><td>Benign</td><td colspan="2">1 BS + &ge;2 BP &nbsp;|&nbsp; &ge;3 BP</td></tr>
+<tr><td>VUS</td><td colspan="2">Evidenze insufficienti, in conflitto, o non classificabili nelle categorie sopra</td></tr>
 </table>`;
 
 let current = 0;
