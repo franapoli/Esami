@@ -142,9 +142,11 @@
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
 
-// Questi valori vengono sovrascritti da _config al caricamento
+// ---- ID TRACCIA — specifico per questo file HTML ----
+const EXAM_ID = "quiz-vhl-2026-05-28";
+
+// Questi valori vengono caricati da _meta all'avvio
 let EXAM_DATE = "";
-let EXAM_ID = "";
 let EXAM_NAME = "";
 let EXAM_DURATION_MIN = 60;
 let EXAM_MODE = "exam"; // "exam" | "practice"
@@ -261,23 +263,22 @@ let studentEmail = "";
 // es. shuffleMap[2] = [2,0,3,1] significa che la dom.3 mostra opzioni in quell'ordine
 let shuffleMap = [];
 
-// ---- CONFIG ----
-async function loadConfig() {
+// ---- CARICA METADATI TRACCIA DA _meta ----
+async function loadTrack() {
   try {
-    const res = await callScript({ action: "getConfig" });
-    if (res.status === "ok") {
-      EXAM_DATE         = res.exam_date     || "";
-      EXAM_ID           = res.exam_id       || "";
-      EXAM_NAME         = res.exam_name     || "";
-      EXAM_DURATION_MIN = parseInt(res.exam_duration) || 60;
-      EXAM_MODE         = res.exam_mode     || "exam";
-      const examStatus  = res.status_exam   || "closed";
+    const res = await callScript({ action: "getTrack", examId: EXAM_ID });
+    if (res.status === "ok" && res.track) {
+      const t = res.track;
+      EXAM_DATE         = t.exam_date  || "";
+      EXAM_NAME         = t.exam_name  || "";
+      EXAM_DURATION_MIN = parseInt(t.duration) || 60;
+      EXAM_MODE         = t.mode       || "exam";
+      const examStatus  = t.status     || "closed";
 
       // Titolo cover: "Nome esame — 28 maggio 2026"
-      const dateIt = formatDateIt(EXAM_DATE);
       document.getElementById("cover-date").textContent =
-        (EXAM_NAME ? EXAM_NAME + " — " : "") + dateIt;
-      // Aggiorna subtitle con durata reale
+        (EXAM_NAME ? EXAM_NAME + " — " : "") + formatDateIt(EXAM_DATE);
+      // Subtitle con durata reale
       document.getElementById("cover-subtitle").innerHTML =
         "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-status").textContent = "";
@@ -290,6 +291,7 @@ async function loadConfig() {
         return;
       }
 
+      // Modalità exam: controlla stato
       const saved = localStorage.getItem(getLSKey());
       if (examStatus === "closed" && !saved) {
         document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
@@ -356,8 +358,8 @@ function buildShuffleMap() {
   });
 }
 
-// LS_KEY è dinamico — basato su EXAM_ID caricato da _config
-function getLSKey() { return "quiz_session_" + (EXAM_ID || EXAM_DATE); }
+// LS_KEY basato su EXAM_ID hardcoded nel file
+function getLSKey() { return "quiz_session_" + EXAM_ID; }
 
 // ---- LOCALSTORAGE ----
 function saveLocal() {
@@ -385,8 +387,8 @@ function clearLocal() {
 
 // ---- AUTO-RESTORE on page load ----
 window.addEventListener("load", async function() {
-  // Prima carica la config (imposta EXAM_DATE e EXAM_DURATION_MIN)
-  await loadConfig();
+  // Prima carica i metadati della traccia da _meta
+  await loadTrack();
 
   // Poi controlla se c'è una sessione locale da ripristinare
   const saved = loadLocal();

@@ -13,45 +13,52 @@
   h1 { font-size: 1.3em; font-weight: bold; margin-bottom: 6px; }
   .subtitle { color: #555; font-size: 0.9em; margin-bottom: 28px; }
   label { display: block; font-size: 0.88em; color: #333; margin-bottom: 4px; margin-top: 14px; }
-  input[type=password], input[type=text], input[type=date], input[type=number] {
-    width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em; font-family: inherit;
+  input[type=password], input[type=text], input[type=date], input[type=number], select {
+    width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em;
+    font-family: inherit; background: #fff;
   }
-  input[type=text].mono { font-family: monospace; font-size: 0.9em; }
-  .btn { display: inline-block; margin-top: 20px; padding: 9px 26px; background: #1a1a1a; color: #fff;
-         border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; }
+  .btn { display: inline-block; margin-top: 16px; padding: 9px 26px; background: #1a1a1a;
+         color: #fff; border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; }
   .btn:hover { background: #333; }
-  .btn:disabled { background: #999; cursor: not-allowed; }
-  .btn-sm { padding: 8px 20px; font-size: 0.9em; margin-top: 0; }
-  .btn-green { background: #2e7d32; }
-  .btn-green:hover { background: #388e3c; }
-  .btn-red { background: #b71c1c; }
-  .btn-red:hover { background: #c62828; }
+  .btn-sm { padding: 7px 18px; font-size: 0.88em; margin-top: 0; }
+  .btn-green  { background: #2e7d32; } .btn-green:hover  { background: #388e3c; }
+  .btn-red    { background: #b71c1c; } .btn-red:hover    { background: #c62828; }
   .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
   .btn-outline:hover { background: #f5f5f0; }
-  .error-msg { color: #b00; font-size: 0.85em; margin-top: 10px; min-height: 1em; }
-  .ok-msg { color: #2e7d32; font-size: 0.85em; margin-top: 10px; min-height: 1em; }
+  .error-msg { color: #b00; font-size: 0.85em; margin-top: 8px; min-height: 1em; }
+  .ok-msg    { color: #2e7d32; font-size: 0.85em; margin-top: 8px; min-height: 1em; }
 
-  #admin-panel { display: none; max-width: 760px; margin: 40px auto; padding: 0 16px 60px; }
+  #admin-panel { display: none; max-width: 820px; margin: 32px auto; padding: 0 16px 60px; }
   #admin-panel.active { display: block; }
-
-  .card { background: #fff; border: 1px solid #ddd; padding: 28px 32px; margin-bottom: 20px; }
-  .card h2 { font-size: 1.05em; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #eee; }
-  .card-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
-  .card-row .field { flex: 1; min-width: 140px; }
-  .field label { margin-top: 0; margin-bottom: 6px; }
-
-  .status-display { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding: 16px; background: #f8f8f4; border: 1px solid #eee; }
-  .status-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
-  .status-dot.open   { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
-  .status-dot.closed { background: #f44336; }
-  .status-text { font-size: 0.92em; line-height: 1.7; }
-  .status-text strong { letter-spacing: 0.03em; }
-
-  .action-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-  .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+  .admin-header { display: flex; align-items: center; justify-content: space-between;
+                  margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
   .admin-header h1 { font-size: 1.2em; }
-  .note { font-size: 0.82em; color: #777; margin-top: 10px; line-height: 1.5; }
-  .hint { font-size: 0.78em; color: #888; margin-top: 4px; }
+
+  .card { background: #fff; border: 1px solid #ddd; padding: 24px 28px; margin-bottom: 18px; }
+  .card h2 { font-size: 1em; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #eee;
+             text-transform: uppercase; letter-spacing: 0.05em; color: #555; font-weight: normal; }
+  .row2 { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row2 .field { flex: 1; min-width: 140px; }
+  .field label { margin-top: 0; margin-bottom: 5px; }
+
+  /* Track selector */
+  #track-select { font-size: 1em; padding: 9px 12px; border: 1px solid #bbb;
+                  width: 100%; font-family: inherit; background: #fff; cursor: pointer; }
+
+  /* Status display */
+  .status-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+                background: #f8f8f4; border: 1px solid #eee; margin-bottom: 16px; font-size: 0.9em; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .dot.open   { background: #4caf50; box-shadow: 0 0 5px #4caf5088; }
+  .dot.closed { background: #aaa; }
+  .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 1px 8px; font-size: 0.78em; border-radius: 2px; margin-left: 6px; }
+  .badge-exam     { background: #e3f0ff; color: #1a3c5c; }
+  .badge-practice { background: #fff8e1; color: #7b5e00; }
+
+  .note { font-size: 0.8em; color: #888; margin-top: 8px; line-height: 1.5; }
+  .hint { font-size: 0.76em; color: #999; margin-top: 3px; }
+  #no-tracks { color: #888; font-size: 0.9em; font-style: italic; }
 </style>
 </head>
 <body>
@@ -80,66 +87,57 @@
     </div>
   </div>
 
-  <!-- STATO ESAME -->
+  <!-- SELEZIONE TRACCIA -->
   <div class="card">
-    <h2>Stato esame attivo</h2>
-    <div class="status-display">
-      <div class="status-dot" id="status-dot"></div>
-      <div class="status-text" id="status-text">—</div>
+    <h2>Seleziona traccia</h2>
+    <select id="track-select" onchange="onTrackChange()">
+      <option value="">— caricamento… —</option>
+    </select>
+    <p id="no-tracks" style="display:none;margin-top:10px;">Nessuna traccia registrata. Le tracce vengono create automaticamente alla prima apertura del file HTML.</p>
+  </div>
+
+  <!-- STATO E CONTROLLO -->
+  <div class="card" id="track-card" style="display:none;">
+    <h2>Stato e controllo</h2>
+    <div class="status-bar">
+      <div class="dot" id="status-dot"></div>
+      <div id="status-text"></div>
     </div>
     <div class="action-row">
-      <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri esame</button>
-      <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi esame</button>
+      <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
+      <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
     </div>
-    <p class="note">
-      Quando l'esame è <strong>chiuso</strong> gli studenti non possono accedere al quiz.<br>
-      Quando è <strong>aperto</strong> possono inserire i dati e iniziare.
-    </p>
     <div id="status-msg" class="ok-msg"></div>
   </div>
 
-  <!-- CONFIGURA PROSSIMO ESAME -->
-  <div class="card">
-    <h2>Configura esame</h2>
-
+  <!-- MODIFICA ATTRIBUTI -->
+  <div class="card" id="edit-card" style="display:none;">
+    <h2>Modifica attributi traccia</h2>
     <div class="field">
-      <label for="cfg-name">Nome esame</label>
-      <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1" oninput="autoExamId()">
+      <label for="cfg-name">Nome visualizzato</label>
+      <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1 — VHL">
     </div>
-
-    <div class="card-row" style="margin-top:14px;">
+    <div class="row2" style="margin-top:12px;">
       <div class="field">
         <label for="cfg-date">Data</label>
-        <input type="date" id="cfg-date" oninput="autoExamId()">
+        <input type="date" id="cfg-date">
       </div>
       <div class="field">
         <label for="cfg-dur">Durata (minuti)</label>
-        <input type="number" id="cfg-dur" min="10" max="180" step="5" value="60">
+        <input type="number" id="cfg-dur" min="10" max="180" step="5">
       </div>
-    </div>
-
-    <div class="card-row" style="margin-top:14px;">
-      <div class="field">
-        <label for="cfg-id">ID traccia <span style="font-weight:normal;color:#888">(generato automaticamente, modificabile)</span></label>
-        <input type="text" id="cfg-id" class="mono" placeholder="es. prova-itinere-1-2026-05-28">
-        <p class="hint">Identifica univocamente la traccia. Usato come nome del foglio Google Sheets (solo in modalità esame).</p>
-      </div>
-      <div class="field" style="min-width:160px;max-width:200px;">
+      <div class="field" style="min-width:150px;max-width:180px;">
         <label for="cfg-mode">Modalità</label>
-        <select id="cfg-mode" style="width:100%;padding:8px 10px;border:1px solid #bbb;font-size:1em;font-family:inherit;background:#fff;">
+        <select id="cfg-mode">
           <option value="exam">Esame</option>
           <option value="practice">Esercitazione</option>
         </select>
         <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
       </div>
     </div>
-
-    <button class="btn btn-sm" style="margin-top:20px;" onclick="saveConfig()">Salva configurazione e prepara foglio</button>
-    <p class="note">
-      Salvando si crea automaticamente il foglio dati su Google Sheets e si registra la traccia nel foglio <em>_meta</em>.<br>
-      Cambiare nome o data e salvare di nuovo crea una nuova traccia — quella precedente rimane intatta.
-    </p>
-    <div id="cfg-msg" class="ok-msg"></div>
+    <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
+    <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
+    <div id="edit-msg" class="ok-msg"></div>
   </div>
 
 </div>
@@ -147,6 +145,8 @@
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
 let adminPassword = "";
+let allTracks = [];
+let currentTrack = null;
 
 async function callScript(payload) {
   const resp = await fetch(SCRIPT_URL, {
@@ -157,32 +157,12 @@ async function callScript(payload) {
   return resp.json();
 }
 
-// Genera slug da nome + data (stesso algoritmo di Apps Script)
-function generateExamId(name, date) {
-  const slug = (name || "esame")
-    .toLowerCase()
-    .replace(/[àáâãäå]/g, "a").replace(/[èéêë]/g, "e")
-    .replace(/[ìíîï]/g, "i").replace(/[òóôõö]/g, "o")
-    .replace(/[ùúûü]/g, "u")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug + (date ? "-" + date : "");
-}
-
-function autoExamId() {
-  const name = document.getElementById("cfg-name").value.trim();
-  const date = document.getElementById("cfg-date").value.trim();
-  if (name || date) {
-    document.getElementById("cfg-id").value = generateExamId(name, date);
-  }
-}
-
 async function doLogin() {
   const pwd = document.getElementById("pwd").value.trim();
   if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
   document.getElementById("login-error").textContent = "Verifica…";
   try {
-    const res = await callScript({ action: "getMonitor", password: pwd });
+    const res = await callScript({ action: "getAllTracks", password: pwd });
     if (res.status === "error") {
       document.getElementById("login-error").textContent = res.message || "Errore.";
       return;
@@ -190,111 +170,153 @@ async function doLogin() {
     adminPassword = pwd;
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("admin-panel").classList.add("active");
-    loadCurrentConfig();
+    loadTracks(res.tracks || []);
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
   }
 }
 
-async function loadCurrentConfig() {
+function loadTracks(tracks) {
+  allTracks = tracks;
+  const sel = document.getElementById("track-select");
+  sel.innerHTML = "";
+  if (tracks.length === 0) {
+    sel.innerHTML = '<option value="">— nessuna traccia —</option>';
+    document.getElementById("no-tracks").style.display = "block";
+    return;
+  }
+  sel.innerHTML = '<option value="">— seleziona una traccia —</option>';
+  tracks.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.exam_id;
+    const modeLbl = t.mode === "practice" ? " [esercitazione]" : " [esame]";
+    const statusLbl = t.status === "open" ? " ▶" : " ■";
+    opt.textContent = (t.exam_name || t.exam_id) + " — " + formatDateIt(t.exam_date) + modeLbl + statusLbl;
+    sel.appendChild(opt);
+  });
+}
+
+function onTrackChange() {
+  const examId = document.getElementById("track-select").value;
+  if (!examId) {
+    document.getElementById("track-card").style.display = "none";
+    document.getElementById("edit-card").style.display = "none";
+    return;
+  }
+  currentTrack = allTracks.find(t => t.exam_id === examId) || null;
+  if (!currentTrack) return;
+  renderTrackStatus(currentTrack);
+  populateEditForm(currentTrack);
+  document.getElementById("track-card").style.display = "block";
+  document.getElementById("edit-card").style.display = "block";
+  document.getElementById("status-msg").textContent = "";
+  document.getElementById("edit-msg").textContent = "";
+}
+
+function renderTrackStatus(t) {
+  const isOpen = t.status === "open";
+  document.getElementById("status-dot").className = "dot " + (isOpen ? "open" : "closed");
+  const modeBadge = t.mode === "practice"
+    ? '<span class="badge badge-practice">Esercitazione</span>'
+    : '<span class="badge badge-exam">Esame</span>';
+  document.getElementById("status-text").innerHTML =
+    "<strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong>" + modeBadge +
+    " &nbsp;|&nbsp; " + (t.exam_name || t.exam_id) +
+    " &nbsp;|&nbsp; " + formatDateIt(t.exam_date) +
+    " &nbsp;|&nbsp; " + (t.duration || "—") + " min";
+}
+
+function populateEditForm(t) {
+  document.getElementById("cfg-name").value = t.exam_name || "";
+  document.getElementById("cfg-date").value = t.exam_date || "";
+  document.getElementById("cfg-dur").value  = t.duration  || "60";
+  document.getElementById("cfg-mode").value = t.mode      || "exam";
+}
+
+async function setStatus(newStatus) {
+  if (!currentTrack) return;
+  const msg = document.getElementById("status-msg");
+  msg.className = "ok-msg";
+  msg.textContent = "Aggiornamento…";
   try {
-    const res = await callScript({ action: "getConfig" });
+    const res = await callScript({
+      action: "setTrack", password: adminPassword,
+      examId: currentTrack.exam_id, status: newStatus
+    });
     if (res.status === "ok") {
-      renderStatus(res);
-      document.getElementById("cfg-name").value = res.exam_name || "";
-      document.getElementById("cfg-date").value = res.exam_date || "";
-      document.getElementById("cfg-dur").value  = res.exam_duration || "60";
-      document.getElementById("cfg-id").value   = res.exam_id || "";
-      document.getElementById("cfg-mode").value = res.exam_mode || "exam";
+      currentTrack.status = newStatus;
+      updateTrackInList(currentTrack);
+      renderTrackStatus(currentTrack);
+      msg.textContent = newStatus === "open" ? "✓ Traccia aperta." : "✓ Traccia chiusa.";
+    } else {
+      msg.className = "error-msg";
+      msg.textContent = res.message || "Errore.";
     }
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    msg.className = "error-msg";
+    msg.textContent = "Errore di rete: " + e.message;
+  }
+}
+
+async function saveTrack() {
+  if (!currentTrack) return;
+  const msg = document.getElementById("edit-msg");
+  msg.className = "ok-msg";
+  msg.textContent = "Salvataggio…";
+  try {
+    const res = await callScript({
+      action: "setTrack", password: adminPassword,
+      examId:    currentTrack.exam_id,
+      exam_name: document.getElementById("cfg-name").value.trim(),
+      exam_date: document.getElementById("cfg-date").value.trim(),
+      duration:  document.getElementById("cfg-dur").value.trim(),
+      mode:      document.getElementById("cfg-mode").value
+    });
+    if (res.status === "ok") {
+      currentTrack.exam_name = document.getElementById("cfg-name").value.trim();
+      currentTrack.exam_date = document.getElementById("cfg-date").value.trim();
+      currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
+      currentTrack.mode      = document.getElementById("cfg-mode").value;
+      updateTrackInList(currentTrack);
+      renderTrackStatus(currentTrack);
+      msg.textContent = "✓ Modifiche salvate.";
+    } else {
+      msg.className = "error-msg";
+      msg.textContent = res.message || "Errore.";
+    }
+  } catch(e) {
+    msg.className = "error-msg";
+    msg.textContent = "Errore di rete: " + e.message;
+  }
+}
+
+function updateTrackInList(t) {
+  const idx = allTracks.findIndex(x => x.exam_id === t.exam_id);
+  if (idx >= 0) allTracks[idx] = { ...allTracks[idx], ...t };
+  // Ricarica il menu a tendina mantenendo la selezione
+  const prev = t.exam_id;
+  loadTracks(allTracks);
+  document.getElementById("track-select").value = prev;
 }
 
 function formatDateIt(dateStr) {
   if (!dateStr) return "—";
   const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
                 "luglio","agosto","settembre","ottobre","novembre","dicembre"];
-  const parts = dateStr.split("-");
-  if (parts.length !== 3) return dateStr;
-  return parseInt(parts[2]) + " " + (mesi[parseInt(parts[1])-1] || parts[1]) + " " + parts[0];
-}
-
-function renderStatus(cfg) {
-  const isOpen = cfg.status_exam === "open";
-  document.getElementById("status-dot").className = "status-dot " + (isOpen ? "open" : "closed");
-  const modeLbl = cfg.exam_mode === "practice"
-    ? "<span style='color:#7b5e00;background:#fff8e1;padding:1px 7px;font-size:0.82em;'>Esercitazione</span>"
-    : "<span style='color:#1a3c5c;background:#e3f0ff;padding:1px 7px;font-size:0.82em;'>Esame</span>";
-  document.getElementById("status-text").innerHTML =
-    "Stato: <strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong> " + modeLbl + "<br>" +
-    "Esame: <strong>" + (cfg.exam_name || "—") + "</strong><br>" +
-    "Data: <strong>" + formatDateIt(cfg.exam_date) + "</strong> &nbsp;|&nbsp; " +
-    "Durata: <strong>" + (cfg.exam_duration || "—") + " min</strong><br>" +
-    "ID traccia: <code style='font-size:0.9em'>" + (cfg.exam_id || "—") + "</code>";
-}
-
-async function setStatus(newStatus) {
-  const msg = document.getElementById("status-msg");
-  msg.className = "ok-msg";
-  msg.textContent = "Aggiornamento…";
-  try {
-    const res = await callScript({ action: "setConfig", password: adminPassword, status_exam: newStatus });
-    if (res.status === "ok") {
-      msg.textContent = newStatus === "open" ? "✓ Esame aperto." : "✓ Esame chiuso.";
-      await loadCurrentConfig();
-    } else {
-      msg.className = "error-msg";
-      msg.textContent = res.message || "Errore.";
-    }
-  } catch(e) {
-    msg.className = "error-msg";
-    msg.textContent = "Errore di rete: " + e.message;
-  }
-}
-
-async function saveConfig() {
-  const name = document.getElementById("cfg-name").value.trim();
-  const date = document.getElementById("cfg-date").value.trim();
-  const dur  = document.getElementById("cfg-dur").value.trim();
-  const id   = document.getElementById("cfg-id").value.trim();
-  const msg  = document.getElementById("cfg-msg");
-
-  if (!name) { msg.className = "error-msg"; msg.textContent = "Inserisci il nome dell'esame."; return; }
-  if (!date) { msg.className = "error-msg"; msg.textContent = "Inserisci una data."; return; }
-  if (!dur || isNaN(dur) || Number(dur) < 1) { msg.className = "error-msg"; msg.textContent = "Durata non valida."; return; }
-
-  msg.className = "ok-msg";
-  msg.textContent = "Salvataggio e preparazione foglio…";
-  try {
-    const mode = document.getElementById("cfg-mode").value;
-    const res = await callScript({
-      action: "setConfig",
-      password: adminPassword,
-      exam_name: name,
-      exam_date: date,
-      exam_id:   id || generateExamId(name, date),
-      exam_duration: dur,
-      exam_mode: mode
-    });
-    if (res.status === "ok") {
-      msg.textContent = "✓ Configurazione salvata. Foglio \"" + (res.exam_id || id) + "\" pronto su Google Sheets.";
-      await loadCurrentConfig();
-    } else {
-      msg.className = "error-msg";
-      msg.textContent = res.message || "Errore.";
-    }
-  } catch(e) {
-    msg.className = "error-msg";
-    msg.textContent = "Errore di rete: " + e.message;
-  }
+  const m = String(dateStr).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return dateStr;
+  return parseInt(m[3]) + " " + (mesi[parseInt(m[2])-1] || m[2]) + " " + m[1];
 }
 
 function logout() {
   adminPassword = "";
+  currentTrack = null;
   document.getElementById("admin-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
   document.getElementById("pwd").value = "";
   document.getElementById("login-error").textContent = "";
+  document.getElementById("track-card").style.display = "none";
+  document.getElementById("edit-card").style.display = "none";
 }
 </script>
 </body>
