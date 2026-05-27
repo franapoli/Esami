@@ -191,7 +191,8 @@ function loadTracks(tracks) {
     opt.value = t.exam_id;
     const modeLbl = t.mode === "practice" ? " [esercitazione]" : " [esame]";
     const statusLbl = t.status === "open" ? " ▶" : " ■";
-    opt.textContent = (t.exam_name || t.exam_id) + " — " + formatDateIt(t.exam_date) + modeLbl + statusLbl;
+    const displayName = t.exam_name && t.exam_name.trim() ? t.exam_name : "⚠ " + t.exam_id + " (non configurata)";
+    opt.textContent = displayName + " — " + formatDateIt(t.exam_date) + modeLbl + statusLbl;
     sel.appendChild(opt);
   });
 }

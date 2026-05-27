@@ -171,7 +171,8 @@ function populateTrackSelect(tracks) {
     opt.value = t.exam_id;
     const statusIcon = t.status === "open" ? "▶ " : "■ ";
     const modeLbl = t.mode === "practice" ? " [esercitazione]" : "";
-    opt.textContent = statusIcon + (t.exam_name || t.exam_id) + " — " + formatDateIt(t.exam_date) + modeLbl;
+    const displayName = t.exam_name && t.exam_name.trim() ? t.exam_name : t.exam_id + " ⚠";
+    opt.textContent = statusIcon + displayName + " — " + formatDateIt(t.exam_date) + modeLbl;
     sel.appendChild(opt);
   });
 }

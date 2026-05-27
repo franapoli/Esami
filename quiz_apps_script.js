@@ -99,13 +99,22 @@ function getMetaSheet() {
 // ------------------------------------------------------------
 function readTrack(examId) {
   const meta = getMetaSheet();
+  const tz = Session.getScriptTimeZone();
   const values = meta.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][META_COLS.exam_id]) === examId) {
+      // La cella Data può essere un oggetto Date (Sheets auto-parse) → formattiamo come YYYY-MM-DD
+      const rawDate = values[i][META_COLS.exam_date];
+      let examDate = "";
+      if (rawDate instanceof Date && !isNaN(rawDate)) {
+        examDate = Utilities.formatDate(rawDate, tz, "yyyy-MM-dd");
+      } else {
+        examDate = String(rawDate);
+      }
       return {
         exam_id:   String(values[i][META_COLS.exam_id]),
         exam_name: String(values[i][META_COLS.exam_name]),
-        exam_date: String(values[i][META_COLS.exam_date]),
+        exam_date: examDate,
         duration:  String(values[i][META_COLS.duration]),
         mode:      String(values[i][META_COLS.mode])   || "exam",
         status:    String(values[i][META_COLS.status])  || "closed",
@@ -124,7 +133,7 @@ function createTrack(examId) {
   const meta = getMetaSheet();
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
   const now   = formatTs(new Date().toISOString());
-  meta.appendRow([examId, examId, today, "60", "exam", "closed", now, ""]);
+  meta.appendRow([examId, "", today, "60", "exam", "closed", now, ""]);
   return readTrack(examId);
 }
 
@@ -221,7 +230,13 @@ function doPost(e) {
       const examId = data.examId;
       if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
       let track = readTrack(examId);
-      if (!track) track = createTrack(examId);
+      if (!track) {
+        track = createTrack(examId);
+        // Crea subito il foglio risultati e aggiorna il link in _meta
+        const examSheet = getResultSheet(examId);
+        updateTrack(examId, {}, examSheet);
+        track = readTrack(examId);
+      }
       return corsResponse({ status: "ok", track });
     }
 
