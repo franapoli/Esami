@@ -85,7 +85,7 @@
 <!-- COVER -->
 <div id="cover">
   <h1>Quiz — Applicazioni di Bioinformatica</h1>
-  <p class="subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
+  <p class="subtitle" id="cover-subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; ~60 minuti</p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
   <label for="cognome">Cognome e nome</label>
   <input type="text" id="cognome" placeholder="Es. Rossi Mario">
@@ -147,16 +147,16 @@ let startTime = null;
 let timerInterval = null;
 
 // Converte "2026-05-28" → "28 maggio 2026"
+// Gestisce anche oggetti Date o stringhe non-ISO passati per errore
 function formatDateIt(dateStr) {
   if (!dateStr) return "";
   const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
                 "luglio","agosto","settembre","ottobre","novembre","dicembre"];
-  const parts = dateStr.split("-");
-  if (parts.length !== 3) return dateStr;
-  const d = parseInt(parts[2], 10);
-  const m = parseInt(parts[1], 10) - 1;
-  const y = parts[0];
-  return d + " " + (mesi[m] || parts[1]) + " " + y;
+  // Estrai solo la parte YYYY-MM-DD da qualsiasi stringa
+  const match = String(dateStr).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(dateStr);
+  const y = match[1], m = parseInt(match[2], 10) - 1, d = parseInt(match[3], 10);
+  return d + " " + (mesi[m] || match[2]) + " " + y;
 }
 
 const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
@@ -270,6 +270,9 @@ async function loadConfig() {
       const dateIt = formatDateIt(EXAM_DATE);
       document.getElementById("cover-date").textContent =
         (EXAM_NAME ? EXAM_NAME + " — " : "") + dateIt;
+      // Aggiorna subtitle con durata reale
+      document.getElementById("cover-subtitle").innerHTML =
+        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 15 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-status").textContent = "";
 
       const saved = localStorage.getItem(getLSKey());
