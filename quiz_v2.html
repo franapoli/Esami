@@ -484,11 +484,29 @@ function saveCurrentAnswer() {
   refreshDuration(); // aggiorna durata dalla traccia in background
 }
 
-// ---- CODA SERIALIZZATA ----
-// I salvataggi vengono accodati: il successivo parte solo quando il precedente è terminato.
-let _saveQueue = Promise.resolve();
+// ---- CODA SERIALIZZATA CON DEDUPLICA ----
+// Per ogni domanda viene tenuto solo il valore più recente da salvare.
+// Se arriva un nuovo salvataggio mentre quello precedente è ancora in volo,
+// il valore pendente viene aggiornato — così non si accumula mai una coda lunga.
+// Perdere un salvataggio intermedio è safe: finalize salva tutto alla consegna.
+let _savePending = {};   // { qIndex: value } — in attesa di partire
+let _saveInFlight = false;
+
 function enqueueProgress(qIndex, value) {
-  _saveQueue = _saveQueue.then(() => saveProgress(qIndex, value));
+  _savePending[qIndex] = value;   // sovrascrive eventuale valore precedente
+  if (!_saveInFlight) _flushSaveQueue();
+}
+
+async function _flushSaveQueue() {
+  while (Object.keys(_savePending).length > 0) {
+    _saveInFlight = true;
+    const entries = Object.entries(_savePending);
+    _savePending = {};  // svuota: eventuali nuovi arrivi durante il save vanno nel prossimo giro
+    for (const [qi, val] of entries) {
+      await saveProgress(parseInt(qi), val);
+    }
+  }
+  _saveInFlight = false;
 }
 
 // ---- AGGIORNAMENTO DURATA DA SERVER ----
