@@ -106,6 +106,33 @@
   .badge-wait { background: #f5f5f5; color: #666; }
   .progress-mini { height: 6px; background: #eee; border-radius: 3px; width: 90px; display: inline-block; vertical-align: middle; }
   .progress-mini-fill { height: 100%; background: #81c784; border-radius: 3px; }
+
+  /* RISULTATI */
+  .res-wrap { overflow-x: auto; }
+  table.res-table { width: auto; min-width: 100%; font-size: 0.78em; border: 1px solid #ddd; }
+  table.res-table thead tr { background: #1a1a1a; color: #fff; }
+  table.res-table thead th { padding: 7px 9px; text-align: center; font-weight: normal;
+    font-size: 0.82em; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  table.res-table thead th.col-name { text-align: left; }
+  table.res-table tbody td { padding: 6px 9px; text-align: center; border-bottom: 1px solid #eee; }
+  table.res-table tbody td.col-name { text-align: left; white-space: nowrap; }
+  table.res-table tbody td.col-score { font-weight: bold; }
+  table.res-table tfoot tr { background: #f0f0e8; font-size: 0.82em; }
+  table.res-table tfoot td { padding: 6px 9px; text-align: center; border-top: 2px solid #ddd; }
+  table.res-table tfoot td.col-name { text-align: left; font-weight: bold; }
+  .cell-ok   { background: #c8e6c9; color: #1b5e20; }
+  .cell-ko   { background: #ffcdd2; color: #b71c1c; }
+  .cell-zero { color: #999; }
+  .hdr-easy  { background: #2e7d32 !important; }
+  .hdr-hard  { background: #b71c1c !important; }
+
+  /* ISTOGRAMMA */
+  .histo-wrap { margin-top: 10px; }
+  .histo-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.82em; }
+  .histo-label { width: 52px; text-align: right; color: #555; flex-shrink: 0; }
+  .histo-bar-bg { flex: 1; background: #eee; height: 18px; position: relative; }
+  .histo-bar-fill { height: 100%; background: #1a1a1a; transition: width 0.3s; }
+  .histo-count { width: 28px; color: #555; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -143,8 +170,9 @@
 
   <!-- TAB BAR -->
   <div class="tab-bar">
-    <button class="tab active" id="tab-admin"   onclick="switchTab('admin')">Gestione traccia</button>
-    <button class="tab"        id="tab-monitor" onclick="switchTab('monitor')">Monitor studenti</button>
+    <button class="tab active" id="tab-admin"    onclick="switchTab('admin')">Gestione traccia</button>
+    <button class="tab"        id="tab-monitor"  onclick="switchTab('monitor')">Monitor studenti</button>
+    <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
   </div>
 
   <!-- ═══════════════════════════════════════════════
@@ -240,6 +268,57 @@
     </div>
 
   </div><!-- /panel-monitor -->
+
+  <!-- ═══════════════════════════════════════════════
+       TAB: RISULTATI
+  ═══════════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-risultati">
+
+    <div id="risultati-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per visualizzare i risultati.
+    </div>
+
+    <div id="risultati-content" style="display:none;">
+      <div class="monitor-info-bar">
+        <div class="monitor-meta" id="risultati-meta"></div>
+        <div class="controls">
+          <button class="btn btn-sm" onclick="loadRisultatiData()">↻ Aggiorna</button>
+          <span id="risultati-last-update"></span>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card blue">  <div class="num" id="res-stat-n">—</div>   <div class="lbl">Consegnati</div></div>
+        <div class="stat-card green"> <div class="num" id="res-stat-avg">—</div> <div class="lbl">Media</div></div>
+        <div class="stat-card orange"><div class="num" id="res-stat-med">—</div> <div class="lbl">Mediana</div></div>
+      </div>
+
+      <!-- Istogramma -->
+      <div class="card" style="margin-bottom:18px;">
+        <h2>Distribuzione punteggi</h2>
+        <div class="histo-wrap" id="histo-wrap"></div>
+      </div>
+
+      <!-- Tabella studenti × domande -->
+      <div class="card">
+        <h2>Punteggi per domanda
+          <span style="font-weight:normal;font-size:0.85em;color:#888;margin-left:12px;">
+            <span style="display:inline-block;width:12px;height:12px;background:#c8e6c9;vertical-align:middle;margin-right:4px;"></span>≥80% corretto
+            &nbsp;
+            <span style="display:inline-block;width:12px;height:12px;background:#ffcdd2;vertical-align:middle;margin-right:4px;"></span>≤20% corretto
+          </span>
+        </h2>
+        <div class="res-wrap">
+          <table class="res-table" id="res-table">
+            <thead id="res-thead"></thead>
+            <tbody id="res-tbody"></tbody>
+            <tfoot id="res-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panel-risultati -->
 
 </div><!-- /main-panel -->
 
@@ -341,6 +420,8 @@ function onTrackChange() {
   updateAdminTab();
   if (activeTab === "monitor") {
     updateMonitorTab();
+  } else if (activeTab === "risultati") {
+    updateRisultatiTab();
   }
 }
 
@@ -363,6 +444,9 @@ function switchTab(name) {
   if (name === "monitor") {
     updateMonitorTab();
     startAutoRefresh();
+  } else if (name === "risultati") {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    updateRisultatiTab();
   } else {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     updateAdminTab();
@@ -525,6 +609,129 @@ function renderMonitorData(res) {
 function startAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (activeTab === "monitor") loadMonitorData(); }, 30000);
+}
+
+// ════════════════════════════════════════════════
+// TAB: RISULTATI
+// ════════════════════════════════════════════════
+function updateRisultatiTab() {
+  const hasTrack = !!currentTrack;
+  document.getElementById("risultati-placeholder").style.display = hasTrack ? "none" : "block";
+  document.getElementById("risultati-content").style.display     = hasTrack ? "block" : "none";
+  if (hasTrack) loadRisultatiData();
+}
+
+async function loadRisultatiData() {
+  if (!currentTrack) return;
+  try {
+    const res = await callScript({ action: "getResults", password: adminPassword, examId: currentTrack.exam_id });
+    if (res.status === "ok") renderRisultati(res);
+    document.getElementById("risultati-last-update").textContent = new Date().toLocaleTimeString("it-IT");
+  } catch(e) { console.error("Risultati error:", e); }
+}
+
+function renderRisultati(res) {
+  const track = res.track || {};
+  const rows  = res.rows  || [];
+  const nQ    = rows.length > 0 ? rows[0].pts.length : N_QUESTIONS;
+
+  // Meta
+  document.getElementById("risultati-meta").innerHTML =
+    "<strong>" + escHtml(track.exam_name || track.exam_id || "—") + "</strong>" +
+    (track.exam_date ? " &nbsp;|&nbsp; " + formatDateIt(track.exam_date) : "");
+
+  // Stats
+  document.getElementById("res-stat-n").textContent = rows.length;
+  if (rows.length > 0) {
+    const scores = rows.map(r => Number(r.score) || 0).sort((a,b) => a-b);
+    const avg = scores.reduce((s,v) => s+v, 0) / scores.length;
+    const med = scores.length % 2 === 0
+      ? (scores[scores.length/2 - 1] + scores[scores.length/2]) / 2
+      : scores[Math.floor(scores.length/2)];
+    document.getElementById("res-stat-avg").textContent = avg.toFixed(1);
+    document.getElementById("res-stat-med").textContent = med % 1 === 0 ? med : med.toFixed(1);
+  } else {
+    document.getElementById("res-stat-avg").textContent = "—";
+    document.getElementById("res-stat-med").textContent = "—";
+  }
+
+  // Istogramma (bin da 0 a 30)
+  renderHistogram(rows, 30);
+
+  if (rows.length === 0) {
+    document.getElementById("res-thead").innerHTML = "";
+    document.getElementById("res-tbody").innerHTML =
+      '<tr><td colspan="3" style="text-align:center;padding:28px;color:#888;">Nessuno studente ha ancora consegnato.</td></tr>';
+    document.getElementById("res-tfoot").innerHTML = "";
+    return;
+  }
+
+  // Calcola % corretto per ogni domanda (pt > 0)
+  const maxPts = rows[0].pts.map((_, qi) => Math.max(...rows.map(r => Number(r.pts[qi]) || 0)));
+  const pctOk  = rows[0].pts.map((_, qi) => {
+    const mp = maxPts[qi]; if (mp === 0) return null;
+    return rows.filter(r => (Number(r.pts[qi]) || 0) >= mp).length / rows.length;
+  });
+
+  // Thead
+  let thHtml = '<tr><th class="col-name">Studente</th>';
+  for (let q = 0; q < nQ; q++) {
+    const p = pctOk[q];
+    const cls = p === null ? "" : p >= 0.8 ? " hdr-easy" : p <= 0.2 ? " hdr-hard" : "";
+    thHtml += `<th class="${cls}" title="Dom. ${q+1}">${q+1}</th>`;
+  }
+  thHtml += '<th>Tot</th></tr>';
+  document.getElementById("res-thead").innerHTML = thHtml;
+
+  // Tbody
+  const tbHtml = rows.map(r => {
+    let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}</td>`;
+    for (let q = 0; q < nQ; q++) {
+      const pt = Number(r.pts[q]) || 0;
+      const mp = maxPts[q];
+      const cls = mp === 0 ? "cell-zero" : pt >= mp ? "cell-ok" : pt > 0 ? "" : "cell-zero";
+      cells += `<td class="${cls}">${pt > 0 ? pt : "·"}</td>`;
+    }
+    cells += `<td class="col-score">${Number(r.score) || 0}</td>`;
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  document.getElementById("res-tbody").innerHTML = tbHtml;
+
+  // Tfoot — % corretto per domanda
+  let tfHtml = '<tr><td class="col-name">% corretto</td>';
+  for (let q = 0; q < nQ; q++) {
+    const p = pctOk[q];
+    const cls = p === null ? "" : p >= 0.8 ? "cell-ok" : p <= 0.2 ? "cell-ko" : "";
+    const lbl = p === null ? "—" : Math.round(p * 100) + "%";
+    tfHtml += `<td class="${cls}">${lbl}</td>`;
+  }
+  tfHtml += "<td></td></tr>";
+  document.getElementById("res-tfoot").innerHTML = tfHtml;
+}
+
+function renderHistogram(rows, maxScore) {
+  const wrap = document.getElementById("histo-wrap");
+  if (rows.length === 0) { wrap.innerHTML = '<p style="color:#888;font-size:0.88em;">Nessun dato.</p>'; return; }
+
+  // Bin da 0 a maxScore (step 1)
+  const counts = Array(maxScore + 1).fill(0);
+  rows.forEach(r => { const s = Math.min(Math.max(Math.round(Number(r.score) || 0), 0), maxScore); counts[s]++; });
+  const maxCount = Math.max(...counts);
+
+  // Raggruppa in bin da 2 punti per leggibilità
+  const step = 2;
+  let html = "";
+  for (let s = 0; s <= maxScore; s += step) {
+    const cnt = counts[s] + (counts[s+1] || 0);
+    const pct = maxCount > 0 ? (cnt / maxCount) * 100 : 0;
+    const label = s + (s+1 <= maxScore ? "–"+(s+1) : "");
+    html += `<div class="histo-bar-row">
+      <span class="histo-label">${label}</span>
+      <div class="histo-bar-bg"><div class="histo-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <span class="histo-count">${cnt > 0 ? cnt : ""}</span>
+    </div>`;
+  }
+  wrap.innerHTML = html;
 }
 </script>
 </body>

@@ -336,6 +336,40 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
+    // getResults — punteggi per domanda di tutti gli studenti finalizzati
+    // ----------------------------------------------------------------
+    if (data.action === "getResults") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const examId = data.examId;
+      if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
+
+      const track = readTrack(examId);
+      const ss = SpreadsheetApp.openById(SHEET_ID);
+      const sheet = ss.getSheetByName(examId);
+      if (!sheet) return corsResponse({ status: "ok", rows: [], track });
+
+      const values = sheet.getDataRange().getValues();
+      const rows = [];
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i];
+        if (row[COL_TS_END - 1] === "") continue; // solo finalizzati
+        const pts = [];
+        for (let q = 0; q < N_QUESTIONS; q++) {
+          pts.push(Number(row[COL_ANS_FIRST - 1 + q * 2 + 1]) || 0); // colonna Pt(q+1)
+        }
+        rows.push({
+          matricola:  row[COL_MATRICOLA - 1],
+          nominativo: row[COL_NOMINATIVO - 1],
+          score:      row[COL_SCORE - 1],
+          pts
+        });
+      }
+      return corsResponse({ status: "ok", rows, track });
+    }
+
+    // ----------------------------------------------------------------
     // Quiz actions: init, update, finalize
     // Richiedono exam_id e che la traccia sia in modalità exam
     // ----------------------------------------------------------------
