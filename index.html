@@ -762,7 +762,7 @@ async function saveProgress(qIndex, value) {
   if (EXAM_MODE === "practice") return; // practice: nessun salvataggio
   setSaveStatus("Salvataggio…");
   try {
-    await callScript({ action:"update", matricola: studentMatricola, qIndex: qIndex+1, value: String(value) });
+    await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola, qIndex: qIndex+1, value: String(value) });
     setSaveStatus("✓ Salvato");
   } catch(e) {
     setSaveStatus("⚠ Salvataggio fallito");
