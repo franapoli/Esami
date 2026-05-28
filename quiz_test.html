@@ -302,8 +302,9 @@ async function loadTrack() {
       document.getElementById("cover-date").textContent =
         (EXAM_NAME ? EXAM_NAME + " — " : "") + formatDateIt(EXAM_DATE);
       // Subtitle con durata reale
+      const durLabel = EXAM_DURATION_MIN === 0 ? "senza limite di tempo" : EXAM_DURATION_MIN + " minuti";
       document.getElementById("cover-subtitle").innerHTML =
-        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 20 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
+        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; " + questions.length + " domande &nbsp;|&nbsp; " + durLabel;
       document.getElementById("cover-status").textContent = "";
 
       // Modalità practice: mostra solo badge, nessun form
@@ -335,6 +336,10 @@ async function loadTrack() {
 
 // ---- TIMER ----
 function startTimer() {
+  if (EXAM_DURATION_MIN === 0) {
+    document.getElementById("timer-wrap").style.display = "none";
+    return;
+  }
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(updateTimer, 1000);
   updateTimer();
