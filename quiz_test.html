@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz — Applicazioni di Bioinformatica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; }
+
+  /* HEADER */
+  #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; }
+  #site-header img { height: 52px; display: block; }
+
+  /* COVER */
+  #cover { max-width: 560px; margin: 40px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+
+  /* COVER */
+  #cover { max-width: 560px; margin: 60px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 6px; }
+  .subtitle { color: #555; font-size: 0.95em; margin-bottom: 32px; }
+  label { display: block; font-size: 0.9em; color: #333; margin-bottom: 4px; margin-top: 16px; }
+  input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em; font-family: inherit; }
+  .btn { display: inline-block; margin-top: 24px; padding: 10px 28px; background: #1a1a1a; color: #fff; border: none; font-size: 1em; font-family: inherit; cursor: pointer; }
+  .btn:hover { background: #333; }
+  .btn:disabled { background: #999; cursor: not-allowed; }
+  .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
+  .btn-outline:hover { background: #f5f5f0; }
+  #cover-error { color: #b00; font-size: 0.88em; margin-top: 10px; min-height: 1.2em; }
+
+  /* QUIZ LAYOUT */
+  #quiz-wrapper { display: none; max-width: 1100px; margin: 30px auto; padding: 0 16px; gap: 24px; display: none; align-items: flex-start; }
+  #quiz-wrapper.active { display: flex; }
+
+  /* SIDEBAR */
+  #sidebar { width: 210px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; padding: 20px 16px; position: sticky; top: 24px; }
+  #sidebar h2 { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-bottom: 12px; }
+  #student-info { font-size: 0.88em; line-height: 1.6; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+  #student-info strong { display: block; }
+  .q-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .q-dot { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.78em; font-weight: bold; border: 2px solid #ddd; cursor: pointer; transition: all 0.15s; color: #555; background: #fff; }
+  .q-dot:hover { background: #f0f0e8; }
+  .q-dot.answered { background: #c8e6c9; border-color: #81c784; color: #1b5e20; }
+  .q-dot.current { border-color: #1a1a1a; border-width: 2px; background: #e8e8e0; }
+  .q-dot.answered.current { border-color: #1a1a1a; }
+  #save-status { font-size: 0.75em; color: #888; margin-top: 14px; min-height: 1em; }
+
+  /* MAIN QUIZ AREA */
+  #quiz-main { flex: 1; background: #fff; border: 1px solid #ddd; padding: 36px 40px; }
+  #progress-label { font-size: 0.82em; color: #777; margin-bottom: 6px; }
+  #progress-bar-wrap { background: #eee; height: 4px; margin-bottom: 28px; }
+  #progress-bar { background: #1a1a1a; height: 4px; transition: width 0.3s; }
+  .q-number { font-size: 0.82em; color: #777; margin-bottom: 6px; }
+  .q-points { font-size: 0.82em; color: #777; margin-left: 8px; }
+  .q-text { font-size: 1.05em; line-height: 1.65; margin-bottom: 22px; }
+  .blast-block { background: #f8f8f8; border: 1px solid #ddd; padding: 12px 14px; font-family: monospace; font-size: 0.78em; line-height: 1.5; overflow-x: auto; margin-bottom: 20px; white-space: pre; }
+  .option { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+  .option:hover { background: #f5f5f0; }
+  .option.selected { background: #e8e8e0; border-color: #999; }
+  .option input[type=radio] { margin-top: 3px; flex-shrink: 0; }
+  .option-label { font-size: 0.95em; line-height: 1.5; }
+  .fitb-input { width: 100%; padding: 9px 12px; border: 1px solid #bbb; font-size: 1em; font-family: monospace; margin-top: 4px; }
+  .fitb-hint { font-size: 0.82em; color: #777; margin-top: 6px; }
+  .nav { display: flex; justify-content: space-between; margin-top: 28px; }
+  .acmg-table { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-bottom: 20px; }
+  .acmg-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; background: #f8f8f8; }
+  .acmg-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+
+  /* THANK YOU */
+  #thankyou { display: none; max-width: 780px; margin: 40px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  #score-display { font-size: 2em; font-weight: bold; margin: 16px 0 8px; }
+  #score-detail { font-size: 0.9em; color: #555; margin-bottom: 24px; }
+  #send-status { margin-top: 12px; font-size: 0.9em; }
+  table.result { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-top: 16px; }
+  table.result th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; }
+  table.result td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  td.correct { color: #2a7a2a; }
+  td.wrong { color: #b00; }
+</style>
+</head>
+<body>
+
+<header id="site-header">
+  <img src="logo_unisannio.png" alt="Università degli Studi del Sannio — DST">
+</header>
+
+<!-- COVER -->
+<div id="cover">
+  <h1>Quiz — Applicazioni di Bioinformatica</h1>
+  <p class="subtitle" id="cover-subtitle">Genetica Umana &middot; MedTec &nbsp;|&nbsp; 3 domande &nbsp;|&nbsp; test</p>
+  <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
+  <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
+    ⚙ Modalità esercitazione — i risultati non vengono registrati
+  </div>
+  <div id="exam-fields" style="display:none;">
+    <label for="cognome">Cognome e nome</label>
+    <input type="text" id="cognome" placeholder="Es. Rossi Mario">
+    <label for="matricola">Matricola</label>
+    <input type="text" id="matricola" placeholder="Es. 123456">
+    <label for="email">Email istituzionale</label>
+    <input type="text" id="email" placeholder="Es. m.rossi@studenti.unisannio.it">
+    <p style="font-size:0.85em;color:#777;margin-top:20px;">Inserisci i tuoi dati e clicca Inizia. La tua sessione viene registrata immediatamente.</p>
+  </div>
+  <div id="cover-error"></div>
+  <div id="cover-status" style="font-size:0.88em;color:#777;margin-top:10px;">Caricamento configurazione…</div>
+  <button class="btn" id="btn-start" onclick="initQuiz()" disabled style="display:none;">Inizia il quiz</button>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz-wrapper">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <h2>Studente</h2>
+    <div id="student-info"></div>
+    <h2>Domande</h2>
+    <div class="q-grid" id="q-grid"></div>
+    <div id="save-status"></div>
+    <div id="timer-wrap" style="margin-top:20px;text-align:center;">
+      <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.05em;color:#777;margin-bottom:4px;">Tempo rimanente</div>
+      <div id="timer" style="font-size:1.6em;font-weight:bold;font-family:monospace;color:#1a1a1a;letter-spacing:2px;">--:--</div>
+    </div>
+    <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
+    <div id="practice-hint" style="display:none;margin-top:14px;font-size:0.78em;color:#7b5e00;background:#fff8e1;border:1px solid #ffe082;padding:8px 10px;line-height:1.5;">
+      Puoi ricominciare il quiz tutte le volte che vuoi.
+    </div>
+  </div>
+  <!-- MAIN -->
+  <div id="quiz-main">
+    <div id="progress-label"></div>
+    <div id="progress-bar-wrap"><div id="progress-bar" style="width:0%"></div></div>
+    <div id="question-container"></div>
+    <div class="nav">
+      <button class="btn" id="btn-prev" onclick="prevQ()" style="background:#888">&#8592; Precedente</button>
+      <button class="btn" id="btn-next" onclick="nextQ()">Avanti &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- THANK YOU -->
+<div id="thankyou">
+  <h1>Quiz completato</h1>
+  <div id="send-status" style="font-size:1em;margin-top:16px;"></div>
+  <div id="send-done" style="display:none;color:#2a7a2a;font-size:1em;margin-top:12px;">✓ Consegna registrata. Puoi chiudere questa pagina.</div>
+  <button id="btn-retry" style="display:none;margin-top:16px;" class="btn" onclick="retryFinalize()">Riprova invio</button>
+  <button id="btn-restart" style="display:none;margin-top:24px;" class="btn btn-outline" onclick="restartQuiz()">↺ Ricomincia il quiz</button>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyesj1cil3kNhPnjzAYIcaub8YeYbQ9sUY2yr5e4ClrM98-V5IPE-d9lgPXXjTa_hU8Mg/exec";
+
+// ---- ID TRACCIA — specifico per questo file HTML ----
+const EXAM_ID = "quiz-test-2026-05-28-x7k3mq";
+
+// Questi valori vengono caricati da _meta all'avvio
+let EXAM_DATE = "";
+let EXAM_NAME = "";
+let EXAM_DURATION_MIN = 60;
+let EXAM_MODE = "exam"; // "exam" | "practice"
+
+let startTime = null;
+let timerInterval = null;
+
+// Converte "2026-05-28" → "28 maggio 2026"
+// Gestisce anche oggetti Date o stringhe non-ISO passati per errore
+function formatDateIt(dateStr) {
+  if (!dateStr) return "";
+  const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+                "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  // Estrai solo la parte YYYY-MM-DD da qualsiasi stringa
+  const match = String(dateStr).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(dateStr);
+  const y = match[1], m = parseInt(match[2], 10) - 1, d = parseInt(match[3], 10);
+  return d + " " + (mesi[m] || match[2]) + " " + y;
+}
+
+const VHL_CONTEXT = `<div style="background:#f8f8f8;border:1px solid #ddd;border-left:4px solid #1a1a1a;padding:14px 18px;margin-bottom:20px;font-size:0.88em;line-height:1.7;color:#333;">
+<strong>Caso applicativo — il gene VHL</strong><br>
+Il gene VHL (von Hippel-Lindau) codifica per una proteina che agisce come soppressore tumorale. Mutazioni germinali in VHL causano la sindrome di von Hippel-Lindau, una sindrome tumorale ereditaria autosomica dominante caratterizzata da emangioblastomi, carcinoma renale a cellule chiare e feocromocitoma. Nelle sezioni seguenti vengono utilizzati dati reali relativi a questo gene.<br><br>
+<em>Un paziente di 28 anni con emangioblastoma cerebellare bilaterale porta la variante NM_000551.4(VHL):c.500G&gt;A (p.Arg167Gln) in eterozigosi.</em>
+</div>`;
+
+const BLAST_OUTPUT = `Query: NP_000542.1 VHL protein isoform 1 [Homo sapiens]
+
+                                                             Score    E
+Sequences producing significant alignments:                 (Bits)  Value
+
+NP_000542.1   VHL protein isoform 1 [Homo sapiens]           436    2e-155
+XP_016799693.1  VHL disease protein [Pan troglodytes]         434    4e-154
+XP_008974688.1  VHL disease protein [Mus musculus]            388    3e-136
+XP_015147021.1  VHL protein [Danio rerio]                     278    2e-94
+XP_033058812.1  VHL protein [Drosophila melanogaster]          52    7e-08
+hypothetical protein [uncultured bacterium]                    18    0.6
+
+> XP_015147021.1  VHL protein [Danio rerio]  Length=213
+  Score = 278 bits, Expect = 2e-94
+  Identities = 149/213 (70%), Positives = 175/213 (82%), Gaps = 1/213 (0%)`;
+
+const questions = [
+  { id:1, pts:1, type:"mc",
+    text:"L'effettività è una proprietà fondamentale degli algoritmi. Quale delle seguenti situazioni rappresenta una sua violazione?",
+    options:[
+      "Un programma che non termina su input molto grandi",
+      "Lo stesso algoritmo produce risultati diversi eseguito due volte sugli stessi dati",
+      "Un'istruzione che richiede un sottoalgoritmo per essere eseguita",
+      "Un algoritmo che richiede più dati di quelli forniti in ingresso"
+    ], correct:2 },
+
+  { id:2, pts:1, type:"mc",
+    text:"Nel sequenziamento NGS, cosa si intende per \"coverage\" (o profondità di copertura) e quale impatto ha sulla chiamata delle varianti?",
+    options:[
+      "Il numero totale di reads prodotti dal sequenziatore; non influisce sulla qualità della chiamata ma solo sulla velocità di analisi",
+      "Il numero medio di reads che coprono ciascuna base del genoma; una coverage più alta aumenta la confidenza nella chiamata delle varianti, specialmente per le varianti a bassa frequenza allelica",
+      "La percentuale del genoma coperta da almeno un read; determina solo la completezza dell'assemblaggio, non la qualità della genotipizzazione",
+      "La lunghezza media dei reads generati; reads più lunghi aumentano la coverage totale indipendentemente dal numero di reads prodotti"
+    ], correct:1 },
+
+  { id:3, pts:1, type:"mc", blast:true,
+    text:"Output blastp — VHL umana (NP_000542.1) vs RefSeq nr. Quale hit deve essere scartato perché non statisticamente significativo, e perché?",
+    options:[
+      "VHL protein — Drosophila melanogaster, perché la percentuale di identità è inferiore alla soglia minima accettabile del 30%",
+      "hypothetical protein — uncultured bacterium, perché l'E-value (0.6) è maggiore della soglia convenzionale di 0.001",
+      "VHL protein — Danio rerio, perché il bit score è inferiore al valore minimo raccomandato per allineamenti affidabili",
+      "VHL disease protein — Pan troglodytes, perché la distanza evolutiva dall'uomo rende l'omologia non informativa"
+    ], correct:1 }
+];
+
+const ACMG_SCHEMA = `<table class="acmg-table">
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;">Criteri patogenici</th></tr>
+<tr><th>Codice</th><th>Peso</th><th>Descrizione sintetica</th></tr>
+<tr><td>PVS1</td><td>Very Strong</td><td>Variante loss-of-function in gene dove la LOF e' meccanismo noto di malattia</td></tr>
+<tr><td>PS1</td><td>Strong</td><td>Stesso aminoacido di variante patogenica nota (diversa alterazione nucleotidica)</td></tr>
+<tr><td>PS2</td><td>Strong</td><td>De novo confermato (paternita' verificata) in paziente con malattia, nessuna storia familiare</td></tr>
+<tr><td>PS3</td><td>Strong</td><td>Studi funzionali validati dimostrano effetto deletério</td></tr>
+<tr><td>PS4</td><td>Strong</td><td>Prevalenza significativamente aumentata nei pazienti rispetto ai controlli</td></tr>
+<tr><td>PM1</td><td>Moderate</td><td>Localizzata in hotspot mutazionale o dominio funzionale critico senza varianti benigne</td></tr>
+<tr><td>PM2</td><td>Moderate</td><td>Assente o a frequenza estremamente bassa in gnomAD (per malattie recessive: recessiva)</td></tr>
+<tr><td>PM3</td><td>Moderate</td><td>In trans con variante patogenica (per malattie recessive)</td></tr>
+<tr><td>PM4</td><td>Moderate</td><td>Variante in-frame o stop-loss in regione non ripetuta</td></tr>
+<tr><td>PM5</td><td>Moderate</td><td>Nuova variante missenso allo stesso residuo di variante patogenica nota</td></tr>
+<tr><td>PM6</td><td>Moderate</td><td>De novo presunto (paternita' non verificata)</td></tr>
+<tr><td>PP1</td><td>Supporting</td><td>Co-segregazione con malattia in piu' familiari affetti</td></tr>
+<tr><td>PP2</td><td>Supporting</td><td>Missenso in gene con bassa tolleranza alle varianti missenso e meccanismo missenso noto</td></tr>
+<tr><td>PP3</td><td>Supporting</td><td>Predizione in silico concordemente deleteria (SIFT, PolyPhen, CADD…)</td></tr>
+<tr><td>PP4</td><td>Supporting</td><td>Fenotipo del paziente altamente specifico per il gene</td></tr>
+<tr><td>PP5</td><td>Supporting</td><td>Segnalata come patogenica da fonte attendibile, senza criteri pubblicati</td></tr>
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;padding-top:10px;">Criteri benigni</th></tr>
+<tr><th>Codice</th><th>Peso</th><th>Descrizione sintetica</th></tr>
+<tr><td>BA1</td><td>Stand-alone</td><td>Frequenza allelica &gt;5% in gnomAD (malattia comune esclusa)</td></tr>
+<tr><td>BS1</td><td>Strong</td><td>Frequenza allelica superiore a quella attesa per la malattia</td></tr>
+<tr><td>BS2</td><td>Strong</td><td>Osservata in individui sani con malattia recessiva/dominante ad alta penetranza</td></tr>
+<tr><td>BS3</td><td>Strong</td><td>Studi funzionali dimostrano nessun effetto deletério</td></tr>
+<tr><td>BS4</td><td>Strong</td><td>Non segregazione con malattia in familiari affetti</td></tr>
+<tr><td>BP1</td><td>Supporting</td><td>Missenso in gene dove solo varianti troncanti sono patogeniche</td></tr>
+<tr><td>BP2</td><td>Supporting</td><td>Osservata in trans con variante patogenica dominante, o in cis con patogenica</td></tr>
+<tr><td>BP3</td><td>Supporting</td><td>In-frame in regione ripetuta senza funzione nota</td></tr>
+<tr><td>BP4</td><td>Supporting</td><td>Predizione in silico concordemente benigna</td></tr>
+<tr><td>BP5</td><td>Supporting</td><td>Trovata in caso con diagnosi molecolare alternativa</td></tr>
+<tr><td>BP6</td><td>Supporting</td><td>Segnalata come benigna da fonte attendibile, senza criteri pubblicati</td></tr>
+<tr><td>BP7</td><td>Supporting</td><td>Variante sinonima senza impatto predetto su splicing</td></tr>
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;padding-top:10px;">Classificazioni e combinazioni minime</th></tr>
+<tr><th>Classificazione</th><th colspan="2">Combinazione minima richiesta (criteri patogenici)</th></tr>
+<tr><td>Pathogenic</td><td colspan="2">PVS1 + &ge;1 PS/PM &nbsp;|&nbsp; &ge;2 PS &nbsp;|&nbsp; 1 PS + &ge;3 PM &nbsp;|&nbsp; 1 PS + 2 PM + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM + &ge;2 PP</td></tr>
+<tr><td>Likely Pathogenic</td><td colspan="2">PVS1 solo &nbsp;|&nbsp; 1 PS + 1&ndash;2 PM &nbsp;|&nbsp; 1 PS + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM &nbsp;|&nbsp; 2 PM + &ge;2 PP &nbsp;|&nbsp; 1 PM + &ge;4 PP</td></tr>
+<tr><td>Likely Benign</td><td colspan="2">BA1 &nbsp;|&nbsp; &ge;2 BS &nbsp;|&nbsp; 1 BS + 1 BP</td></tr>
+<tr><td>Benign</td><td colspan="2">1 BS + &ge;2 BP &nbsp;|&nbsp; &ge;3 BP</td></tr>
+<tr><td>VUS</td><td colspan="2">Evidenze insufficienti, in conflitto, o non classificabili nelle categorie sopra</td></tr>
+</table>`;
+
+const ACMG_COMBO = `<table class="acmg-table">
+<tr><th colspan="3" style="background:#f0f0e8;text-align:center;">Combinazioni minime per la classificazione ACMG/AMP</th></tr>
+<tr><th>Classificazione</th><th colspan="2">Combinazione minima richiesta</th></tr>
+<tr><td>Pathogenic</td><td colspan="2">PVS1 + &ge;1 PS/PM &nbsp;|&nbsp; &ge;2 PS &nbsp;|&nbsp; 1 PS + &ge;3 PM &nbsp;|&nbsp; 1 PS + 2 PM + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM + &ge;2 PP</td></tr>
+<tr><td>Likely Pathogenic</td><td colspan="2">PVS1 solo &nbsp;|&nbsp; 1 PS + 1&ndash;2 PM &nbsp;|&nbsp; 1 PS + &ge;2 PP &nbsp;|&nbsp; &ge;3 PM &nbsp;|&nbsp; 2 PM + &ge;2 PP &nbsp;|&nbsp; 1 PM + &ge;4 PP</td></tr>
+<tr><td>Likely Benign</td><td colspan="2">BA1 &nbsp;|&nbsp; &ge;2 BS &nbsp;|&nbsp; 1 BS + 1 BP</td></tr>
+<tr><td>Benign</td><td colspan="2">1 BS + &ge;2 BP &nbsp;|&nbsp; &ge;3 BP</td></tr>
+<tr><td>VUS</td><td colspan="2">Evidenze insufficienti, in conflitto, o non classificabili nelle categorie sopra</td></tr>
+</table>`;
+
+let current = 0;
+let answers = new Array(questions.length).fill(null);
+let studentNominativo = "";
+let studentMatricola = "";
+let studentEmail = "";
+
+// shuffleMap[i] = array degli indici originali nell'ordine in cui vengono mostrati
+// es. shuffleMap[2] = [2,0,3,1] significa che la dom.3 mostra opzioni in quell'ordine
+let shuffleMap = [];
+
+// ---- CARICA METADATI TRACCIA DA _meta ----
+async function loadTrack() {
+  try {
+    const res = await callScript({ action: "getTrack", examId: EXAM_ID });
+    if (res.status === "ok" && res.track) {
+      const t = res.track;
+      EXAM_DATE         = t.exam_date  || "";
+      EXAM_NAME         = t.exam_name  || "";
+      EXAM_DURATION_MIN = parseInt(t.duration) || 60;
+      EXAM_MODE         = t.mode       || "exam";
+      const examStatus  = t.status     || "closed";
+
+      // Titolo cover: "Nome esame — 28 maggio 2026"
+      document.getElementById("cover-date").textContent =
+        (EXAM_NAME ? EXAM_NAME + " — " : "") + formatDateIt(EXAM_DATE);
+      // Subtitle con durata reale
+      document.getElementById("cover-subtitle").innerHTML =
+        "Genetica Umana &middot; MedTec &nbsp;|&nbsp; 20 domande &nbsp;|&nbsp; 30 punti &nbsp;|&nbsp; " + EXAM_DURATION_MIN + " minuti";
+      document.getElementById("cover-status").textContent = "";
+
+      // Modalità practice: mostra solo badge, nessun form
+      if (EXAM_MODE === "practice") {
+        document.getElementById("practice-badge").style.display = "block";
+        const btn = document.getElementById("btn-start");
+        btn.style.display = "inline-block";
+        btn.disabled = false;
+        return;
+      }
+
+      // Modalità exam: mostra form, controlla stato
+      const saved = localStorage.getItem(getLSKey());
+      if (examStatus === "closed" && !saved) {
+        document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
+        return;
+      }
+      document.getElementById("exam-fields").style.display = "block";
+      const btn = document.getElementById("btn-start");
+      btn.style.display = "inline-block";
+      btn.disabled = false;
+    } else {
+      document.getElementById("cover-status").textContent = "⚠ Impossibile caricare la configurazione. Ricarica la pagina.";
+    }
+  } catch(e) {
+    document.getElementById("cover-status").textContent = "⚠ Errore di connessione. Ricarica la pagina.";
+  }
+}
+
+// ---- TIMER ----
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
+}
+
+function updateTimer() {
+  if (!startTime) return;
+  const elapsed = Math.floor((new Date() - startTime) / 1000);
+  const totalSec = EXAM_DURATION_MIN * 60;
+  const remaining = totalSec - elapsed;
+
+  if (remaining <= 0) {
+    clearInterval(timerInterval);
+    document.getElementById("timer").textContent = "00:00";
+    document.getElementById("timer").style.color = "#b00";
+    showResults(); // consegna automatica
+    return;
+  }
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+  document.getElementById("timer").textContent = mm + ":" + ss;
+
+  const timerEl = document.getElementById("timer");
+  if (remaining <= 3 * 60) {
+    timerEl.style.color = "#b00";
+  } else if (remaining <= 10 * 60) {
+    timerEl.style.color = "#e67e00";
+  } else {
+    timerEl.style.color = "#1a1a1a";
+  }
+}
+
+// ---- SHUFFLE ----
+function fisherYates(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildShuffleMap() {
+  shuffleMap = questions.map(q => {
+    if (q.type !== "mc") return null;
+    return fisherYates(q.options.map((_, i) => i));
+  });
+}
+
+// LS_KEY basato su EXAM_ID hardcoded nel file
+function getLSKey() { return "quiz_session_" + EXAM_ID; }
+
+// ---- LOCALSTORAGE ----
+function saveLocal() {
+  localStorage.setItem(getLSKey(), JSON.stringify({
+    nominativo: studentNominativo,
+    matricola: studentMatricola,
+    email: studentEmail,
+    answers,
+    current,
+    shuffleMap,
+    startTime: startTime ? startTime.toISOString() : null
+  }));
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(getLSKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function clearLocal() {
+  localStorage.removeItem(getLSKey());
+}
+
+// ---- AUTO-RESTORE on page load ----
+window.addEventListener("load", async function() {
+  // Prima carica i metadati della traccia da _meta
+  await loadTrack();
+
+  // Poi controlla se c'è una sessione locale da ripristinare
+  const saved = loadLocal();
+  if (!saved) return;
+  const resume = confirm("Trovata una sessione in corso per " + saved.nominativo + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
+  if (!resume) { clearLocal(); return; }
+  studentNominativo = saved.nominativo || "";
+  studentMatricola = saved.matricola;
+  studentEmail = saved.email || "";
+  answers = saved.answers || new Array(questions.length).fill(null);
+  current = saved.current || 0;
+  shuffleMap = saved.shuffleMap || null;
+  if (!shuffleMap) buildShuffleMap();
+  startTime = saved.startTime ? new Date(saved.startTime) : new Date();
+  document.getElementById("cover").style.display = "none";
+  document.getElementById("quiz-wrapper").classList.add("active");
+  document.getElementById("student-info").innerHTML = "<strong>" + studentNominativo + "</strong><br>" + studentMatricola + "<br><span style='font-size:0.85em;color:#888'>" + studentEmail + "</span>";
+  buildGrid();
+  renderQuestion();
+  startTimer();
+});
+
+// ---- INIT ----
+async function initQuiz() {
+  const btn = document.getElementById("btn-start");
+  btn.disabled = true;
+  document.getElementById("cover-error").textContent = "";
+
+  // ---- MODALITÀ ESERCITAZIONE ----
+  if (EXAM_MODE === "practice") {
+    studentNominativo = "Esercitazione";
+    studentMatricola  = "";
+    studentEmail      = "";
+    answers = new Array(questions.length).fill(null);
+    current = 0;
+    startTime = new Date();
+    buildShuffleMap();
+    document.getElementById("cover").style.display = "none";
+    document.getElementById("thankyou").style.display = "none";
+    document.getElementById("quiz-wrapper").classList.add("active");
+    document.getElementById("student-info").innerHTML =
+      "<span style='font-size:0.85em;color:#888;font-style:italic;'>Modalità esercitazione</span>";
+    document.getElementById("practice-hint").style.display = "block";
+    buildGrid();
+    renderQuestion();
+    startTimer();
+    return;
+  }
+
+  // ---- MODALITÀ ESAME ----
+  const nominativo = document.getElementById("cognome").value.trim();
+  const matricola  = document.getElementById("matricola").value.trim();
+  const email      = document.getElementById("email").value.trim();
+  if (!nominativo || !matricola || !email) {
+    document.getElementById("cover-error").textContent = "Inserisci tutti i campi richiesti.";
+    btn.disabled = false;
+    return;
+  }
+  btn.textContent = "Verifica in corso…";
+
+  try {
+    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
+    if (res.status === "duplicate") {
+      document.getElementById("cover-error").textContent = res.finalized
+        ? "Hai già consegnato il quiz con questa matricola."
+        : "Questa matricola è già registrata per l'esame in corso.";
+      btn.disabled = false;
+      btn.textContent = "Inizia il quiz";
+      return;
+    }
+    studentNominativo = nominativo;
+    studentMatricola  = matricola;
+    studentEmail      = email;
+    startTime = new Date();
+    buildShuffleMap();
+    saveLocal();
+    document.getElementById("cover").style.display = "none";
+    document.getElementById("quiz-wrapper").classList.add("active");
+    document.getElementById("student-info").innerHTML =
+      "<strong>" + nominativo + "</strong><br>" + matricola +
+      "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
+    buildGrid();
+    renderQuestion();
+    startTimer();
+  } catch(err) {
+    document.getElementById("cover-error").textContent = "Errore di connessione. Riprova.";
+    btn.disabled = false;
+    btn.textContent = "Inizia il quiz";
+  }
+}
+
+// ---- GRID ----
+function buildGrid() {
+  const grid = document.getElementById("q-grid");
+  grid.innerHTML = "";
+  questions.forEach((q, i) => {
+    const d = document.createElement("div");
+    d.className = "q-dot" + (i===0?" current":"");
+    d.id = "dot-" + i;
+    d.textContent = q.id;
+    d.onclick = () => jumpTo(i);
+    grid.appendChild(d);
+  });
+}
+
+function updateGrid() {
+  questions.forEach((q, i) => {
+    const d = document.getElementById("dot-" + i);
+    if (!d) return;
+    d.className = "q-dot" + (answers[i] !== null ? " answered" : "") + (i === current ? " current" : "");
+  });
+}
+
+function jumpTo(i) {
+  saveCurrentAnswer();
+  current = i;
+  renderQuestion();
+}
+
+function saveCurrentAnswer() {
+  const ans = answers[current];
+  if (ans !== null && ans !== undefined) saveProgress(current, ans);
+}
+
+// ---- RENDER ----
+function renderQuestion() {
+  const q = questions[current];
+  const total = questions.length;
+  document.getElementById("progress-label").textContent = "Domanda " + (current+1) + " di " + total;
+  document.getElementById("progress-bar").style.width = (((current+1)/total)*100) + "%";
+
+  let html = "<div class='q-number'>Domanda " + q.id + " <span class='q-points'>[" + q.pts + " pt]</span></div>";
+
+  if (q.context) html += VHL_CONTEXT;
+  if (q.acmg) html += ACMG_SCHEMA;
+  if (q.acmg_combo) html += ACMG_COMBO;
+  if (q.blast) html += "<div class='blast-block'>" + BLAST_OUTPUT + "</div>";
+
+  html += "<div class='q-text'>" + q.text + "</div>";
+
+  if (q.type === "mc") {
+    const order = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : q.options.map((_,i)=>i);
+    order.forEach((origIdx, displayPos) => {
+      const sel = answers[current] === origIdx ? " selected" : "";
+      html += "<div class='option" + sel + "' onclick='selectOption(" + origIdx + ")'><input type='radio' name='q'" + (answers[current]===origIdx?" checked":"") + " readonly><span class='option-label'>" + q.options[origIdx] + "</span></div>";
+    });
+  } else if (q.type === "fitb") {
+    const val = answers[current] !== null ? answers[current] : "";
+    html += "<input class='fitb-input' type='text' id='fitb-input' value='" + val + "' placeholder='" + q.placeholder + "' oninput='saveText(this.value)'><p class='fitb-hint'>Inserisci i 5 valori separati da virgola, senza spazi (es. 0,1,2,3,4)</p>";
+  }
+
+  document.getElementById("question-container").innerHTML = html;
+  document.getElementById("btn-prev").style.visibility = current === 0 ? "hidden" : "visible";
+  document.getElementById("btn-next").style.visibility = current === total-1 ? "hidden" : "visible";
+  updateGrid();
+}
+
+function selectOption(i) {
+  answers[current] = i;
+  saveLocal();
+  renderQuestion();
+}
+
+function saveText(val) {
+  answers[current] = val.trim();
+  saveLocal();
+}
+
+// ---- NAV ----
+function nextQ() {
+  if (current < questions.length - 1) {
+    saveCurrentAnswer();
+    current++;
+    renderQuestion();
+  }
+}
+
+function prevQ() {
+  if (current > 0) {
+    saveCurrentAnswer();
+    current--;
+    renderQuestion();
+  }
+}
+
+function confirmSubmit() {
+  const answered = answers.filter(a => a !== null).length;
+  const total = questions.length;
+  const unanswered = total - answered;
+  let msg = "Hai risposto a " + answered + " domande su " + total + ".";
+  if (unanswered > 0) msg += "\n\n" + unanswered + " domanda/e senza risposta verrà considerata errata.";
+  msg += "\n\nConfermi la consegna?";
+  if (confirm(msg)) showResults();
+}
+
+// ---- SAVE PROGRESS ----
+function setSaveStatus(msg) {
+  document.getElementById("save-status").textContent = msg;
+}
+
+async function saveProgress(qIndex, value) {
+  if (EXAM_MODE === "practice") return; // practice: nessun salvataggio
+  setSaveStatus("Salvataggio…");
+  try {
+    const q = questions[qIndex];
+    let ansText, pts;
+    if (q.type === "mc") {
+      ansText = (value !== null && value !== undefined) ? q.options[value] : "";
+      const correct = value === q.correct;
+      pts = correct ? q.pts : 0;
+    } else {
+      ansText = String(value);
+      const correct = normalizeAnswer(value) === normalizeAnswer(q.correct);
+      pts = correct ? q.pts : 0;
+    }
+    await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
+                       qIndex: qIndex+1, ans: ansText, pts });
+    setSaveStatus("✓ Salvato");
+  } catch(e) {
+    setSaveStatus("⚠ Salvataggio fallito");
+  }
+}
+
+// ---- RESULTS ----
+function normalizeAnswer(ans) {
+  if (ans === null || ans === undefined) return "";
+  return String(ans).replace(/\s/g,"").toLowerCase();
+}
+
+// Payload dell'ultimo finalize — tenuto in memoria per il retry
+let lastFinalizePayload = null;
+
+async function showResults() {
+  document.getElementById("quiz-wrapper").classList.remove("active");
+  document.getElementById("thankyou").style.display = "block";
+
+  let score = 0;
+  const resultRows = [];
+
+  questions.forEach((q, i) => {
+    let userAns = answers[i];
+    let correct = false;
+    if (q.type === "mc") correct = userAns === q.correct;
+    else if (q.type === "fitb") correct = normalizeAnswer(userAns) === normalizeAnswer(q.correct);
+    const pts = correct ? q.pts : 0;
+    score += pts;
+    const userDisplay = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
+    const correctDisplay = q.type === "mc" ? q.options[q.correct] : q.correct;
+    const ansRaw = userAns !== null && userAns !== undefined ? String(userAns) : "";
+    resultRows.push({ ans: ansRaw, pts, correct, correctDisplay, qText: q.text, qPts: q.pts, userDisplay });
+  });
+
+  // ---- MODALITÀ ESERCITAZIONE ----
+  if (EXAM_MODE === "practice") {
+    const totalPts = questions.reduce((s, q) => s + q.pts, 0);
+    document.getElementById("send-status").innerHTML =
+      "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + score + " / " + totalPts + "</div>" +
+      "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione — risultato non registrato</div>" +
+      "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
+      "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>Dom.</th>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>La tua risposta</th>" +
+      "<th style='padding:8px;text-align:left;font-weight:normal;'>Risposta corretta</th>" +
+      "<th style='padding:8px;text-align:center;font-weight:normal;'>Pt</th>" +
+      "</tr></thead><tbody>" +
+      resultRows.map((r, i) => {
+        const bg = r.correct ? "#f0f7f0" : (r.userDisplay === "—" ? "#fff" : "#fdf0f0");
+        const icon = r.correct ? "✓" : (r.userDisplay === "—" ? "–" : "✗");
+        const iconColor = r.correct ? "#2e7d32" : (r.userDisplay === "—" ? "#888" : "#b00");
+        return "<tr style='border-bottom:1px solid #eee;background:" + bg + ";'>" +
+          "<td style='padding:8px;color:#777;'>" + (i+1) + "</td>" +
+          "<td style='padding:8px;'><span style='color:" + iconColor + ";margin-right:6px;'>" + icon + "</span>" + escHtml(r.userDisplay) + "</td>" +
+          "<td style='padding:8px;color:#1a5c1a;'>" + (r.correct ? "" : escHtml(r.correctDisplay)) + "</td>" +
+          "<td style='padding:8px;text-align:center;'>" + r.pts + "/" + r.qPts + "</td>" +
+          "</tr>";
+      }).join("") +
+      "</tbody></table>";
+    document.getElementById("send-done").style.display = "none";
+    document.getElementById("btn-retry").style.display = "none";
+    // Mostra pulsante per ricominciare
+    document.getElementById("btn-restart").style.display = "inline-block";
+    return;
+  }
+
+  // ---- MODALITÀ ESAME ----
+  const endTime = new Date();
+  const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : null;
+  const elapsedStr = elapsed !== null ? Math.floor(elapsed/60) + "m " + (elapsed%60) + "s" : "";
+
+  lastFinalizePayload = {
+    action: "finalize",
+    matricola: studentMatricola,
+    nominativo: studentNominativo,
+    email: studentEmail,
+    examId: EXAM_ID,
+    score,
+    answers: resultRows,
+    tsStart: startTime ? startTime.toISOString() : "",
+    tsEnd: endTime.toISOString(),
+    elapsed: elapsedStr
+  };
+
+  await doFinalize();
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+async function doFinalize() {
+  const statusEl = document.getElementById("send-status");
+  const doneEl = document.getElementById("send-done");
+  const retryBtn = document.getElementById("btn-retry");
+
+  statusEl.textContent = "Salvataggio in corso…";
+  statusEl.style.color = "#555";
+  doneEl.style.display = "none";
+  retryBtn.style.display = "none";
+
+  const ok = await callScriptWithRetry(lastFinalizePayload, 3);
+
+  if (ok) {
+    clearLocal();
+    statusEl.textContent = "";
+    doneEl.style.display = "block";
+  } else {
+    statusEl.textContent = "⚠ Salvataggio non riuscito. I tuoi dati sono al sicuro in questo browser.";
+    statusEl.style.color = "#b00";
+    retryBtn.style.display = "inline-block";
+  }
+}
+
+async function retryFinalize() {
+  await doFinalize();
+}
+
+// ---- HTTP con retry automatico ----
+async function callScriptWithRetry(payload, maxRetries) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+      document.getElementById("send-status").textContent =
+        "Nuovo tentativo " + attempt + "/" + maxRetries + "…";
+      await new Promise(r => setTimeout(r, delay));
+    }
+    try {
+      const res = await callScript(payload);
+      if (res && res.status === "ok") return true;
+    } catch(e) { /* riprova */ }
+  }
+  return false;
+}
+
+function callScript(payload) {
+  return fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload)
+  }).then(r => r.json());
+}
+
+// ---- RICOMINCIA (solo practice) ----
+function restartQuiz() {
+  if (timerInterval) clearInterval(timerInterval);
+  document.getElementById("thankyou").style.display = "none";
+  document.getElementById("btn-restart").style.display = "none";
+  initQuiz(); // riavvia dall'inizio, già in practice mode
+}
+</script>
+</body>
+</html>
