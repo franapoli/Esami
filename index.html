@@ -762,7 +762,7 @@ function confirmSubmit() {
   const total = questions.length;
   const unanswered = total - answered;
   let msg = "Hai risposto a " + answered + " domande su " + total + ".";
-  if (unanswered > 0) msg += "\n\n" + unanswered + " domanda/e senza risposta verrà considerata errata.";
+  if (unanswered > 0) msg += "\n\n" + unanswered + (unanswered === 1 ? " domanda senza risposta verrà considerata errata." : " domande senza risposta verranno considerate errate.");
   msg += "\n\nConfermi la consegna?";
   if (confirm(msg)) showResults();
 }
