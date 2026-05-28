@@ -762,7 +762,19 @@ async function saveProgress(qIndex, value) {
   if (EXAM_MODE === "practice") return; // practice: nessun salvataggio
   setSaveStatus("Salvataggio…");
   try {
-    await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola, qIndex: qIndex+1, value: String(value) });
+    const q = questions[qIndex];
+    let ansText, pts;
+    if (q.type === "mc") {
+      ansText = (value !== null && value !== undefined) ? q.options[value] : "";
+      const correct = value === q.correct;
+      pts = correct ? q.pts : 0;
+    } else {
+      ansText = String(value);
+      const correct = normalizeAnswer(value) === normalizeAnswer(q.correct);
+      pts = correct ? q.pts : 0;
+    }
+    await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
+                       qIndex: qIndex+1, ans: ansText, pts });
     setSaveStatus("✓ Salvato");
   } catch(e) {
     setSaveStatus("⚠ Salvataggio fallito");

@@ -409,8 +409,10 @@ function doPost(e) {
     if (data.action === "update") {
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
-      const col = COL_ANS_FIRST + (data.qIndex - 1) * 2;
-      sheet.getRange(rowIndex, col).setValue(data.value);
+      const qIdx = parseInt(data.qIndex, 10);
+      const col = COL_ANS_FIRST + (qIdx - 1) * 2;
+      sheet.getRange(rowIndex, col).setValue(data.ans || "");
+      sheet.getRange(rowIndex, col + 1).setValue(data.pts !== undefined ? data.pts : "");
       return corsResponse({ status: "ok" });
     }
 
