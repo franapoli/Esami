@@ -445,7 +445,7 @@ async function loadTrack() {
       const t = res.track;
       EXAM_DATE         = t.exam_date  || "";
       EXAM_NAME         = t.exam_name  || "";
-      EXAM_DURATION_MIN = parseInt(t.duration) || 60;
+      EXAM_DURATION_MIN = t.duration !== undefined && t.duration !== "" ? parseInt(t.duration) : 60;
       EXAM_MODE         = t.mode       || "exam";
       const examStatus  = t.status     || "closed";
 
