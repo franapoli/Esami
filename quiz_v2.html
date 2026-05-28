@@ -480,7 +480,36 @@ function prevQ()    { if (current > 0)                    { saveCurrentAnswer();
 
 function saveCurrentAnswer() {
   const ans = answers[current];
-  if (ans !== null && ans !== undefined) saveProgress(current, ans);
+  if (ans !== null && ans !== undefined) enqueueProgress(current, ans);
+  refreshDuration(); // aggiorna durata dalla traccia in background
+}
+
+// ---- CODA SERIALIZZATA ----
+// I salvataggi vengono accodati: il successivo parte solo quando il precedente è terminato.
+let _saveQueue = Promise.resolve();
+function enqueueProgress(qIndex, value) {
+  _saveQueue = _saveQueue.then(() => saveProgress(qIndex, value));
+}
+
+// ---- AGGIORNAMENTO DURATA DA SERVER ----
+async function refreshDuration() {
+  if (EXAM_MODE === "practice") return;
+  try {
+    const res = await callScript({ action: "getTrack", examId: EXAM_ID });
+    if (res.status !== "ok" || !res.track) return;
+    const newDur = res.track.duration !== undefined && res.track.duration !== ""
+      ? parseInt(res.track.duration) : EXAM_DURATION_MIN;
+    if (newDur === EXAM_DURATION_MIN) return; // nessun cambiamento
+    EXAM_DURATION_MIN = newDur;
+    // Riavvia il timer con la nuova durata (startTime rimane invariato)
+    if (EXAM_DURATION_MIN === 0) {
+      clearInterval(timerInterval);
+      document.getElementById("timer-wrap").style.display = "none";
+    } else {
+      document.getElementById("timer-wrap").style.display = "";
+      startTimer();
+    }
+  } catch(e) { /* silenzioso */ }
 }
 
 // ---- RENDER ----
