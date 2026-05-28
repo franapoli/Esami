@@ -681,8 +681,14 @@ function updateGrid() {
 }
 
 function jumpTo(i) {
+  saveCurrentAnswer();
   current = i;
   renderQuestion();
+}
+
+function saveCurrentAnswer() {
+  const ans = answers[current];
+  if (ans !== null && ans !== undefined) saveProgress(current, ans);
 }
 
 // ---- RENDER ----
@@ -721,26 +727,29 @@ function renderQuestion() {
 function selectOption(i) {
   answers[current] = i;
   saveLocal();
-  saveProgress(current, i);
   renderQuestion();
 }
 
 function saveText(val) {
   answers[current] = val.trim();
   saveLocal();
-  saveProgress(current, val.trim());
 }
 
 // ---- NAV ----
 function nextQ() {
   if (current < questions.length - 1) {
+    saveCurrentAnswer();
     current++;
     renderQuestion();
   }
 }
 
 function prevQ() {
-  if (current > 0) { current--; renderQuestion(); }
+  if (current > 0) {
+    saveCurrentAnswer();
+    current--;
+    renderQuestion();
+  }
 }
 
 function confirmSubmit() {
