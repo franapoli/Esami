@@ -794,7 +794,8 @@ async function showResults() {
     score += pts;
     const userDisplay = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
     const correctDisplay = q.type === "mc" ? q.options[q.correct] : q.correct;
-    resultRows.push({ ans: userDisplay, pts, correct, correctDisplay, qText: q.text, qPts: q.pts });
+    const ansRaw = userAns !== null && userAns !== undefined ? String(userAns) : "";
+    resultRows.push({ ans: ansRaw, pts, correct, correctDisplay, qText: q.text, qPts: q.pts, userDisplay });
   });
 
   // ---- MODALITÀ ESERCITAZIONE ----
@@ -811,12 +812,12 @@ async function showResults() {
       "<th style='padding:8px;text-align:center;font-weight:normal;'>Pt</th>" +
       "</tr></thead><tbody>" +
       resultRows.map((r, i) => {
-        const bg = r.correct ? "#f0f7f0" : (r.ans === "—" ? "#fff" : "#fdf0f0");
-        const icon = r.correct ? "✓" : (r.ans === "—" ? "–" : "✗");
-        const iconColor = r.correct ? "#2e7d32" : (r.ans === "—" ? "#888" : "#b00");
+        const bg = r.correct ? "#f0f7f0" : (r.userDisplay === "—" ? "#fff" : "#fdf0f0");
+        const icon = r.correct ? "✓" : (r.userDisplay === "—" ? "–" : "✗");
+        const iconColor = r.correct ? "#2e7d32" : (r.userDisplay === "—" ? "#888" : "#b00");
         return "<tr style='border-bottom:1px solid #eee;background:" + bg + ";'>" +
           "<td style='padding:8px;color:#777;'>" + (i+1) + "</td>" +
-          "<td style='padding:8px;'><span style='color:" + iconColor + ";margin-right:6px;'>" + icon + "</span>" + escHtml(r.ans) + "</td>" +
+          "<td style='padding:8px;'><span style='color:" + iconColor + ";margin-right:6px;'>" + icon + "</span>" + escHtml(r.userDisplay) + "</td>" +
           "<td style='padding:8px;color:#1a5c1a;'>" + (r.correct ? "" : escHtml(r.correctDisplay)) + "</td>" +
           "<td style='padding:8px;text-align:center;'>" + r.pts + "/" + r.qPts + "</td>" +
           "</tr>";
