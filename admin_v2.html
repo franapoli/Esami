@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pannello Admin — QuizForge v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; }
+  #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; }
+  #site-header img { height: 52px; display: block; }
+
+  #login-panel { max-width: 420px; margin: 60px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  h1 { font-size: 1.3em; font-weight: bold; margin-bottom: 6px; }
+  .subtitle { color: #555; font-size: 0.9em; margin-bottom: 28px; }
+  label { display: block; font-size: 0.88em; color: #333; margin-bottom: 4px; margin-top: 14px; }
+  input[type=password], input[type=text], input[type=date], input[type=number], select {
+    width: 100%; padding: 8px 10px; border: 1px solid #bbb; font-size: 1em;
+    font-family: inherit; background: #fff;
+  }
+  .btn { display: inline-block; margin-top: 16px; padding: 9px 26px; background: #1a1a1a;
+         color: #fff; border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; }
+  .btn:hover { background: #333; }
+  .btn-sm { padding: 7px 18px; font-size: 0.88em; margin-top: 0; }
+  .btn-green  { background: #2e7d32; } .btn-green:hover  { background: #388e3c; }
+  .btn-red    { background: #b71c1c; } .btn-red:hover    { background: #c62828; }
+  .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
+  .btn-outline:hover { background: #f5f5f0; }
+  .error-msg { color: #b00; font-size: 0.85em; margin-top: 8px; min-height: 1em; }
+  .ok-msg    { color: #2e7d32; font-size: 0.85em; margin-top: 8px; min-height: 1em; }
+
+  #main-panel { display: none; max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
+  #main-panel.active { display: block; }
+
+  .panel-header { display: flex; align-items: center; justify-content: space-between;
+                  padding: 18px 0 16px; flex-wrap: wrap; gap: 12px; }
+  .panel-header h1 { font-size: 1.2em; }
+
+  .track-selector-bar { background: #fff; border: 1px solid #ddd; padding: 16px 24px;
+                        display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 0; }
+  .track-selector-bar label { margin: 0; font-size: 0.88em; white-space: nowrap; color: #555; }
+  .track-selector-bar select { flex: 1; min-width: 260px; padding: 8px 10px; border: 1px solid #bbb;
+                                font-size: 0.95em; font-family: inherit; background: #fff; cursor: pointer; }
+  #no-tracks { font-size: 0.85em; color: #888; font-style: italic; }
+
+  .tab-bar { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; margin-top: 16px; }
+  .tab { padding: 10px 24px; font-size: 0.92em; font-family: inherit; cursor: pointer;
+         background: none; border: none; border-bottom: 3px solid transparent;
+         margin-bottom: -2px; color: #666; transition: color 0.15s; }
+  .tab:hover { color: #1a1a1a; }
+  .tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: bold; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .card { background: #fff; border: 1px solid #ddd; padding: 24px 28px; margin-bottom: 18px; }
+  .card h2 { font-size: 1em; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #eee;
+             text-transform: uppercase; letter-spacing: 0.05em; color: #555; font-weight: normal; }
+  .row2 { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row2 .field { flex: 1; min-width: 140px; }
+  .field label { margin-top: 0; margin-bottom: 5px; }
+
+  .status-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+                background: #f8f8f4; border: 1px solid #eee; margin-bottom: 16px; font-size: 0.9em; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .dot.open   { background: #4caf50; box-shadow: 0 0 5px #4caf5088; }
+  .dot.closed { background: #aaa; }
+  .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 1px 8px; font-size: 0.78em; border-radius: 2px; margin-left: 6px; }
+  .badge-exam     { background: #e3f0ff; color: #1a3c5c; }
+  .badge-practice { background: #fff8e1; color: #7b5e00; }
+  .note { font-size: 0.8em; color: #888; margin-top: 8px; line-height: 1.5; }
+  .hint { font-size: 0.76em; color: #999; margin-top: 3px; }
+
+  .monitor-info-bar { background: #fff; border: 1px solid #ddd; padding: 14px 24px; margin-bottom: 14px;
+                      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .monitor-meta { font-size: 0.88em; color: #555; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #last-update { font-size: 0.78em; color: #888; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stat-card { background: #fff; border: 1px solid #ddd; padding: 14px 20px; flex: 1; min-width: 130px; }
+  .stat-card .num { font-size: 1.9em; font-weight: bold; line-height: 1; }
+  .stat-card .lbl { font-size: 0.76em; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .stat-card.green .num { color: #2e7d32; }
+  .stat-card.blue  .num { color: #1565c0; }
+  .stat-card.orange .num { color: #e65100; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; font-size: 0.88em; }
+  thead tr { background: #1a1a1a; color: #fff; }
+  thead th { padding: 9px 11px; text-align: left; font-weight: normal; font-size: 0.82em;
+             text-transform: uppercase; letter-spacing: 0.04em; }
+  tbody tr { border-bottom: 1px solid #eee; }
+  tbody tr:hover { background: #f8f8f4; }
+  tbody tr.finalized { background: #f0f7f0; }
+  tbody td { padding: 8px 11px; }
+  .badge-done { background: #c8e6c9; color: #1b5e20; }
+  .badge-prog { background: #fff9c4; color: #f57f17; }
+  .badge-wait { background: #f5f5f5; color: #666; }
+  .progress-mini { height: 6px; background: #eee; border-radius: 3px; width: 90px; display: inline-block; vertical-align: middle; }
+  .progress-mini-fill { height: 100%; background: #81c784; border-radius: 3px; }
+
+  .res-wrap { overflow-x: auto; }
+  table.res-table { width: auto; min-width: 100%; font-size: 0.78em; border: 1px solid #ddd; }
+  table.res-table thead tr { background: #1a1a1a; color: #fff; }
+  table.res-table thead th { padding: 7px 9px; text-align: center; font-weight: normal;
+    font-size: 0.82em; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  table.res-table thead th.col-name { text-align: left; }
+  table.res-table tbody td { padding: 6px 9px; text-align: center; border-bottom: 1px solid #eee; }
+  table.res-table tbody td.col-name { text-align: left; white-space: nowrap; }
+  table.res-table tbody td.col-score { font-weight: bold; }
+  table.res-table tfoot tr { background: #f0f0e8; font-size: 0.82em; }
+  table.res-table tfoot td { padding: 6px 9px; text-align: center; border-top: 2px solid #ddd; }
+  table.res-table tfoot td.col-name { text-align: left; font-weight: bold; }
+  .cell-ok   { background: #c8e6c9; color: #1b5e20; }
+  .cell-ko   { background: #ffcdd2; color: #b71c1c; }
+  .cell-zero { color: #999; }
+  .hdr-easy  { background: #2e7d32 !important; }
+  .hdr-hard  { background: #b71c1c !important; }
+
+  .histo-wrap { margin-top: 10px; }
+  .histo-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.82em; }
+  .histo-label { width: 52px; text-align: right; color: #555; flex-shrink: 0; }
+  .histo-bar-bg { flex: 1; background: #eee; height: 18px; position: relative; overflow: hidden; }
+  .histo-bar-fill { height: 100%; background: #1a1a1a; transition: width 0.3s; }
+  .histo-count { width: 28px; color: #555; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<header id="site-header">
+  <img src="logo_unisannio.png" alt="Università degli Studi del Sannio — DST">
+</header>
+
+<div id="login-panel">
+  <h1>Pannello Amministratore</h1>
+  <p class="subtitle">QuizForge v2 — Applicazioni di Bioinformatica</p>
+  <label for="pwd">Password amministratore</label>
+  <input type="password" id="pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
+  <div id="login-error" class="error-msg"></div>
+  <button class="btn" onclick="doLogin()">Accedi</button>
+</div>
+
+<div id="main-panel">
+
+  <div class="panel-header">
+    <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span></h1>
+    <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+  </div>
+
+  <div class="track-selector-bar">
+    <label for="track-select">Traccia:</label>
+    <select id="track-select" onchange="onTrackChange()">
+      <option value="">— caricamento… —</option>
+    </select>
+    <span id="no-tracks" style="display:none;">Nessuna traccia trovata. Aggiungila nel foglio <em>tracce</em> del repository domande.</span>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Gestione traccia</button>
+    <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
+    <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
+  </div>
+
+  <!-- TAB: GESTIONE TRACCIA -->
+  <div class="tab-panel active" id="panel-admin">
+    <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per gestirla.
+    </div>
+    <div id="track-card" style="display:none;">
+      <div class="card">
+        <h2>Stato e controllo</h2>
+        <div class="status-bar">
+          <div class="dot" id="status-dot"></div>
+          <div id="status-text"></div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
+          <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
+        </div>
+        <div id="status-msg" class="ok-msg"></div>
+      </div>
+      <div class="card">
+        <h2>Modifica attributi traccia</h2>
+        <div class="field">
+          <label for="cfg-name">Nome visualizzato</label>
+          <input type="text" id="cfg-name" placeholder="Es. Prova in itinere 1 — VHL">
+        </div>
+        <div class="row2" style="margin-top:12px;">
+          <div class="field">
+            <label for="cfg-date">Data</label>
+            <input type="date" id="cfg-date">
+          </div>
+          <div class="field">
+            <label for="cfg-dur">Durata (minuti, 0 = illimitata)</label>
+            <input type="number" id="cfg-dur" min="0" max="240" step="5">
+          </div>
+          <div class="field" style="min-width:150px;max-width:180px;">
+            <label for="cfg-mode">Modalità</label>
+            <select id="cfg-mode">
+              <option value="exam">Esame</option>
+              <option value="practice">Esercitazione</option>
+            </select>
+            <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
+          </div>
+        </div>
+        <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
+        <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
+        <div id="edit-msg" class="ok-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: MONITOR STUDENTI -->
+  <div class="tab-panel" id="panel-monitor">
+    <div id="monitor-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per monitorare gli studenti.
+    </div>
+    <div id="monitor-content" style="display:none;">
+      <div class="monitor-info-bar">
+        <div class="monitor-meta" id="monitor-meta"></div>
+        <div class="controls">
+          <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
+          <span id="last-update"></span>
+          <span style="font-size:0.78em;color:#aaa;">auto ogni 30s</span>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card blue">  <div class="num" id="stat-total">—</div><div class="lbl">Connessi</div></div>
+        <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
+        <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Matricola</th><th>Nominativo</th><th>Email</th>
+            <th>Inizio</th><th>Fine</th><th>Durata</th>
+            <th>Risposte</th><th>Voto</th><th>Stato</th>
+          </tr>
+        </thead>
+        <tbody id="monitor-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: RISULTATI -->
+  <div class="tab-panel" id="panel-risultati">
+    <div id="risultati-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona una traccia per visualizzare i risultati.
+    </div>
+    <div id="risultati-content" style="display:none;">
+      <div class="monitor-info-bar">
+        <div class="monitor-meta" id="risultati-meta"></div>
+        <div class="controls">
+          <button class="btn btn-sm" onclick="loadRisultatiData()">↻ Aggiorna</button>
+          <span id="risultati-last-update"></span>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card blue">  <div class="num" id="res-stat-n">—</div>   <div class="lbl">Consegnati</div></div>
+        <div class="stat-card green"> <div class="num" id="res-stat-avg">—</div> <div class="lbl">Media</div></div>
+        <div class="stat-card orange"><div class="num" id="res-stat-med">—</div> <div class="lbl">Mediana</div></div>
+      </div>
+      <div class="card" style="margin-bottom:18px;">
+        <h2>Distribuzione punteggi</h2>
+        <div class="histo-wrap" id="histo-wrap"></div>
+      </div>
+      <div class="card">
+        <h2>Punteggi per domanda
+          <span style="font-weight:normal;font-size:0.85em;color:#888;margin-left:12px;">
+            <span style="display:inline-block;width:12px;height:12px;background:#c8e6c9;vertical-align:middle;margin-right:4px;"></span>≥80% corretto
+            &nbsp;
+            <span style="display:inline-block;width:12px;height:12px;background:#ffcdd2;vertical-align:middle;margin-right:4px;"></span>≤20% corretto
+          </span>
+        </h2>
+        <div class="res-wrap">
+          <table class="res-table" id="res-table">
+            <thead id="res-thead"></thead>
+            <tbody id="res-tbody"></tbody>
+            <tfoot id="res-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
+
+let adminPassword = "";
+let allTracks     = [];
+let currentTrack  = null;
+let refreshTimer  = null;
+let activeTab     = "admin";
+// N. domande dinamico per traccia (arriva da getResults/getMonitor)
+let currentNQ     = 20;
+
+async function callScript(payload) {
+  const resp = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload)
+  });
+  return resp.json();
+}
+
+function formatDateIt(dateStr) {
+  if (!dateStr) return "—";
+  const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+                "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  const m = String(dateStr).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return dateStr;
+  return parseInt(m[3]) + " " + (mesi[parseInt(m[2])-1] || m[2]) + " " + m[1];
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---- LOGIN ----
+async function doLogin() {
+  const pwd = document.getElementById("pwd").value.trim();
+  if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
+  document.getElementById("login-error").textContent = "Verifica…";
+  try {
+    const res = await callScript({ action: "getAllTracks", password: pwd });
+    if (res.status === "error") {
+      document.getElementById("login-error").textContent = res.message || "Errore.";
+      return;
+    }
+    adminPassword = pwd;
+    allTracks = res.tracks || [];
+    document.getElementById("login-panel").style.display = "none";
+    document.getElementById("main-panel").classList.add("active");
+    populateTrackSelect(allTracks);
+  } catch(e) {
+    document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
+  }
+}
+
+function logout() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  adminPassword = ""; currentTrack = null; refreshTimer = null;
+  document.getElementById("main-panel").classList.remove("active");
+  document.getElementById("login-panel").style.display = "";
+  document.getElementById("pwd").value = "";
+  document.getElementById("login-error").textContent = "";
+  switchTab("admin");
+}
+
+// ---- TRACK SELECT ----
+function populateTrackSelect(tracks) {
+  const sel = document.getElementById("track-select");
+  sel.innerHTML = "";
+  if (tracks.length === 0) {
+    sel.innerHTML = '<option value="">— nessuna traccia —</option>';
+    document.getElementById("no-tracks").style.display = "inline";
+    return;
+  }
+  const sorted = [...tracks].sort((a,b) => a.status === b.status ? 0 : a.status === "open" ? -1 : 1);
+  sel.innerHTML = '<option value="">— seleziona una traccia —</option>';
+  sorted.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.exam_id;
+    const icon    = t.status === "open" ? "▶ " : "■ ";
+    const mode    = t.mode === "practice" ? " [esercitazione]" : " [esame]";
+    const name    = t.exam_name && t.exam_name.trim() ? t.exam_name : "⚠ " + t.exam_id + " (non configurata)";
+    opt.textContent = icon + name + " — " + formatDateIt(t.exam_date) + mode;
+    sel.appendChild(opt);
+  });
+}
+
+function onTrackChange() {
+  const examId = document.getElementById("track-select").value;
+  currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
+  updateAdminTab();
+  if (activeTab === "monitor")   updateMonitorTab();
+  if (activeTab === "risultati") updateRisultatiTab();
+}
+
+function updateTrackInList(t) {
+  const idx = allTracks.findIndex(x => x.exam_id === t.exam_id);
+  if (idx >= 0) allTracks[idx] = { ...allTracks[idx], ...t };
+  const prev = t.exam_id;
+  populateTrackSelect(allTracks);
+  document.getElementById("track-select").value = prev;
+}
+
+// ---- TABS ----
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  document.getElementById("panel-" + name).classList.add("active");
+  if (name === "monitor") {
+    updateMonitorTab();
+    startAutoRefresh();
+  } else if (name === "risultati") {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    updateRisultatiTab();
+  } else {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    updateAdminTab();
+  }
+}
+
+// ---- TAB GESTIONE TRACCIA ----
+function updateAdminTab() {
+  const has = !!currentTrack;
+  document.getElementById("admin-placeholder").style.display = has ? "none" : "block";
+  document.getElementById("track-card").style.display        = has ? "block" : "none";
+  if (!has) return;
+  renderTrackStatus(currentTrack);
+  populateEditForm(currentTrack);
+  document.getElementById("status-msg").textContent = "";
+  document.getElementById("edit-msg").textContent   = "";
+}
+
+function renderTrackStatus(t) {
+  const isOpen = t.status === "open";
+  document.getElementById("status-dot").className = "dot " + (isOpen ? "open" : "closed");
+  const modeBadge = t.mode === "practice"
+    ? '<span class="badge badge-practice">Esercitazione</span>'
+    : '<span class="badge badge-exam">Esame</span>';
+  const dur = t.duration === "0" || t.duration === 0 ? "senza limite" : (t.duration || "—") + " min";
+  document.getElementById("status-text").innerHTML =
+    "<strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong>" + modeBadge +
+    " &nbsp;|&nbsp; " + escHtml(t.exam_name || t.exam_id) +
+    " &nbsp;|&nbsp; " + formatDateIt(t.exam_date) +
+    " &nbsp;|&nbsp; " + dur;
+}
+
+function populateEditForm(t) {
+  document.getElementById("cfg-name").value = t.exam_name || "";
+  document.getElementById("cfg-date").value = t.exam_date || "";
+  document.getElementById("cfg-dur").value  = t.duration  || "90";
+  document.getElementById("cfg-mode").value = t.mode      || "exam";
+}
+
+async function setStatus(newStatus) {
+  if (!currentTrack) return;
+  const msg = document.getElementById("status-msg");
+  msg.className = "ok-msg"; msg.textContent = "Aggiornamento…";
+  try {
+    const res = await callScript({ action:"setTrack", password:adminPassword, examId:currentTrack.exam_id, status:newStatus });
+    if (res.status === "ok") {
+      currentTrack.status = newStatus;
+      updateTrackInList(currentTrack);
+      renderTrackStatus(currentTrack);
+      msg.textContent = newStatus === "open" ? "✓ Traccia aperta." : "✓ Traccia chiusa.";
+    } else { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; }
+  } catch(e) { msg.className = "error-msg"; msg.textContent = "Errore di rete: " + e.message; }
+}
+
+async function saveTrack() {
+  if (!currentTrack) return;
+  const msg = document.getElementById("edit-msg");
+  msg.className = "ok-msg"; msg.textContent = "Salvataggio…";
+  try {
+    const res = await callScript({
+      action:"setTrack", password:adminPassword, examId:currentTrack.exam_id,
+      exam_name: document.getElementById("cfg-name").value.trim(),
+      exam_date: document.getElementById("cfg-date").value.trim(),
+      duration:  document.getElementById("cfg-dur").value.trim(),
+      mode:      document.getElementById("cfg-mode").value
+    });
+    if (res.status === "ok") {
+      currentTrack.exam_name = document.getElementById("cfg-name").value.trim();
+      currentTrack.exam_date = document.getElementById("cfg-date").value.trim();
+      currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
+      currentTrack.mode      = document.getElementById("cfg-mode").value;
+      updateTrackInList(currentTrack);
+      renderTrackStatus(currentTrack);
+      msg.textContent = "✓ Modifiche salvate.";
+    } else { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; }
+  } catch(e) { msg.className = "error-msg"; msg.textContent = "Errore di rete: " + e.message; }
+}
+
+// ---- TAB MONITOR ----
+function updateMonitorTab() {
+  const has = !!currentTrack;
+  document.getElementById("monitor-placeholder").style.display = has ? "none"  : "block";
+  document.getElementById("monitor-content").style.display     = has ? "block" : "none";
+  if (has) loadMonitorData();
+}
+
+async function loadMonitorData() {
+  if (!currentTrack) return;
+  try {
+    const res = await callScript({ action:"getMonitor", password:adminPassword, examId:currentTrack.exam_id });
+    if (res.status === "ok") renderMonitorData(res);
+    document.getElementById("last-update").textContent = new Date().toLocaleTimeString("it-IT");
+  } catch(e) { console.error("Monitor error:", e); }
+}
+
+function renderMonitorData(res) {
+  const track  = res.track || {};
+  const rows   = res.rows  || [];
+  // N. domande dinamico: prova a ricavarlo dalla traccia o dai dati
+  const nQ = currentNQ;
+
+  const dateIt  = formatDateIt(track.exam_date || "");
+  const modeLbl = track.mode === "practice" ? " — esercitazione" : "";
+  document.getElementById("monitor-meta").innerHTML =
+    "<strong>" + escHtml(track.exam_name || track.exam_id || "—") + "</strong>" +
+    (dateIt ? " &nbsp;|&nbsp; " + dateIt : "") + modeLbl +
+    " &nbsp;|&nbsp; <code style='font-size:0.85em'>" + escHtml(track.exam_id || "—") + "</code>";
+
+  const done = rows.filter(r => r.finalized).length;
+  document.getElementById("stat-total").textContent = rows.length;
+  document.getElementById("stat-prog").textContent  = rows.length - done;
+  document.getElementById("stat-done").textContent  = done;
+
+  const tbody = document.getElementById("monitor-body");
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#888;">Nessuno studente ancora connesso</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const answered = r.answered || 0;
+    const pct   = Math.round((answered / nQ) * 100);
+    const badge = r.finalized
+      ? '<span class="badge badge-done">Consegnato</span>'
+      : answered > 0
+        ? '<span class="badge badge-prog">In corso</span>'
+        : '<span class="badge badge-wait">Connesso</span>';
+    const score = r.finalized && r.score !== "" ? r.score : "—";
+    return `<tr class="${r.finalized ? "finalized" : ""}">
+      <td>${escHtml(String(r.matricola))}</td>
+      <td>${escHtml(String(r.nominativo||""))}</td>
+      <td>${escHtml(String(r.email||""))}</td>
+      <td>${r.tsStart||"—"}</td>
+      <td>${r.finalized ? (r.tsEnd||"—") : "—"}</td>
+      <td>${r.finalized ? escHtml(String(r.elapsed||"")) : "—"}</td>
+      <td><span style="margin-right:6px;">${answered}/${nQ}</span>
+          <span class="progress-mini"><span class="progress-mini-fill" style="width:${pct}%"></span></span></td>
+      <td>${score}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join("");
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => { if (activeTab === "monitor") loadMonitorData(); }, 30000);
+}
+
+// ---- TAB RISULTATI ----
+function updateRisultatiTab() {
+  const has = !!currentTrack;
+  document.getElementById("risultati-placeholder").style.display = has ? "none"  : "block";
+  document.getElementById("risultati-content").style.display     = has ? "block" : "none";
+  if (has) loadRisultatiData();
+}
+
+async function loadRisultatiData() {
+  if (!currentTrack) return;
+  try {
+    const res = await callScript({ action:"getResults", password:adminPassword, examId:currentTrack.exam_id });
+    if (res.status === "ok") renderRisultati(res);
+    document.getElementById("risultati-last-update").textContent = new Date().toLocaleTimeString("it-IT");
+  } catch(e) { console.error("Risultati error:", e); }
+}
+
+function renderRisultati(res) {
+  const track = res.track || {};
+  const rows  = res.rows  || [];
+  const nQ    = rows.length > 0 ? rows[0].pts.length : currentNQ;
+  currentNQ   = nQ; // aggiorna per il monitor
+
+  document.getElementById("risultati-meta").innerHTML =
+    "<strong>" + escHtml(track.exam_name || track.exam_id || "—") + "</strong>" +
+    (track.exam_date ? " &nbsp;|&nbsp; " + formatDateIt(track.exam_date) : "");
+
+  document.getElementById("res-stat-n").textContent = rows.length;
+  if (rows.length > 0) {
+    const scores = rows.map(r => Number(r.score) || 0).sort((a,b) => a-b);
+    const avg = scores.reduce((s,v) => s+v, 0) / scores.length;
+    const med = scores.length % 2 === 0
+      ? (scores[scores.length/2 - 1] + scores[scores.length/2]) / 2
+      : scores[Math.floor(scores.length/2)];
+    document.getElementById("res-stat-avg").textContent = avg.toFixed(1);
+    document.getElementById("res-stat-med").textContent = med % 1 === 0 ? med : med.toFixed(1);
+  } else {
+    document.getElementById("res-stat-avg").textContent = "—";
+    document.getElementById("res-stat-med").textContent = "—";
+  }
+
+  // Calcola totale punti dalla traccia (se disponibile)
+  const maxScore = rows.length > 0
+    ? rows[0].pts.reduce((s, _, qi) => s + Math.max(...rows.map(r => Number(r.pts[qi]) || 0)), 0)
+    : 30;
+
+  renderHistogram(rows, maxScore);
+
+  if (rows.length === 0) {
+    document.getElementById("res-thead").innerHTML = "";
+    document.getElementById("res-tbody").innerHTML =
+      '<tr><td colspan="3" style="text-align:center;padding:28px;color:#888;">Nessuno studente ha ancora consegnato.</td></tr>';
+    document.getElementById("res-tfoot").innerHTML = "";
+    return;
+  }
+
+  const maxPts = rows[0].pts.map((_, qi) => Math.max(...rows.map(r => Number(r.pts[qi]) || 0)));
+  const pctOk  = rows[0].pts.map((_, qi) => {
+    const mp = maxPts[qi]; if (mp === 0) return null;
+    return rows.filter(r => (Number(r.pts[qi]) || 0) >= mp).length / rows.length;
+  });
+
+  let thHtml = '<tr><th class="col-name">Studente</th>';
+  for (let q = 0; q < nQ; q++) {
+    const p = pctOk[q];
+    const cls = p === null ? "" : p >= 0.8 ? " hdr-easy" : p <= 0.2 ? " hdr-hard" : "";
+    thHtml += `<th class="${cls}" title="Dom. ${q+1}">${q+1}</th>`;
+  }
+  thHtml += '<th>Tot</th></tr>';
+  document.getElementById("res-thead").innerHTML = thHtml;
+
+  document.getElementById("res-tbody").innerHTML = rows.map(r => {
+    let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}</td>`;
+    for (let q = 0; q < nQ; q++) {
+      const pt = Number(r.pts[q]) || 0;
+      const mp = maxPts[q];
+      const cls = mp === 0 ? "cell-zero" : pt >= mp ? "cell-ok" : pt > 0 ? "" : "cell-zero";
+      cells += `<td class="${cls}">${pt > 0 ? pt : "·"}</td>`;
+    }
+    cells += `<td class="col-score">${Number(r.score) || 0}</td>`;
+    return `<tr>${cells}</tr>`;
+  }).join("");
+
+  let tfHtml = '<tr><td class="col-name">% corretto</td>';
+  for (let q = 0; q < nQ; q++) {
+    const p   = pctOk[q];
+    const cls = p === null ? "" : p >= 0.8 ? "cell-ok" : p <= 0.2 ? "cell-ko" : "";
+    const lbl = p === null ? "—" : Math.round(p * 100) + "%";
+    tfHtml += `<td class="${cls}">${lbl}</td>`;
+  }
+  tfHtml += "<td></td></tr>";
+  document.getElementById("res-tfoot").innerHTML = tfHtml;
+}
+
+function renderHistogram(rows, maxScore) {
+  const wrap = document.getElementById("histo-wrap");
+  if (rows.length === 0) { wrap.innerHTML = '<p style="color:#888;font-size:0.88em;">Nessun dato.</p>'; return; }
+  const counts = Array(maxScore + 1).fill(0);
+  rows.forEach(r => { const s = Math.min(Math.max(Math.round(Number(r.score) || 0), 0), maxScore); counts[s]++; });
+  const maxCount = Math.max(...counts);
+  const step = 2;
+  let html = "";
+  for (let s = 0; s <= maxScore; s += step) {
+    const cnt = counts[s] + (counts[s+1] || 0);
+    const pct = maxCount > 0 ? (cnt / maxCount) * 100 : 0;
+    const label = s + (s+1 <= maxScore ? "–"+(s+1) : "");
+    html += `<div class="histo-bar-row">
+      <span class="histo-label">${label}</span>
+      <div class="histo-bar-bg"><div class="histo-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <span class="histo-count">${cnt > 0 ? cnt : ""}</span>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+</script>
+</body>
+</html>
