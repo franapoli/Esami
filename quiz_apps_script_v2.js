@@ -363,6 +363,43 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
+    // getQuestions — restituisce tutte le domande per l'admin
+    // ----------------------------------------------------------------
+    if (data.action === "getQuestions") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const allQ = loadAllQuestions();
+      return corsResponse({ status: "ok", questions: Object.values(allQ) });
+    }
+
+    // ----------------------------------------------------------------
+    // createTrack — crea nuova traccia nel foglio tracce
+    // ----------------------------------------------------------------
+    if (data.action === "createTrack") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const sheet = getTracceSheet();
+      // Genera track ID: YYYY-MM-DD-xxxxxx
+      const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+      let suffix = "";
+      for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+      const trackId = (data.exam_date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd")) + "-" + suffix;
+      sheet.appendRow([
+        trackId,
+        data.corso       || "",
+        data.exam_name   || "",
+        data.exam_date   || "",
+        data.duration    || 90,
+        data.mode        || "exam",
+        "closed",
+        (data.question_ids || []).join(",")
+      ]);
+      return corsResponse({ status: "ok", track_id: trackId });
+    }
+
+    // ----------------------------------------------------------------
     // getAllTracks — per admin
     // ----------------------------------------------------------------
     if (data.action === "getAllTracks") {
