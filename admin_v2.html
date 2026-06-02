@@ -208,6 +208,7 @@
         <div class="action-row">
           <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
           <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
+          <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova traccia</a>
         </div>
         <div id="status-msg" class="ok-msg"></div>
       </div>
@@ -526,8 +527,14 @@ function updateAdminTab() {
   if (!has) return;
   renderTrackStatus(currentTrack);
   populateEditForm(currentTrack);
+  updateProvaLink(currentTrack.exam_id);
   document.getElementById("status-msg").textContent = "";
   document.getElementById("edit-msg").textContent   = "";
+}
+
+function updateProvaLink(examId) {
+  const a = document.getElementById("link-prova");
+  if (a) a.href = "quiz_v2.html?id=" + encodeURIComponent(examId);
 }
 
 function renderTrackStatus(t) {
