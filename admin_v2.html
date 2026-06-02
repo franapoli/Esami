@@ -861,10 +861,8 @@ function renderSelList() {
   const countEl   = document.getElementById("sel-count");
 
   if (selectedIds.length === 0) {
-    empty.style.display     = "block";
-    container.innerHTML     = "";
-    container.appendChild(empty);
-    countEl.textContent     = "0 domande — 0 pt";
+    container.innerHTML = '<div style="padding:16px;color:#aaa;font-size:0.85em;font-style:italic;">Nessuna domanda selezionata</div>';
+    countEl.textContent = "0 domande — 0 pt";
     return;
   }
 
