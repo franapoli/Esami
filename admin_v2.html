@@ -143,7 +143,17 @@
 
   <div class="panel-header">
     <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span></h1>
-    <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <a id="link-questions" href="https://docs.google.com/spreadsheets/d/1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ/edit" target="_blank"
+         style="font-size:0.82em;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #bbb;">
+        ↗ Repo domande
+      </a>
+      <a id="link-results" href="https://docs.google.com/spreadsheets/d/1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA/edit" target="_blank"
+         style="font-size:0.82em;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #bbb;">
+        ↗ Foglio risultati
+      </a>
+      <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+    </div>
   </div>
 
   <div class="track-selector-bar">
@@ -199,7 +209,7 @@
               <option value="exam">Esame</option>
               <option value="practice">Esercitazione</option>
             </select>
-            <p class="hint">Esercitazione: nessun salvataggio, risposte mostrate alla fine.</p>
+            <p class="hint">Esercitazione: salvataggio abilitato, risposte mostrate alla fine. Tentativi multipli consentiti.</p>
           </div>
         </div>
         <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>

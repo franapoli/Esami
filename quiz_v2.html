@@ -96,7 +96,7 @@
   <p class="subtitle" id="cover-subtitle"></p>
   <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
-    ⚙ Modalità esercitazione — i risultati non vengono registrati
+    ⚙ Modalità esercitazione — puoi ripetere il quiz tutte le volte che vuoi
   </div>
   <div id="exam-fields" style="display:none;">
     <label for="cognome">Cognome e nome</label>
@@ -270,6 +270,7 @@ async function loadTrack() {
 
     if (EXAM_MODE === "practice") {
       document.getElementById("practice-badge").style.display = "block";
+      document.getElementById("exam-fields").style.display = "block";
       showBtn();
       return true;
     }
@@ -338,26 +339,6 @@ async function initQuiz() {
   btn.disabled = true;
   document.getElementById("cover-error").textContent = "";
 
-  if (EXAM_MODE === "practice") {
-    studentNominativo = "Esercitazione";
-    studentMatricola  = "";
-    studentEmail      = "";
-    answers   = new Array(questions.length).fill(null);
-    current   = 0;
-    startTime = new Date();
-    buildShuffleMap();
-    document.getElementById("cover").style.display = "none";
-    document.getElementById("thankyou").style.display = "none";
-    document.getElementById("quiz-wrapper").classList.add("active");
-    document.getElementById("student-info").innerHTML =
-      "<span style='font-size:0.85em;color:#888;font-style:italic;'>Modalità esercitazione</span>";
-    document.getElementById("practice-hint").style.display = "block";
-    buildGrid();
-    renderQuestion();
-    startTimer();
-    return;
-  }
-
   const nominativo = document.getElementById("cognome").value.trim();
   const matricola  = document.getElementById("matricola").value.trim();
   const email      = document.getElementById("email").value.trim();
@@ -371,12 +352,32 @@ async function initQuiz() {
   try {
     const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
     if (res.status === "duplicate") {
-      document.getElementById("cover-error").textContent = res.finalized
-        ? "Hai già consegnato il quiz con questa matricola."
-        : "Questa matricola è già registrata per l'esame in corso.";
-      btn.disabled = false;
-      btn.textContent = "Inizia il quiz";
-      return;
+      if (EXAM_MODE === "practice") {
+        const reset = confirm(
+          "Hai già un tentativo registrato con questa matricola.\n" +
+          "I risultati precedenti verranno cancellati.\n\nVuoi procedere?"
+        );
+        if (!reset) {
+          btn.disabled = false;
+          btn.textContent = "Inizia il quiz";
+          return;
+        }
+        const resetRes = await callScript({ action:"resetPractice", examId: EXAM_ID,
+                                            matricola, nominativo, email });
+        if (!resetRes || resetRes.status !== "ok") {
+          document.getElementById("cover-error").textContent = "Errore durante il reset. Riprova.";
+          btn.disabled = false;
+          btn.textContent = "Inizia il quiz";
+          return;
+        }
+      } else {
+        document.getElementById("cover-error").textContent = res.finalized
+          ? "Hai già consegnato il quiz con questa matricola."
+          : "Questa matricola è già registrata per l'esame in corso.";
+        btn.disabled = false;
+        btn.textContent = "Inizia il quiz";
+        return;
+      }
     }
     studentNominativo = nominativo;
     studentMatricola  = matricola;
@@ -385,10 +386,14 @@ async function initQuiz() {
     buildShuffleMap();
     saveLocal();
     document.getElementById("cover").style.display = "none";
+    document.getElementById("thankyou").style.display = "none";
     document.getElementById("quiz-wrapper").classList.add("active");
+    const infoExtra = EXAM_MODE === "practice"
+      ? "<br><span style='font-size:0.78em;color:#7b5e00;'>esercitazione</span>" : "";
     document.getElementById("student-info").innerHTML =
       "<strong>" + nominativo + "</strong><br>" + matricola +
-      "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
+      "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>" + infoExtra;
+    document.getElementById("practice-hint").style.display = EXAM_MODE === "practice" ? "block" : "none";
     buildGrid();
     renderQuestion();
     startTimer();
@@ -587,7 +592,6 @@ function normalizeAnswer(ans) {
 }
 
 async function saveProgress(qIndex, value) {
-  if (EXAM_MODE === "practice") return;
   setSaveStatus("Salvataggio…");
   try {
     const q = questions[qIndex];
@@ -648,7 +652,7 @@ async function showResults() {
   if (EXAM_MODE === "practice") {
     document.getElementById("send-status").innerHTML =
       "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + score + " / " + TOTAL_PTS + "</div>" +
-      "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione — risultato non registrato</div>" +
+      "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione</div>" +
       "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
       "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
       "<th style='padding:8px;text-align:left;font-weight:normal;'>Dom.</th>" +
@@ -670,6 +674,19 @@ async function showResults() {
     document.getElementById("send-done").style.display = "none";
     document.getElementById("btn-retry").style.display = "none";
     document.getElementById("btn-restart").style.display = "inline-block";
+
+    // Salva su Sheets in background (fire-and-forget)
+    const endTimePr  = new Date();
+    const elapsedPr  = startTime ? Math.round((endTimePr - startTime) / 1000) : null;
+    const elapsedStrPr = elapsedPr !== null ? Math.floor(elapsedPr / 60) + "m " + (elapsedPr % 60) + "s" : "";
+    clearLocal();
+    callScript({
+      action: "finalize", examId: EXAM_ID,
+      matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail,
+      score, answers: resultRows,
+      tsStart: startTime ? startTime.toISOString() : "",
+      tsEnd: endTimePr.toISOString(), elapsed: elapsedStrPr
+    }).catch(() => {});
     return;
   }
 
@@ -719,10 +736,28 @@ async function doFinalize() {
 
 async function retryFinalize() { await doFinalize(); }
 
-function restartQuiz() {
+async function restartQuiz() {
   if (timerInterval) clearInterval(timerInterval);
   document.getElementById("thankyou").style.display = "none";
   document.getElementById("btn-restart").style.display = "none";
+
+  if (EXAM_MODE === "practice") {
+    // Reset sul server e ricomincia subito (lo studente ha già confermato cliccando il pulsante)
+    await callScript({ action: "resetPractice", examId: EXAM_ID,
+                       matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail })
+          .catch(() => {});
+    answers   = new Array(questions.length).fill(null);
+    current   = 0;
+    startTime = new Date();
+    buildShuffleMap();
+    saveLocal();
+    document.getElementById("quiz-wrapper").classList.add("active");
+    buildGrid();
+    renderQuestion();
+    startTimer();
+    return;
+  }
+
   initQuiz();
 }
 </script>
