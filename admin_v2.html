@@ -164,7 +164,7 @@
 <div id="main-panel">
 
   <div class="panel-header">
-    <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span></h1>
+    <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
       <a id="link-questions" href="https://docs.google.com/spreadsheets/d/1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ/edit" target="_blank"
          style="font-size:0.82em;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #bbb;">
@@ -394,6 +394,8 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
+const BUILD = "3ccee68";
+document.getElementById("build-label").textContent = "build " + BUILD;
 
 let adminPassword = "";
 let allTracks     = [];
