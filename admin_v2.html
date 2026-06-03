@@ -201,7 +201,7 @@
     <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Gestione traccia</button>
     <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
     <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
-    <button class="tab"        id="tab-crea"      onclick="switchTab('crea')">+ Nuova traccia</button>
+    <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Domande</button>
   </div>
 
   <!-- TAB: GESTIONE TRACCIA -->
@@ -290,12 +290,12 @@
     </div>
   </div>
 
-  <!-- TAB: NUOVA TRACCIA -->
-  <div class="tab-panel" id="panel-crea">
+  <!-- TAB: DOMANDE -->
+  <div class="tab-panel" id="panel-domande">
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
 
       <!-- Colonna sinistra: browser domande -->
-      <div style="flex:1;min-width:320px;">
+      <div id="browser-col" style="flex:1;min-width:320px;">
         <div class="card" style="margin-bottom:12px;">
           <h2>Filtri</h2>
           <div class="row2">
@@ -329,9 +329,11 @@
         </div>
       </div>
 
-      <!-- Colonna destra: traccia in costruzione -->
+      <!-- Colonna destra: traccia -->
       <div style="flex:1;min-width:300px;">
-        <div class="card" style="margin-bottom:12px;">
+
+        <!-- Nuova traccia (nessuna traccia selezionata) -->
+        <div id="new-track-form" class="card" style="margin-bottom:12px;">
           <h2>Nuova traccia</h2>
           <div class="field">
             <label for="new-name">Nome</label>
@@ -355,18 +357,31 @@
             </div>
           </div>
         </div>
+
+        <!-- Traccia esistente selezionata -->
+        <div id="existing-track-info" style="display:none;margin-bottom:12px;"></div>
+
+        <!-- Lista items (condivisa) -->
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
             <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
-            <button class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
+            <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
           </div>
           <div id="items-list" style="max-height:460px;overflow-y:auto;min-height:60px;"></div>
         </div>
 
-        <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <!-- Azioni nuova traccia -->
+        <div id="actions-new" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-green" onclick="doCreateTrack()">Crea traccia</button>
           <span id="create-msg" style="font-size:0.85em;"></span>
         </div>
+
+        <!-- Azioni traccia esistente aperta -->
+        <div id="actions-edit" style="display:none;margin-top:14px;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="saveTrackItems()">Salva modifiche domande</button>
+          <span id="save-items-msg" style="font-size:0.85em;"></span>
+        </div>
+
       </div>
 
     </div>
@@ -514,6 +529,7 @@ function onTrackChange() {
   updateAdminTab();
   if (activeTab === "monitor")   updateMonitorTab();
   if (activeTab === "risultati") updateRisultatiTab();
+  if (activeTab === "domande")   updateDomandeTab();
 }
 
 function updateTrackInList(t) {
@@ -537,9 +553,9 @@ function switchTab(name) {
   } else if (name === "risultati") {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     updateRisultatiTab();
-  } else if (name === "crea") {
+  } else if (name === "domande") {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-    initCreaTab();
+    initDomandeTab();
   } else {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     updateAdminTab();
@@ -827,25 +843,100 @@ function renderHistogram(rows, maxScore) {
 }
 
 // ============================================================
-// TAB: NUOVA TRACCIA
+// TAB: DOMANDE
 // ============================================================
-let allQuestions = null;  // array caricato una volta sola
-let trackItems   = [];    // [{type:"fixed",id} | {type:"random",categoria,sottocateg,tag}]
+let allQuestions   = null;  // array caricato una volta sola
+let trackItems     = [];    // [{type:"fixed",id} | {type:"random",categoria,sottocateg,tag}]
+let isEditingItems = true;  // false = sola lettura (traccia chiusa)
 
-// ---- CARICAMENTO ----
-async function initCreaTab() {
-  if (allQuestions !== null) { renderQBrowser(); renderItemsList(); return; }
-  document.getElementById("q-loading").style.display = "block";
-  document.getElementById("q-browser").style.display = "none";
+// ---- INIT ----
+async function initDomandeTab() {
+  if (!allQuestions) {
+    document.getElementById("q-loading").style.display = "block";
+    document.getElementById("q-browser").style.display = "none";
+    try {
+      const res = await callScript({ action: "getQuestions", password: adminPassword });
+      if (res.status !== "ok") throw new Error(res.message);
+      allQuestions = res.questions || [];
+      buildCategoryFilters();
+    } catch(e) {
+      document.getElementById("q-loading").textContent = "Errore: " + e.message;
+      return;
+    }
+  }
+  updateDomandeTab();
+}
+
+function updateDomandeTab() {
+  if (!allQuestions) return; // non ancora caricato
+  if (!currentTrack) {
+    setDomandeMode("new");
+  } else if (currentTrack.status === "closed") {
+    setDomandeMode("readonly");
+  } else {
+    setDomandeMode("edit");
+  }
+}
+
+function setDomandeMode(mode) {
+  isEditingItems = (mode !== "readonly");
+
+  // Visibilità browser sinistro
+  const browserCol = document.getElementById("browser-col");
+  if (browserCol) browserCol.style.display = mode === "readonly" ? "none" : "";
+
+  // Visibilità form/header
+  document.getElementById("new-track-form").style.display      = mode === "new" ? "" : "none";
+  document.getElementById("existing-track-info").style.display  = mode !== "new" ? "" : "none";
+  document.getElementById("actions-new").style.display          = mode === "new" ? "flex" : "none";
+  document.getElementById("actions-edit").style.display         = mode === "edit" ? "flex" : "none";
+  document.getElementById("btn-clear-items").style.display      = isEditingItems ? "" : "none";
+
+  if (mode === "new") {
+    trackItems = [];
+    document.getElementById("create-msg").textContent = "";
+  } else {
+    trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
+    renderExistingTrackInfo();
+    document.getElementById("save-items-msg").textContent = "";
+  }
+
+  renderQBrowser();
+  renderItemsList();
+}
+
+function renderExistingTrackInfo() {
+  const t = currentTrack;
+  const isOpen = t.status === "open";
+  const statusEl = isOpen
+    ? '<span class="badge badge-exam" style="background:#c8e6c9;color:#1b5e20;">APERTO</span>'
+    : '<span class="badge" style="background:#eee;color:#666;padding:1px 8px;font-size:0.78em;border-radius:2px;">CHIUSO</span>';
+  const dur = t.duration == 0 ? "senza limite" : (t.duration || "—") + " min";
+  const info = document.getElementById("existing-track-info");
+  info.className = "card";
+  info.innerHTML = `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+    <strong style="font-size:1em;">${escHtml(t.exam_name || t.exam_id)}</strong>${statusEl}
+  </div>
+  <div style="font-size:0.84em;color:#666;margin-top:6px;">
+    ${formatDateIt(t.exam_date)} &nbsp;·&nbsp; ${dur} &nbsp;·&nbsp; ${t.mode === "practice" ? "esercitazione" : "esame"}
+    ${!isOpen ? '<br><span style="color:#b00;font-size:0.9em;">Traccia chiusa — sola lettura</span>' : ""}
+  </div>`;
+}
+
+async function saveTrackItems() {
+  const msg = document.getElementById("save-items-msg");
+  msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
-    const res = await callScript({ action: "getQuestions", password: adminPassword });
+    const res = await callScript({
+      action: "setTrack", password: adminPassword,
+      examId: currentTrack.exam_id, items: trackItems
+    });
     if (res.status !== "ok") throw new Error(res.message);
-    allQuestions = res.questions || [];
-    buildCategoryFilters();
-    renderQBrowser();
-    renderItemsList();
+    currentTrack.items = JSON.parse(JSON.stringify(trackItems));
+    updateTrackInList(currentTrack);
+    msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
   } catch(e) {
-    document.getElementById("q-loading").textContent = "Errore caricamento domande: " + e.message;
+    msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
   }
 }
 
@@ -919,11 +1010,13 @@ function renderQBrowser() {
 
 // ---- ITEMS LIST ----
 function addFixedItem(id) {
+  if (!isEditingItems) return;
   trackItems.push({ type: "fixed", id });
   renderItemsList();
 }
 
 function addRandomItem() {
+  if (!isEditingItems) return;
   const categoria  = document.getElementById("f-cat").value;
   const sottocateg = document.getElementById("f-subcat").value;
   const tag        = document.getElementById("f-tag").value;
@@ -980,11 +1073,11 @@ function renderItemsList() {
 
   let totalPt = 0;
   const rows = trackItems.map((item, i) => {
-    const arrows = `<div class="sel-arrows">
+    const arrows = isEditingItems ? `<div class="sel-arrows">
       <button onclick="moveItem(${i},-1)" ${i === 0 ? "disabled" : ""}>▲</button>
       <button onclick="moveItem(${i}, 1)" ${i === trackItems.length - 1 ? "disabled" : ""}>▼</button>
     </div>
-    <button class="sel-remove" onclick="removeItem(${i})">✕</button>`;
+    <button class="sel-remove" onclick="removeItem(${i})">✕</button>` : "";
 
     if (item.type === "fixed") {
       const q = qMap[item.id];
@@ -1020,6 +1113,7 @@ function renderItemsList() {
 }
 
 function clearItems() {
+  if (!isEditingItems) return;
   trackItems = [];
   renderItemsList();
 }
