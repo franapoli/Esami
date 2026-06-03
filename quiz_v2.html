@@ -743,12 +743,11 @@ async function restartQuiz() {
     // Ricarica le domande dal server per ottenere un nuovo draw casuale
     try {
       const res = await callScript({ action: "getTrack", examId: EXAM_ID });
-      console.log("[restart] getTrack response:", JSON.stringify(res.questions?.map(q=>q.id)));
       if (res.status === "ok") {
         questions = res.questions || [];
         TOTAL_PTS = res.total_pts || questions.reduce((s, q) => s + (q.pts || 0), 0);
       }
-    } catch(e) { console.error("[restart] getTrack error:", e); }
+    } catch(e) { /* usa le domande precedenti se la rete non risponde */ }
 
     // Reset sul server
     await callScript({ action: "resetPractice", examId: EXAM_ID,
