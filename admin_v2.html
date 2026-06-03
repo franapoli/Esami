@@ -165,6 +165,7 @@
 <div id="login-panel">
   <h1>Pannello Amministratore</h1>
   <p class="subtitle">QuizForge v2 — Applicazioni di Bioinformatica</p>
+  <p id="build-label-login" style="font-size:0.75em;color:#bbb;font-family:monospace;margin-top:4px;"></p>
   <label for="pwd">Password amministratore</label>
   <input type="password" id="pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
   <div id="login-error" class="error-msg"></div>
@@ -416,7 +417,8 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
-const BUILD = "b45ee3a";
+const BUILD = "0595e23";
+document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
 let adminPassword = "";
