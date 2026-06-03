@@ -596,16 +596,13 @@ async function saveProgress(qIndex, value) {
   setSaveStatus("Salvataggio…");
   try {
     const q = questions[qIndex];
-    let ansText, pts;
-    if (q.type === "mc") {
-      ansText = (value !== null && value !== undefined) ? q.options[value] : "";
-      pts = (value === q.correct) ? q.pts : 0;
-    } else {
-      ansText = String(value);
-      pts = normalizeAnswer(value) === normalizeAnswer(q.correct) ? q.pts : 0;
-    }
+    // ans: indice 0-based per mc, testo per fitb
+    const ans = (value !== null && value !== undefined) ? String(value) : "";
+    const pts = q.type === "mc"
+      ? (value === q.correct ? q.pts : 0)
+      : (normalizeAnswer(value) === normalizeAnswer(q.correct) ? q.pts : 0);
     await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
-                       qIndex: qIndex + 1, ans: ansText, pts });
+                       qIndex: qIndex + 1, ans, pts });
     setSaveStatus("✓ Salvato");
   } catch(e) {
     setSaveStatus("⚠ Salvataggio fallito");

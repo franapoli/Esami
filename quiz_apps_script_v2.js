@@ -350,7 +350,7 @@ function getResultSheet(examId, nQuestions) {
     const headers = ["Matricola", "Nominativo", "Email", "Score", "Totale", "Inizio", "Fine", "Durata", "QIDs"];
     const n = nQuestions || 20;
     for (let i = 1; i <= n; i++) {
-      headers.push("Dom" + i);
+      headers.push("Ans" + i);
       headers.push("Pt" + i);
     }
     sheet.appendRow(headers);
