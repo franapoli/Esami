@@ -649,8 +649,8 @@ async function saveTrack() {
       exam_name: document.getElementById("cfg-name").value.trim(),
       exam_date: document.getElementById("cfg-date").value.trim(),
       duration:  document.getElementById("cfg-dur").value.trim(),
-      mode:      document.getElementById("cfg-mode").value,
-      password:  document.getElementById("cfg-pwd").value.trim()
+      mode:           document.getElementById("cfg-mode").value,
+      track_password: document.getElementById("cfg-pwd").value.trim()
     });
     if (res.status === "ok") {
       currentTrack.exam_name = document.getElementById("cfg-name").value.trim();

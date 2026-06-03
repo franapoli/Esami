@@ -447,7 +447,7 @@ function doPost(e) {
         data.mode      || "exam",
         "closed",
         JSON.stringify(data.items || []),
-        data.password || ""
+        data.track_password || ""
       ]);
       return corsResponse({ status: "ok", track_id: trackId });
     }
@@ -502,9 +502,9 @@ function doPost(e) {
         if (data.exam_date !== undefined) sheet.getRange(row, T_DATA + 1).setValue(data.exam_date);
         if (data.duration  !== undefined) sheet.getRange(row, T_DURATA + 1).setValue(data.duration);
         if (data.mode      !== undefined) sheet.getRange(row, T_MODALITA + 1).setValue(data.mode);
-        if (data.status    !== undefined) sheet.getRange(row, T_STATO    + 1).setValue(data.status);
-        if (data.items     !== undefined) sheet.getRange(row, T_ITEMS    + 1).setValue(JSON.stringify(data.items));
-        if (data.password  !== undefined) sheet.getRange(row, T_PASSWORD + 1).setValue(data.password);
+        if (data.status         !== undefined) sheet.getRange(row, T_STATO    + 1).setValue(data.status);
+        if (data.items          !== undefined) sheet.getRange(row, T_ITEMS    + 1).setValue(JSON.stringify(data.items));
+        if (data.track_password !== undefined) sheet.getRange(row, T_PASSWORD + 1).setValue(data.track_password);
 
         // Sincronizza anche _meta nel foglio risultati
         const meta   = getMetaSheet();
