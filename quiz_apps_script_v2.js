@@ -20,7 +20,8 @@ const COL_TOTALE     = 5;
 const COL_TS_START   = 6;
 const COL_TS_END     = 7;
 const COL_ELAPSED    = 8;
-const COL_ANS_FIRST  = 9; // Dom1, Pt1, Dom2, Pt2, ...
+const COL_QIDS       = 9; // IDs domande assegnate (comma-separated)
+const COL_ANS_FIRST  = 10; // Dom1, Pt1, Dom2, Pt2, ...
 
 // Indici colonne foglio "questions" (0-based)
 const Q_ID            = 0;  // A
@@ -346,13 +347,12 @@ function getResultSheet(examId, nQuestions) {
   let sheet = ss.getSheetByName(examId);
   if (!sheet) {
     sheet = ss.insertSheet(examId);
-    const headers = ["Matricola", "Nominativo", "Email", "Score", "Totale", "Inizio", "Fine", "Durata"];
+    const headers = ["Matricola", "Nominativo", "Email", "Score", "Totale", "Inizio", "Fine", "Durata", "QIDs"];
     const n = nQuestions || 20;
     for (let i = 1; i <= n; i++) {
       headers.push("Dom" + i);
       headers.push("Pt" + i);
     }
-    headers.push("QIDs"); // ID domande assegnate allo studente
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -632,9 +632,9 @@ function doPost(e) {
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex !== -1) sheet.deleteRow(rowIndex);
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
-                   "", totalPts, formatTs(new Date().toISOString()), "", ""];
+                   "", totalPts, formatTs(new Date().toISOString()), "", "",
+                   data.questionIds ? data.questionIds.join(",") : ""];
       for (let i = 0; i < nQ; i++) { row.push(""); row.push(""); }
-      row.push(data.questionIds ? data.questionIds.join(",") : ""); // QIDs
       sheet.appendRow(row);
       sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
       return corsResponse({ status: "ok" });
@@ -648,10 +648,11 @@ function doPost(e) {
           return corsResponse({ status: "duplicate", finalized: values[i][COL_TS_END - 1] !== "" });
         }
       }
+      // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
-                   "", totalPts, formatTs(new Date().toISOString()), "", ""];
+                   "", totalPts, formatTs(new Date().toISOString()), "", "",
+                   data.questionIds ? data.questionIds.join(",") : ""];
       for (let i = 0; i < nQ; i++) { row.push(""); row.push(""); }
-      row.push(data.questionIds ? data.questionIds.join(",") : ""); // QIDs
       sheet.appendRow(row);
       sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
       return corsResponse({ status: "ok" });
