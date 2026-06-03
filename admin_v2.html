@@ -301,7 +301,7 @@
           <div class="row2">
             <div class="field">
               <label for="f-cat">Categoria</label>
-              <select id="f-cat" onchange="filterQuestions()">
+              <select id="f-cat" onchange="onCatChange()">
                 <option value="">— tutte —</option>
               </select>
             </div>
@@ -874,7 +874,8 @@ function updateSubcatFilter() {
   subcats.forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = s; subSel.appendChild(o); });
 }
 
-function filterQuestions() { updateSubcatFilter(); renderQBrowser(); }
+function onCatChange()     { updateSubcatFilter(); renderQBrowser(); }
+function filterQuestions() { renderQBrowser(); }
 
 // ---- BROWSER DOMANDE ----
 function renderQBrowser() {
