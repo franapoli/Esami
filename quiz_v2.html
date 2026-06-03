@@ -350,7 +350,8 @@ async function initQuiz() {
   btn.textContent = "Verifica in corso…";
 
   try {
-    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
+    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID,
+                                   questionIds: questions.map(q => q.id) });
     if (res.status === "duplicate") {
       if (EXAM_MODE === "practice") {
         const reset = confirm(
@@ -744,7 +745,8 @@ async function restartQuiz() {
   if (EXAM_MODE === "practice") {
     // Reset sul server e ricomincia subito (lo studente ha già confermato cliccando il pulsante)
     await callScript({ action: "resetPractice", examId: EXAM_ID,
-                       matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail })
+                       matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail,
+                       questionIds: questions.map(q => q.id) })
           .catch(() => {});
     answers   = new Array(questions.length).fill(null);
     current   = 0;

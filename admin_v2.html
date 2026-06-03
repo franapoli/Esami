@@ -141,6 +141,14 @@
   .sel-remove:hover { color: #800; }
   .tag-chip { display: inline-block; padding: 1px 7px; font-size: 0.72em; background: #e8f0fe;
               color: #1a3c6e; border-radius: 10px; margin: 2px 2px 0 0; }
+  .rule-row { display: flex; align-items: center; gap: 8px; padding: 8px 0;
+              border-bottom: 1px solid #eee; flex-wrap: wrap; font-size: 0.88em; }
+  .rule-row:last-child { border-bottom: none; }
+  .rule-row select, .rule-row input[type=number] { padding: 5px 7px; border: 1px solid #bbb;
+              font-family: inherit; font-size: 0.95em; background: #fff; }
+  .rule-row input[type=number] { width: 60px; }
+  .rule-count { font-size: 0.78em; color: #2e7d32; font-style: italic; }
+  .rule-count.zero { color: #b00; }
   .histo-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.82em; }
   .histo-label { width: 52px; text-align: right; color: #555; flex-shrink: 0; }
   .histo-bar-bg { flex: 1; background: #eee; height: 18px; position: relative; overflow: hidden; }
@@ -213,6 +221,10 @@
           <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova traccia</a>
         </div>
         <div id="status-msg" class="ok-msg"></div>
+        <div id="track-rules-wrap" style="display:none;margin-top:14px;">
+          <div style="font-size:0.82em;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;">Regole casuali</div>
+          <div id="track-rules-display" style="font-size:0.85em;line-height:1.8;"></div>
+        </div>
       </div>
       <div class="card">
         <h2>Modifica attributi traccia</h2>
@@ -348,9 +360,16 @@
             <div id="sel-empty" style="padding:16px;color:#aaa;font-size:0.85em;font-style:italic;">Nessuna domanda selezionata</div>
           </div>
         </div>
+        <div class="card" style="margin-top:12px;padding:16px 20px;">
+          <h2>Regole domande casuali</h2>
+          <div id="rules-list"></div>
+          <button class="btn btn-sm btn-outline" style="margin-top:10px;" onclick="addRule()">+ Aggiungi regola</button>
+          <p class="note" style="margin-top:8px;">Le domande casuali vengono aggiunte dopo quelle fisse. Ad ogni caricamento ogni studente riceve un set diverso.</p>
+        </div>
+
         <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-green" onclick="doCreateTrack()">Crea traccia</button>
-          <button class="btn btn-outline btn-sm" onclick="clearSelection()">Svuota selezione</button>
+          <button class="btn btn-outline btn-sm" onclick="clearSelection()">Svuota tutto</button>
           <span id="create-msg" style="font-size:0.85em;"></span>
         </div>
       </div>
@@ -557,6 +576,23 @@ function renderTrackStatus(t) {
     " &nbsp;|&nbsp; " + escHtml(t.exam_name || t.exam_id) +
     " &nbsp;|&nbsp; " + formatDateIt(t.exam_date) +
     " &nbsp;|&nbsp; " + dur;
+
+  // Mostra regole casuali se presenti
+  const rules = t.rules || [];
+  const wrap  = document.getElementById("track-rules-wrap");
+  const disp  = document.getElementById("track-rules-display");
+  if (rules.length > 0) {
+    wrap.style.display = "block";
+    disp.innerHTML = rules.map((r, i) => {
+      const parts = ["<strong>" + (r.n || 1) + "</strong> domande casuali"];
+      if (r.categoria) parts.push("categoria: <em>" + escHtml(r.categoria) + "</em>");
+      if (r.sottocateg) parts.push("sottocategoria: <em>" + escHtml(r.sottocateg) + "</em>");
+      if (r.tag) parts.push("tag: <em>" + escHtml(r.tag) + "</em>");
+      return "• " + parts.join(" · ");
+    }).join("<br>");
+  } else {
+    wrap.style.display = "none";
+  }
 }
 
 function populateEditForm(t) {
@@ -796,7 +832,7 @@ let allQuestions  = null;   // array caricato una volta sola
 let selectedIds   = [];     // ordine delle domande selezionate
 
 async function initCreaTab() {
-  if (allQuestions !== null) { renderQBrowser(); return; }
+  if (allQuestions !== null) { renderQBrowser(); renderRulesList(); return; }
   document.getElementById("q-loading").style.display = "block";
   document.getElementById("q-browser").style.display = "none";
   try {
@@ -805,6 +841,7 @@ async function initCreaTab() {
     allQuestions = res.questions || [];
     buildCategoryFilters();
     renderQBrowser();
+    renderRulesList();
   } catch(e) {
     document.getElementById("q-loading").textContent = "Errore caricamento domande: " + e.message;
   }
@@ -931,8 +968,80 @@ function moveQ(idx, dir) {
 
 function clearSelection() {
   selectedIds = [];
+  currentRules = [];
   renderQBrowser();
   renderSelList();
+  renderRulesList();
+}
+
+// ---- REGOLE CASUALI ----
+let currentRules = [];
+
+function addRule() {
+  currentRules.push({ n: 1, categoria: "", tag: "" });
+  renderRulesList();
+}
+
+function removeRule(idx) {
+  currentRules.splice(idx, 1);
+  renderRulesList();
+}
+
+function ruleChanged(idx, field, value) {
+  if (field === "n") currentRules[idx].n = parseInt(value) || 1;
+  else currentRules[idx][field] = value;
+  updateRuleCount(idx);
+}
+
+function getRuleMatchCount(rule) {
+  if (!allQuestions) return 0;
+  return allQuestions.filter(q => {
+    if (rule.categoria && q.categoria !== rule.categoria) return false;
+    if (rule.sottocateg && q.sottocateg !== rule.sottocateg) return false;
+    if (rule.tag) {
+      const qTags = (q.tags || "").split(",").map(t => t.trim());
+      if (!qTags.includes(rule.tag)) return false;
+    }
+    return true;
+  }).length;
+}
+
+function updateRuleCount(idx) {
+  const el = document.getElementById("rule-count-" + idx);
+  if (!el) return;
+  const count = getRuleMatchCount(currentRules[idx]);
+  el.textContent = count + " disponibili";
+  el.className = "rule-count" + (count === 0 ? " zero" : "");
+}
+
+function renderRulesList() {
+  const container = document.getElementById("rules-list");
+  if (currentRules.length === 0) {
+    container.innerHTML = '<div style="color:#aaa;font-size:0.85em;padding:8px 0;">Nessuna regola — il quiz userà solo le domande fisse.</div>';
+    return;
+  }
+
+  const cats = allQuestions ? [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort() : [];
+  const tags = allQuestions ? [...new Set(allQuestions.flatMap(q =>
+    (q.tags || "").split(",").map(t => t.trim()).filter(Boolean)
+  ))].sort() : [];
+
+  container.innerHTML = currentRules.map((r, i) => {
+    const catOpts = ['<option value="">— qualsiasi —</option>',
+      ...cats.map(c => `<option value="${escHtml(c)}" ${r.categoria === c ? "selected" : ""}>${escHtml(c)}</option>`)
+    ].join("");
+    const tagOpts = ['<option value="">— qualsiasi —</option>',
+      ...tags.map(t => `<option value="${escHtml(t)}" ${r.tag === t ? "selected" : ""}>${escHtml(t)}</option>`)
+    ].join("");
+    const count = getRuleMatchCount(r);
+    return `<div class="rule-row">
+      Pesca <input type="number" min="1" max="100" value="${r.n}" onchange="ruleChanged(${i},'n',this.value)">
+      da&nbsp;categoria <select onchange="ruleChanged(${i},'categoria',this.value)">${catOpts}</select>
+      &nbsp;tag <select onchange="ruleChanged(${i},'tag',this.value)">${tagOpts}</select>
+      <span id="rule-count-${i}" class="rule-count${count === 0 ? " zero" : ""}">${count} disponibili</span>
+      <button class="sel-remove" onclick="removeRule(${i})" title="Rimuovi regola">✕</button>
+    </div>`;
+  }).join("");
 }
 
 async function doCreateTrack() {
@@ -944,19 +1053,24 @@ async function doCreateTrack() {
 
   if (!name) { msg.style.color = "#b00"; msg.textContent = "Inserisci un nome per la traccia."; return; }
   if (!date) { msg.style.color = "#b00"; msg.textContent = "Seleziona una data."; return; }
-  if (selectedIds.length === 0) { msg.style.color = "#b00"; msg.textContent = "Seleziona almeno una domanda."; return; }
+  if (selectedIds.length === 0 && currentRules.length === 0) {
+    msg.style.color = "#b00"; msg.textContent = "Seleziona almeno una domanda o aggiungi una regola."; return;
+  }
+
+  // Filtra regole valide
+  const rules = currentRules.filter(r => r.n > 0 && (r.categoria || r.tag));
 
   msg.style.color = "#555"; msg.textContent = "Creazione in corso…";
   try {
     const res = await callScript({
       action: "createTrack", password: adminPassword,
-      exam_name: name, exam_date: date, duration: dur, mode, question_ids: selectedIds
+      exam_name: name, exam_date: date, duration: dur, mode,
+      question_ids: selectedIds, rules
     });
     if (res.status !== "ok") throw new Error(res.message);
 
-    // Aggiorna lista tracce
     const newTrack = { exam_id: res.track_id, exam_name: name, exam_date: date,
-                       duration: dur, mode, status: "closed" };
+                       duration: dur, mode, status: "closed", rules };
     allTracks.push(newTrack);
     populateTrackSelect(allTracks);
 
@@ -967,6 +1081,8 @@ async function doCreateTrack() {
     document.getElementById("new-name").value = "";
     document.getElementById("new-date").value = "";
     clearSelection();
+    currentRules = [];
+    renderRulesList();
   } catch(e) {
     msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
   }
