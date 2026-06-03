@@ -317,7 +317,10 @@
               </select>
             </div>
           </div>
-          <div style="margin-top:10px;font-size:0.82em;color:#888;" id="q-count"></div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:0.82em;color:#888;" id="q-count"></span>
+            <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
+          </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden;">
           <div id="q-browser" style="max-height:520px;overflow-y:auto;"></div>
@@ -354,10 +357,7 @@
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
             <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-sm btn-outline" onclick="addRandomItem()">+ Casuale</button>
-              <button class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;">Svuota</button>
-            </div>
+            <button class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
           </div>
           <div id="items-list" style="max-height:460px;overflow-y:auto;min-height:60px;"></div>
         </div>
@@ -921,7 +921,19 @@ function addFixedItem(id) {
 }
 
 function addRandomItem() {
-  trackItems.push({ type: "random", categoria: "", sottocateg: "", tag: "" });
+  const categoria  = document.getElementById("f-cat").value;
+  const sottocateg = document.getElementById("f-subcat").value;
+  const tag        = document.getElementById("f-tag").value;
+  const count = (allQuestions || []).filter(q => {
+    if (categoria  && q.categoria  !== categoria)  return false;
+    if (sottocateg && q.sottocateg !== sottocateg) return false;
+    if (tag) {
+      const qTags = (q.tags || "").split(",").map(t => t.trim());
+      if (!qTags.includes(tag)) return false;
+    }
+    return true;
+  }).length;
+  trackItems.push({ type: "random", categoria, sottocateg, tag, _count: count });
   renderItemsList();
 }
 
@@ -937,16 +949,6 @@ function moveItem(idx, dir) {
   renderItemsList();
 }
 
-function randomItemChanged(idx, field, value) {
-  trackItems[idx][field] = value;
-  // aggiorna solo il contatore senza re-render completo
-  const countEl = document.getElementById("rcount-" + idx);
-  if (countEl) {
-    const count = getRandomMatchCount(trackItems[idx]);
-    countEl.textContent = count + " disponibili";
-    countEl.className = "rule-count" + (count === 0 ? " zero" : "");
-  }
-}
 
 function getRandomMatchCount(item) {
   if (!allQuestions) return 0;
@@ -971,11 +973,7 @@ function renderItemsList() {
     return;
   }
 
-  const qMap  = allQuestions ? Object.fromEntries(allQuestions.map(q => [q.id, q])) : {};
-  const cats  = allQuestions ? [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort() : [];
-  const tags  = allQuestions ? [...new Set(allQuestions.flatMap(q =>
-    (q.tags || "").split(",").map(t => t.trim()).filter(Boolean)
-  ))].sort() : [];
+  const qMap = allQuestions ? Object.fromEntries(allQuestions.map(q => [q.id, q])) : {};
 
   let totalPt = 0;
   const rows = trackItems.map((item, i) => {
@@ -997,20 +995,18 @@ function renderItemsList() {
         ${arrows}
       </div>`;
     } else {
-      // slot casuale
-      const catOpts = ['<option value="">— qualsiasi —</option>',
-        ...cats.map(c => `<option value="${escHtml(c)}" ${item.categoria===c?"selected":""}>${escHtml(c)}</option>`)
-      ].join("");
-      const tagOpts = ['<option value="">— qualsiasi —</option>',
-        ...tags.map(t => `<option value="${escHtml(t)}" ${item.tag===t?"selected":""}>${escHtml(t)}</option>`)
-      ].join("");
-      const count = getRandomMatchCount(item);
-      return `<div class="sel-row" style="background:#fffbf0;flex-wrap:wrap;gap:6px;">
+      // slot casuale — mostra il riepilogo dei filtri in sola lettura
+      const parts = [];
+      if (item.categoria)  parts.push("cat: " + item.categoria);
+      if (item.sottocateg) parts.push("subcat: " + item.sottocateg);
+      if (item.tag)        parts.push("tag: " + item.tag);
+      const desc   = parts.length ? parts.join(" · ") : "qualsiasi";
+      const count  = item._count !== undefined ? item._count : getRandomMatchCount(item);
+      const countStr = count + " disponibili";
+      return `<div class="sel-row" style="background:#fffbf0;">
         <span class="sel-num">${i+1}.</span>
-        <span style="font-size:0.78em;color:#7b5e00;font-style:italic;margin-right:4px;">🎲 casuale</span>
-        <select style="font-size:0.82em;" onchange="randomItemChanged(${i},'categoria',this.value)">${catOpts}</select>
-        <select style="font-size:0.82em;" onchange="randomItemChanged(${i},'tag',this.value)">${tagOpts}</select>
-        <span id="rcount-${i}" class="rule-count${count===0?" zero":""}">${count} disponibili</span>
+        <span class="sel-text" style="font-style:italic;color:#7b5e00;">🎲 ${escHtml(desc)}</span>
+        <span class="sel-pts rule-count${count===0?" zero":""}">${countStr}</span>
         ${arrows}
       </div>`;
     }
