@@ -251,6 +251,10 @@
             <p class="hint">Esercitazione: salvataggio abilitato, risposte mostrate alla fine. Tentativi multipli consentiti.</p>
           </div>
         </div>
+        <div class="field" style="margin-top:14px;">
+          <label for="cfg-pwd">Password d'accesso <span style="font-weight:normal;color:#aaa;">(solo esame — lascia vuoto per nessuna)</span></label>
+          <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
+        </div>
         <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
         <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
         <div id="edit-msg" class="ok-msg"></div>
@@ -617,6 +621,7 @@ function populateEditForm(t) {
   document.getElementById("cfg-date").value = t.exam_date || "";
   document.getElementById("cfg-dur").value  = t.duration  || "90";
   document.getElementById("cfg-mode").value = t.mode      || "exam";
+  document.getElementById("cfg-pwd").value  = t.password  || "";
 }
 
 async function setStatus(newStatus) {
@@ -644,13 +649,15 @@ async function saveTrack() {
       exam_name: document.getElementById("cfg-name").value.trim(),
       exam_date: document.getElementById("cfg-date").value.trim(),
       duration:  document.getElementById("cfg-dur").value.trim(),
-      mode:      document.getElementById("cfg-mode").value
+      mode:      document.getElementById("cfg-mode").value,
+      password:  document.getElementById("cfg-pwd").value.trim()
     });
     if (res.status === "ok") {
       currentTrack.exam_name = document.getElementById("cfg-name").value.trim();
       currentTrack.exam_date = document.getElementById("cfg-date").value.trim();
       currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
       currentTrack.mode      = document.getElementById("cfg-mode").value;
+      currentTrack.password  = document.getElementById("cfg-pwd").value.trim();
       updateTrackInList(currentTrack);
       renderTrackStatus(currentTrack);
       msg.textContent = "✓ Modifiche salvate.";

@@ -98,6 +98,11 @@
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
     ⚙ Modalità esercitazione — puoi ripetere il quiz tutte le volte che vuoi
   </div>
+  <div id="track-pwd-section" style="display:none;margin-top:20px;padding:14px;background:#fff8e1;border:1px solid #ffe082;">
+    <label for="track-pwd" style="font-size:0.88em;color:#7b5e00;margin-bottom:6px;">Password d'accesso</label>
+    <input type="password" id="track-pwd" placeholder="Inserita dal docente" autocomplete="off">
+  </div>
+
   <div id="exam-fields" style="display:none;">
     <label for="cognome">Cognome e nome</label>
     <input type="text" id="cognome" placeholder="Es. Rossi Mario">
@@ -161,8 +166,9 @@ let questions    = [];
 let EXAM_DATE    = "";
 let EXAM_NAME    = "";
 let EXAM_DURATION_MIN = 60;
-let EXAM_MODE    = "exam";
-let TOTAL_PTS    = 0;
+let EXAM_MODE         = "exam";
+let EXAM_PWD_REQUIRED = false;
+let TOTAL_PTS         = 0;
 
 let current = 0;
 let answers = [];
@@ -259,6 +265,7 @@ async function loadTrack() {
     EXAM_NAME         = t.exam_name || "";
     EXAM_DURATION_MIN = t.duration !== undefined && t.duration !== "" ? parseInt(t.duration) : 60;
     EXAM_MODE         = t.mode || "exam";
+    EXAM_PWD_REQUIRED = !!(t.password_required) && EXAM_MODE === "exam";
     const examStatus  = t.status || "closed";
 
     // Cover
@@ -275,6 +282,9 @@ async function loadTrack() {
       showBtn();
       return true;
     }
+
+    // Mostra campo password se richiesta
+    document.getElementById("track-pwd-section").style.display = EXAM_PWD_REQUIRED ? "block" : "none";
 
     // Exam mode
     const saved = loadLocal();
@@ -339,6 +349,31 @@ async function initQuiz() {
   const btn = document.getElementById("btn-start");
   btn.disabled = true;
   document.getElementById("cover-error").textContent = "";
+
+  // Verifica password traccia (solo exam, se richiesta)
+  if (EXAM_PWD_REQUIRED) {
+    const trackPwd = document.getElementById("track-pwd").value.trim();
+    if (!trackPwd) {
+      document.getElementById("cover-error").textContent = "Inserisci la password d'accesso.";
+      btn.disabled = false;
+      return;
+    }
+    btn.textContent = "Verifica password…";
+    try {
+      const pwdRes = await callScript({ action: "verifyTrackPassword", examId: EXAM_ID, password: trackPwd });
+      if (pwdRes.status !== "ok") {
+        document.getElementById("cover-error").textContent = "Password errata.";
+        btn.disabled = false;
+        btn.textContent = "Inizia il quiz";
+        return;
+      }
+    } catch(e) {
+      document.getElementById("cover-error").textContent = "Errore di connessione. Riprova.";
+      btn.disabled = false;
+      btn.textContent = "Inizia il quiz";
+      return;
+    }
+  }
 
   const nominativo = document.getElementById("cognome").value.trim();
   const matricola  = document.getElementById("matricola").value.trim();

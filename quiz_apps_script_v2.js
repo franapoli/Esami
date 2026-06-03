@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.5.0"; // aggiornare ad ogni deploy
+const VERSION = "2.6.0"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -51,6 +51,7 @@ const T_DURATA        = 4;  // E  minuti (0 = senza limite)
 const T_MODALITA      = 5;  // F  "exam" | "practice"
 const T_STATO         = 6;  // G  "open" | "closed"
 const T_ITEMS         = 7;  // H  JSON array: [{type:"fixed",id?} | {type:"random",categoria?,sottocateg?,tag?}]
+const T_PASSWORD      = 8;  // I  password d'accesso (solo exam; vuota = nessuna)
 
 // Colonne foglio _meta risultati (0-based)
 const META_COLS = {
@@ -120,7 +121,7 @@ function getTracceSheet() {
   let sheet = ss.getSheetByName("tracce");
   if (!sheet) {
     sheet = ss.insertSheet("tracce");
-    const headers = ["TracciaID", "Corso", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "Items"];
+    const headers = ["TracciaID", "Corso", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "Items", "Password"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -183,7 +184,8 @@ function readTraccia(tracciaId) {
           const raw = String(row[T_ITEMS] || "");
           return JSON.parse(raw || "[]");
         } catch(e) { return []; }
-      })()
+      })(),
+      password: String(row[T_PASSWORD] || "").trim()
     };
   }
   return null;
@@ -262,7 +264,8 @@ function resolveTraccia(tracciaId) {
       duration:  traccia.durata,
       mode:      traccia.modalita,
       status:    traccia.stato,
-      corso:     traccia.corso
+      corso:     traccia.corso,
+      _password: traccia.password   // rimosso dal doPost prima di inviare al client
     },
     questions,
     n_questions: questions.length,
@@ -391,7 +394,24 @@ function doPost(e) {
       // Assicura che la traccia esista anche nel foglio risultati
       ensureMetaTrack(resolved.track);
 
+      // password_required: bool (mai la password in chiaro al client)
+      const pwdRequired = !!(resolved.track._password);
+      delete resolved.track._password;
+      resolved.track.password_required = pwdRequired;
       return corsResponse({ status: "ok", ...resolved });
+    }
+
+    // ----------------------------------------------------------------
+    // verifyTrackPassword — verifica password d'accesso traccia
+    // ----------------------------------------------------------------
+    if (data.action === "verifyTrackPassword") {
+      const tracciaId = data.examId;
+      if (!tracciaId) return corsResponse({ status: "error", message: "examId mancante" });
+      const traccia = readTraccia(tracciaId);
+      if (!traccia) return corsResponse({ status: "error", message: "Traccia non trovata" });
+      if (!traccia.password || traccia.modalita === "practice") return corsResponse({ status: "ok" });
+      if (String(data.password || "").trim() === traccia.password) return corsResponse({ status: "ok" });
+      return corsResponse({ status: "error", message: "Password errata" });
     }
 
     // ----------------------------------------------------------------
@@ -426,7 +446,8 @@ function doPost(e) {
         data.duration  || 90,
         data.mode      || "exam",
         "closed",
-        JSON.stringify(data.items || [])
+        JSON.stringify(data.items || []),
+        data.password || ""
       ]);
       return corsResponse({ status: "ok", track_id: trackId });
     }
@@ -458,6 +479,7 @@ function doPost(e) {
           duration:  String(row[T_DURATA]),
           mode:      String(row[T_MODALITA]) || "exam",
           status:    String(row[T_STATO])    || "closed",
+          password:  String(row[T_PASSWORD] || "").trim(),
           items
         });
       }
@@ -480,8 +502,9 @@ function doPost(e) {
         if (data.exam_date !== undefined) sheet.getRange(row, T_DATA + 1).setValue(data.exam_date);
         if (data.duration  !== undefined) sheet.getRange(row, T_DURATA + 1).setValue(data.duration);
         if (data.mode      !== undefined) sheet.getRange(row, T_MODALITA + 1).setValue(data.mode);
-        if (data.status    !== undefined) sheet.getRange(row, T_STATO + 1).setValue(data.status);
-        if (data.items     !== undefined) sheet.getRange(row, T_ITEMS + 1).setValue(JSON.stringify(data.items));
+        if (data.status    !== undefined) sheet.getRange(row, T_STATO    + 1).setValue(data.status);
+        if (data.items     !== undefined) sheet.getRange(row, T_ITEMS    + 1).setValue(JSON.stringify(data.items));
+        if (data.password  !== undefined) sheet.getRange(row, T_PASSWORD + 1).setValue(data.password);
 
         // Sincronizza anche _meta nel foglio risultati
         const meta   = getMetaSheet();
