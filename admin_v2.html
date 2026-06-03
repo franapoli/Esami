@@ -422,7 +422,7 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
-const BUILD = "2bb6939";
+const BUILD = "4e7fab9";
 document.getElementById("build-label").textContent = "build " + BUILD;
 
 let adminPassword = "";
@@ -470,6 +470,10 @@ async function doLogin() {
     allTracks = res.tracks || [];
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
+    if (res.version) {
+      document.getElementById("build-label").textContent =
+        "build " + BUILD + " · script v" + res.version;
+    }
     populateTrackSelect(allTracks);
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;

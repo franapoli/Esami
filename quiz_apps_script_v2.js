@@ -7,6 +7,8 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
+const VERSION = "2.3.0"; // aggiornare ad ogni deploy
+
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
 const SHEET_RESULTS_ID   = "1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA";  // risultati esami
@@ -373,7 +375,7 @@ function findRow(sheet, matricola) {
 // doGet / doPost
 // ------------------------------------------------------------
 function doGet(e) {
-  return corsResponse({ status: "ok", message: "QuizForge Apps Script v2 attivo" });
+  return corsResponse({ status: "ok", message: "QuizForge Apps Script v2 attivo", version: VERSION });
 }
 
 function doPost(e) {
@@ -461,7 +463,7 @@ function doPost(e) {
           status:    String(row[T_STATO])    || "closed"
         });
       }
-      return corsResponse({ status: "ok", tracks });
+      return corsResponse({ status: "ok", tracks, version: VERSION });
     }
 
     // ----------------------------------------------------------------
