@@ -139,6 +139,8 @@
   .sel-remove { background: none; border: none; color: #b00; font-size: 1em;
                 cursor: pointer; padding: 0 2px; flex-shrink: 0; line-height: 1; }
   .sel-remove:hover { color: #800; }
+  .tag-chip { display: inline-block; padding: 1px 7px; font-size: 0.72em; background: #e8f0fe;
+              color: #1a3c6e; border-radius: 10px; margin: 2px 2px 0 0; }
   .histo-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.82em; }
   .histo-label { width: 52px; text-align: right; color: #555; flex-shrink: 0; }
   .histo-bar-bg { flex: 1; background: #eee; height: 18px; position: relative; overflow: hidden; }
@@ -294,6 +296,12 @@
               <label for="f-subcat">Sottocategoria</label>
               <select id="f-subcat" onchange="filterQuestions()">
                 <option value="">— tutte —</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-tag">Tag</label>
+              <select id="f-tag" onchange="filterQuestions()">
+                <option value="">— tutti —</option>
               </select>
             </div>
           </div>
@@ -803,10 +811,17 @@ async function initCreaTab() {
 }
 
 function buildCategoryFilters() {
-  const cats    = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort();
-  const catSel  = document.getElementById("f-cat");
+  const cats = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort();
+  const catSel = document.getElementById("f-cat");
   catSel.innerHTML = '<option value="">— tutte —</option>';
   cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catSel.appendChild(o); });
+
+  const tags = [...new Set(allQuestions.flatMap(q =>
+    (q.tags || "").split(",").map(t => t.trim()).filter(Boolean)
+  ))].sort();
+  const tagSel = document.getElementById("f-tag");
+  tagSel.innerHTML = '<option value="">— tutti —</option>';
+  tags.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tagSel.appendChild(o); });
 }
 
 function updateSubcatFilter() {
@@ -827,10 +842,16 @@ function filterQuestions() {
 function renderQBrowser() {
   const cat    = document.getElementById("f-cat").value;
   const subcat = document.getElementById("f-subcat").value;
-  const filtered = allQuestions.filter(q =>
-    (!cat    || q.categoria  === cat) &&
-    (!subcat || q.sottocateg === subcat)
-  );
+  const tag = document.getElementById("f-tag").value;
+  const filtered = allQuestions.filter(q => {
+    if (cat    && q.categoria  !== cat)    return false;
+    if (subcat && q.sottocateg !== subcat) return false;
+    if (tag) {
+      const qTags = (q.tags || "").split(",").map(t => t.trim());
+      if (!qTags.includes(tag)) return false;
+    }
+    return true;
+  });
 
   document.getElementById("q-loading").style.display = "none";
   document.getElementById("q-browser").style.display = "block";
@@ -849,7 +870,10 @@ function renderQBrowser() {
       <input type="checkbox" ${isSel ? "checked" : ""} onclick="event.stopPropagation();toggleQuestion('${q.id}')">
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
-        <div class="q-row-meta">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${q.tipo === "fitb" ? "risposta libera" : "scelta multipla"}</div>
+        <div class="q-row-meta">
+          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${q.tipo === "fitb" ? "risposta libera" : "scelta multipla"}
+          ${(q.tags || "").split(",").map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-chip">${escHtml(t)}</span>`).join("")}
+        </div>
       </div>
       <div class="q-row-pts">${q.punti} pt</div>
     </div>`;

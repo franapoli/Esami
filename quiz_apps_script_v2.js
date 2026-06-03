@@ -37,6 +37,7 @@ const Q_CORRETTA      = 10; // K  lettera (A/B/C/D) o testo esatto per fitb
 const Q_PUNTI         = 11; // L
 const Q_FLAGS         = 12; // M  es. "blast,context" (non più usato per contenuto ricco — il testo è nella cella)
 const Q_PLACEHOLDER   = 13; // N  solo per fitb
+const Q_TAGS          = 14; // O  tag separati da virgola (es. "blast,phylogeny")
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -103,7 +104,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tipo",
-                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder"];
+                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -144,7 +145,8 @@ function loadAllQuestions() {
       corretta:     String(row[Q_CORRETTA]).trim(),
       punti:        Number(row[Q_PUNTI]) || 1,
       flags:        String(row[Q_FLAGS]).trim(),
-      placeholder:  String(row[Q_PLACEHOLDER]).trim()
+      placeholder:  String(row[Q_PLACEHOLDER]).trim(),
+      tags:         String(row[Q_TAGS] || "").trim()
     };
   }
   return map;
@@ -563,7 +565,8 @@ function doPost(e) {
         data.corretta    || "A",
         data.punti       || 1,
         data.flags       || "",
-        data.placeholder || ""
+        data.placeholder || "",
+        data.tags        || ""
       ]);
       return corsResponse({ status: "ok", id: newId });
     }
