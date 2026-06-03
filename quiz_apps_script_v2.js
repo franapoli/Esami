@@ -606,6 +606,21 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
+    // abandon — cancella la riga dello studente dal foglio risultati
+    // ----------------------------------------------------------------
+    if (data.action === "abandon") {
+      const examId = data.examId;
+      if (!examId || !data.matricola) return corsResponse({ status: "error", message: "Parametri mancanti" });
+      const ss    = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+      const sheet = ss.getSheetByName(examId);
+      if (sheet) {
+        const rowIndex = findRow(sheet, data.matricola);
+        if (rowIndex !== -1) sheet.deleteRow(rowIndex);
+      }
+      return corsResponse({ status: "ok" });
+    }
+
+    // ----------------------------------------------------------------
     // Quiz actions: init, update, finalize
     // ----------------------------------------------------------------
     const examId = data.examId;

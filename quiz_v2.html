@@ -125,6 +125,7 @@
       <div id="timer" style="font-size:1.6em;font-weight:bold;font-family:monospace;color:#1a1a1a;letter-spacing:2px;">--:--</div>
     </div>
     <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px;font-size:0.85em;" onclick="abandonQuiz()">Abbandona</button>
     <div id="practice-hint" style="display:none;margin-top:14px;font-size:0.78em;color:#7b5e00;background:#fff8e1;border:1px solid #ffe082;padding:8px 10px;line-height:1.5;">
       Puoi ricominciare il quiz tutte le volte che vuoi.
     </div>
@@ -575,7 +576,19 @@ function renderQuestion() {
 
   document.getElementById("question-container").innerHTML = html;
   document.getElementById("btn-prev").style.visibility = current === 0 ? "hidden" : "visible";
-  document.getElementById("btn-next").style.visibility = current === total - 1 ? "hidden" : "visible";
+  const isLast = current === total - 1;
+  const nextBtn = document.getElementById("btn-next");
+  if (isLast) {
+    nextBtn.textContent = "Consegna ✓";
+    nextBtn.onclick = confirmSubmit;
+    nextBtn.style.background = "#2e7d32";
+    nextBtn.style.visibility = "visible";
+  } else {
+    nextBtn.textContent = "Avanti →";
+    nextBtn.onclick = nextQ;
+    nextBtn.style.background = "";
+    nextBtn.style.visibility = "visible";
+  }
   updateGrid();
 }
 
@@ -733,6 +746,44 @@ async function doFinalize() {
 }
 
 async function retryFinalize() { await doFinalize(); }
+
+async function abandonQuiz() {
+  if (!confirm("Sei sicuro di voler abbandonare il quiz?\nLa tua sessione verrà cancellata e dovrai ricominciare dall'inizio.")) return;
+
+  if (timerInterval) clearInterval(timerInterval);
+
+  // Cancella la riga sul server (fire-and-forget)
+  if (studentMatricola) {
+    callScript({ action: "abandon", examId: EXAM_ID, matricola: studentMatricola }).catch(() => {});
+  }
+
+  clearLocal();
+
+  // Reset stato
+  studentMatricola  = "";
+  studentNominativo = "";
+  studentEmail      = "";
+  answers   = new Array(questions.length).fill(null);
+  current   = 0;
+  startTime = null;
+
+  // Torna alla cover
+  document.getElementById("quiz-wrapper").classList.remove("active");
+  document.getElementById("thankyou").style.display = "none";
+  document.getElementById("cover").style.display = "block";
+  document.getElementById("cover-error").textContent = "";
+  document.getElementById("cover-status").textContent = "";
+
+  const btn = document.getElementById("btn-start");
+  btn.disabled = false;
+  btn.textContent = "Inizia il quiz";
+
+  if (EXAM_MODE === "exam") {
+    document.getElementById("cognome").value    = "";
+    document.getElementById("matricola").value  = "";
+    document.getElementById("email").value      = "";
+  }
+}
 
 async function restartQuiz() {
   if (timerInterval) clearInterval(timerInterval);
