@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.3.0"; // aggiornare ad ogni deploy
+const VERSION = "2.4.0"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -50,8 +50,7 @@ const T_DATA          = 3;  // D  YYYY-MM-DD
 const T_DURATA        = 4;  // E  minuti (0 = senza limite)
 const T_MODALITA      = 5;  // F  "exam" | "practice"
 const T_STATO         = 6;  // G  "open" | "closed"
-const T_QUESTION_IDS  = 7;  // H  id separati da virgola
-const T_RULES         = 8;  // I  JSON array: [{n, categoria?, sottocateg?, tag?}]
+const T_ITEMS         = 7;  // H  JSON array: [{type:"fixed",id?} | {type:"random",categoria?,sottocateg?,tag?}]
 
 // Colonne foglio _meta risultati (0-based)
 const META_COLS = {
@@ -121,7 +120,7 @@ function getTracceSheet() {
   let sheet = ss.getSheetByName("tracce");
   if (!sheet) {
     sheet = ss.insertSheet("tracce");
-    const headers = ["TracciaID", "Corso", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "IDs domande", "Regole casuali"];
+    const headers = ["TracciaID", "Corso", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "Items"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -179,9 +178,11 @@ function readTraccia(tracciaId) {
       durata:      String(row[T_DURATA]),
       modalita:    String(row[T_MODALITA]) || "exam",
       stato:       String(row[T_STATO])    || "closed",
-      questionIds: String(row[T_QUESTION_IDS]).split(",").map(s => s.trim()).filter(Boolean),
-      rules: (function() {
-        try { return JSON.parse(String(row[T_RULES] || "") || "[]"); } catch(e) { return []; }
+      items: (function() {
+        try {
+          const raw = String(row[T_ITEMS] || "");
+          return JSON.parse(raw || "[]");
+        } catch(e) { return []; }
       })()
     };
   }
@@ -224,37 +225,33 @@ function resolveTraccia(tracciaId) {
   const questions = [];
   const usedIds   = new Set();
 
-  // 1. Domande fisse (ordine preservato)
-  traccia.questionIds.forEach(qid => {
-    usedIds.add(qid);
-    const q = allQ[qid];
-    if (!q) {
-      questions.push({ id: qid, error: "Domanda non trovata: " + qid, pts: 0, type: "mc", text: "", options: [], correct: 0, pos: questions.length + 1 });
-      return;
-    }
-    questions.push(buildQuestionObj(q, questions.length + 1));
-  });
-
-  // 2. Regole casuali
-  (traccia.rules || []).forEach(rule => {
-    const n = parseInt(rule.n) || 0;
-    if (n <= 0) return;
-
-    const candidates = Object.values(allQ).filter(q => {
-      if (usedIds.has(q.id)) return false;
-      if (rule.categoria && q.categoria !== rule.categoria) return false;
-      if (rule.sottocateg && q.sottocateg !== rule.sottocateg) return false;
-      if (rule.tag) {
-        const qTags = String(q.tags || "").split(",").map(t => t.trim());
-        if (!qTags.includes(rule.tag)) return false;
+  (traccia.items || []).forEach(item => {
+    if (item.type === "fixed") {
+      usedIds.add(item.id);
+      const q = allQ[item.id];
+      if (!q) {
+        questions.push({ id: item.id, error: "Domanda non trovata: " + item.id, pts: 0, type: "mc", text: "", options: [], correct: 0, pos: questions.length + 1 });
+        return;
       }
-      return true;
-    });
-
-    shuffleArray(candidates).slice(0, n).forEach(q => {
-      usedIds.add(q.id);
       questions.push(buildQuestionObj(q, questions.length + 1));
-    });
+
+    } else if (item.type === "random") {
+      const candidates = Object.values(allQ).filter(q => {
+        if (usedIds.has(q.id)) return false;
+        if (item.categoria && q.categoria !== item.categoria) return false;
+        if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
+        if (item.tag) {
+          const qTags = String(q.tags || "").split(",").map(t => t.trim());
+          if (!qTags.includes(item.tag)) return false;
+        }
+        return true;
+      });
+      const picked = shuffleArray(candidates)[0];
+      if (picked) {
+        usedIds.add(picked.id);
+        questions.push(buildQuestionObj(picked, questions.length + 1));
+      }
+    }
   });
 
   return {
@@ -265,8 +262,7 @@ function resolveTraccia(tracciaId) {
       duration:  traccia.durata,
       mode:      traccia.modalita,
       status:    traccia.stato,
-      corso:     traccia.corso,
-      rules:     traccia.rules || []
+      corso:     traccia.corso
     },
     questions,
     n_questions: questions.length,
@@ -424,14 +420,13 @@ function doPost(e) {
       const trackId = (data.exam_date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd")) + "-" + suffix;
       sheet.appendRow([
         trackId,
-        data.corso       || "",
-        data.exam_name   || "",
-        data.exam_date   || "",
-        data.duration    || 90,
-        data.mode        || "exam",
+        data.corso     || "",
+        data.exam_name || "",
+        data.exam_date || "",
+        data.duration  || 90,
+        data.mode      || "exam",
         "closed",
-        (data.question_ids || []).join(","),
-        JSON.stringify(data.rules || [])
+        JSON.stringify(data.items || [])
       ]);
       return corsResponse({ status: "ok", track_id: trackId });
     }
@@ -454,13 +449,16 @@ function doPost(e) {
         const rawDate = row[T_DATA];
         let dataStr = rawDate instanceof Date && !isNaN(rawDate)
           ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+        let items = [];
+        try { items = JSON.parse(String(row[T_ITEMS] || "") || "[]"); } catch(e) {}
         tracks.push({
           exam_id:   id,
           exam_name: String(row[T_NOME]),
           exam_date: dataStr,
           duration:  String(row[T_DURATA]),
           mode:      String(row[T_MODALITA]) || "exam",
-          status:    String(row[T_STATO])    || "closed"
+          status:    String(row[T_STATO])    || "closed",
+          items
         });
       }
       return corsResponse({ status: "ok", tracks, version: VERSION });
@@ -483,7 +481,7 @@ function doPost(e) {
         if (data.duration  !== undefined) sheet.getRange(row, T_DURATA + 1).setValue(data.duration);
         if (data.mode      !== undefined) sheet.getRange(row, T_MODALITA + 1).setValue(data.mode);
         if (data.status    !== undefined) sheet.getRange(row, T_STATO + 1).setValue(data.status);
-        if (data.rules     !== undefined) sheet.getRange(row, T_RULES + 1).setValue(JSON.stringify(data.rules));
+        if (data.items     !== undefined) sheet.getRange(row, T_ITEMS + 1).setValue(JSON.stringify(data.items));
 
         // Sincronizza anche _meta nel foglio risultati
         const meta   = getMetaSheet();
