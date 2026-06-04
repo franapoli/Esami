@@ -118,6 +118,29 @@
 
   .histo-wrap { margin-top: 10px; }
 
+  /* MODAL PREVIEW */
+  #preview-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+                     z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  #preview-overlay.open { display:flex; }
+  #preview-box { background:#fff; border:1px solid #ccc; max-width:680px; width:100%;
+                 max-height:85vh; overflow-y:auto; padding:32px 36px; position:relative; }
+  #preview-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em;
+                    color:#888; margin-bottom:12px; font-weight:normal; }
+  #preview-close { position:absolute; top:14px; right:18px; background:none; border:none;
+                   font-size:1.4em; cursor:pointer; color:#888; line-height:1; }
+  #preview-close:hover { color:#1a1a1a; }
+  .prev-text { font-size:1em; line-height:1.65; margin-bottom:20px; }
+  .prev-opt { padding:8px 12px; margin-bottom:6px; border:1px solid #ddd; font-size:0.9em;
+              display:flex; gap:10px; align-items:flex-start; }
+  .prev-opt.correct { background:#f0f7f0; border-color:#81c784; }
+  .prev-opt-label { font-weight:bold; flex-shrink:0; min-width:20px; }
+  .prev-fitb { font-family:monospace; font-size:0.9em; padding:8px 12px;
+               background:#f8f8f8; border:1px solid #ddd; margin-bottom:6px; }
+  .prev-meta { font-size:0.78em; color:#999; margin-top:16px; line-height:1.8; }
+  .prev-btn { background:none; border:none; cursor:pointer; color:#888; font-size:0.82em;
+              padding:2px 6px; flex-shrink:0; line-height:1; }
+  .prev-btn:hover { color:#1a1a1a; }
+
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
   .q-row:hover { background: #f8f8f4; }
@@ -432,6 +455,16 @@
     </div>
   </div>
 
+</div>
+
+<!-- MODAL PREVIEW DOMANDA -->
+<div id="preview-overlay" onclick="closePreview(event)">
+  <div id="preview-box">
+    <button id="preview-close" onclick="closePreview()">✕</button>
+    <h3 id="preview-meta-top"></h3>
+    <div id="preview-body"></div>
+    <div id="preview-meta" class="prev-meta"></div>
+  </div>
 </div>
 
 <script>
@@ -858,6 +891,55 @@ function renderHistogram(rows, maxScore) {
 }
 
 // ============================================================
+// PREVIEW DOMANDA
+// ============================================================
+function previewQuestion(id, event) {
+  if (event) event.stopPropagation();
+  const q = allQuestions && allQuestions.find(x => x.id === id);
+  if (!q) return;
+
+  const letters = ["A","B","C","D"];
+  document.getElementById("preview-meta-top").textContent =
+    escHtml(q.categoria) + (q.sottocateg ? " › " + escHtml(q.sottocateg) : "") +
+    " · " + (q.tipo === "fitb" ? "risposta libera" : "scelta multipla") +
+    " · " + q.punti + " pt";
+
+  let body = `<div class="prev-text">${q.testo}</div>`;
+
+  if (q.tipo === "mc") {
+    const correct = { A:0, B:1, C:2, D:3 }[String(q.corretta).toUpperCase().trim()] ?? 0;
+    body += q.options.map((opt, i) =>
+      `<div class="prev-opt${i === correct ? " correct" : ""}">
+        <span class="prev-opt-label">${letters[i]}</span>
+        <span>${escHtml(opt)}</span>
+        ${i === correct ? '<span style="margin-left:auto;color:#2e7d32;font-size:0.85em;">✓ corretta</span>' : ""}
+      </div>`
+    ).join("");
+  } else {
+    body += `<div style="font-size:0.85em;color:#777;margin-bottom:4px;">Risposta corretta:</div>
+             <div class="prev-fitb">${escHtml(q.corretta)}</div>`;
+    if (q.placeholder) body += `<div style="font-size:0.82em;color:#aaa;">Placeholder: ${escHtml(q.placeholder)}</div>`;
+  }
+
+  document.getElementById("preview-body").innerHTML = body;
+  document.getElementById("preview-meta").innerHTML =
+    `ID: <code>${escHtml(q.id)}</code>` +
+    (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
+    (q.flags ? ` &nbsp;·&nbsp; Flags: ${escHtml(q.flags)}` : "");
+
+  document.getElementById("preview-overlay").classList.add("open");
+}
+
+function closePreview(event) {
+  if (event && event.target !== document.getElementById("preview-overlay")) return;
+  document.getElementById("preview-overlay").classList.remove("open");
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.getElementById("preview-overlay").classList.remove("open");
+});
+
+// ============================================================
 // TAB: DOMANDE
 // ============================================================
 let allQuestions   = null;  // array caricato una volta sola
@@ -1039,6 +1121,7 @@ function renderQBrowser() {
         </div>
       </div>
       <div class="q-row-pts">${q.punti} pt</div>
+      <button class="prev-btn" onclick="previewQuestion('${q.id}',event)" title="Anteprima">👁</button>
     </div>`;
   }).join("");
 }
@@ -1123,6 +1206,7 @@ function renderItemsList() {
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text">${escHtml(shortText)}</span>
         <span class="sel-pts">${q.punti} pt</span>
+        <button class="prev-btn" onclick="previewQuestion('${item.id}',event)" title="Anteprima">👁</button>
         ${arrows}
       </div>`;
     } else {
