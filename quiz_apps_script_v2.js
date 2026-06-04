@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.7.0"; // aggiornare ad ogni deploy
+const VERSION = "2.8.0"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -221,6 +221,12 @@ function buildQuestionObj(q, pos) {
       obj.cols  = d.cols  || 1;
     } catch(e) { obj.boxes = []; obj.cols = 1; }
     obj.correct = obj.boxes.map(b => String(b.correct || "").trim());
+  } else if (q.tipo === "cloze") {
+    try {
+      const d = JSON.parse(q.data || "{}");
+      obj.dropdowns = d.dropdowns || [];
+    } catch(e) { obj.dropdowns = []; }
+    obj.correct = obj.dropdowns.map(dd => dd.correct ?? 0);
   }
   if (q.flags) {
     q.flags.split(",").forEach(f => { const flag = f.trim(); if (flag) obj[flag] = true; });

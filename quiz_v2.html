@@ -79,6 +79,13 @@
   .free-textarea { width:100%; min-height:130px; padding:10px 12px; border:1px solid #bbb;
                    font-family:inherit; font-size:0.95em; resize:vertical; line-height:1.55; margin-top:4px; }
 
+  /* CLOZE */
+  .cloze-text { font-size:1.05em; line-height:2.4; }
+  .cloze-select { font-family:inherit; font-size:0.95em; padding:3px 8px;
+                  border:1px solid #bbb; background:#fff; cursor:pointer; margin:0 4px;
+                  border-radius:0; }
+  .cloze-select:focus { outline:2px solid #1a1a1a; }
+
   /* MULTI-FITB */
   .multi-fitb-grid { display:grid; gap:12px; margin-top:6px; }
   .multi-fitb-box { display:flex; flex-direction:column; gap:4px; }
@@ -646,6 +653,8 @@ function renderQuestion() {
             "<p class='fitb-hint'>La risposta verrà registrata; il punteggio sarà assegnato manualmente.</p>";
   } else if (q.type === "multi-fitb") {
     html += renderMultiFitbQuestion(q);
+  } else if (q.type === "cloze") {
+    html += renderClozeQuestion(q);
   }
 
   document.getElementById("question-container").innerHTML = html;
@@ -776,6 +785,53 @@ function normalizeAnswer(ans) {
   return String(ans).replace(/\s/g, "").toLowerCase();
 }
 
+// ---- CLOZE ----
+function renderClozeQuestion(q) {
+  if (!q.dropdowns || q.dropdowns.length === 0)
+    return "<p style='color:#b00;font-size:0.9em;'>Errore: dati dropdown mancanti.</p>";
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.dropdowns.length).fill(null);
+  const ans = answers[current];
+
+  // Sostituisce {{N}} con <select> inline, escaping il testo circostante
+  const parts = q.text.split(/(\{\{\d+\}\})/);
+  let html = '<div class="cloze-text">';
+  parts.forEach(part => {
+    const m = part.match(/^\{\{(\d+)\}\}$/);
+    if (m) {
+      const i = parseInt(m[1]);
+      const dd = q.dropdowns[i];
+      if (!dd) { html += escHtml(part); return; }
+      let opts = '<option value="">— scegli —</option>';
+      dd.options.forEach((opt, j) => {
+        opts += "<option value='" + j + "'" + (ans[i] === j ? " selected" : "") + ">" + escHtml(opt) + "</option>";
+      });
+      html += "<select class='cloze-select' onchange='saveClozeBox(" + i + ",parseInt(this.value))'>" + opts + "</select>";
+    } else {
+      html += escHtml(part);
+    }
+  });
+  html += "</div>";
+  if (q.dropdowns.length > 1) {
+    html += "<p class='fitb-hint'>Seleziona la parola/frase corretta per ogni spazio. Punteggio parziale.</p>";
+  }
+  return html;
+}
+
+function saveClozeBox(idx, val) {
+  const q = questions[current];
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.dropdowns.length).fill(null);
+  answers[current][idx] = isNaN(val) ? null : val;
+  saveLocal();
+  enqueueProgress(current, answers[current]);
+}
+
+function scoreCloze(q, value) {
+  if (!Array.isArray(value) || !q.dropdowns) return 0;
+  let correct = 0;
+  q.dropdowns.forEach((dd, i) => { if (value[i] === dd.correct) correct++; });
+  return Math.round((correct / q.dropdowns.length) * q.pts);
+}
+
 function scoreMatch(q, value) {
   if (!Array.isArray(value) || !q.right) return 0;
   let correct = 0;
@@ -812,6 +868,9 @@ async function saveProgress(qIndex, value) {
     } else if (q.type === "multi-fitb") {
       ans = JSON.stringify(value || []);
       pts = scoreMultiFitb(q, value);
+    } else if (q.type === "cloze") {
+      ans = JSON.stringify(value || []);
+      pts = scoreCloze(q, value);
     } else {
       ans = String(value || "");
       pts = 0;
@@ -831,6 +890,7 @@ function confirmSubmit() {
     const q = questions[i];
     if (q.type === "match")      return Array.isArray(a) && !a.includes(null);
     if (q.type === "multi-fitb") return Array.isArray(a) && a.some(v => v !== "");
+    if (q.type === "cloze")      return Array.isArray(a) && a.some(v => v !== null);
     if (q.type === "free")       return String(a).trim() !== "";
     return true;
   }).length;
@@ -888,6 +948,12 @@ async function showResults() {
       correct = (pts === q.pts);
       userDisplay    = Array.isArray(userAns) ? q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (userAns[j] || "—")).join(", ") : "—";
       correctDisplay = q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + b.correct).join(", ");
+      ansRaw = JSON.stringify(userAns || []);
+    } else if (q.type === "cloze") {
+      pts = scoreCloze(q, userAns);
+      correct = (pts === q.pts);
+      userDisplay    = Array.isArray(userAns) ? q.dropdowns.map((dd, j) => dd.options[userAns[j]] || "—").join(" / ") : "—";
+      correctDisplay = q.dropdowns.map(dd => dd.options[dd.correct]).join(" / ");
       ansRaw = JSON.stringify(userAns || []);
     }
 

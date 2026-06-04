@@ -924,7 +924,7 @@ function previewQuestion(id, event) {
   const letters = ["A","B","C","D"];
   document.getElementById("preview-meta-top").textContent =
     escHtml(q.categoria) + (q.sottocateg ? " › " + escHtml(q.sottocateg) : "") +
-    " · " + (({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple"}[q.tipo] || q.tipo)) +
+    " · " + (({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)) +
     " · " + q.punti + " pt";
 
   let body = `<div class="prev-text">${q.testo}</div>`;
@@ -938,6 +938,17 @@ function previewQuestion(id, event) {
         ${i === correct ? '<span style="margin-left:auto;color:#2e7d32;font-size:0.85em;">✓ corretta</span>' : ""}
       </div>`
     ).join("");
+  } else if (q.tipo === "cloze") {
+    try {
+      const d = JSON.parse(q.data || "{}");
+      (d.dropdowns || []).forEach((dd, i) => {
+        body += `<div style="margin-bottom:10px;"><strong>{{${i}}}</strong>: `;
+        body += dd.options.map((opt, j) =>
+          `<span style="${j===dd.correct ? 'color:#2e7d32;font-weight:bold;' : 'color:#555;'}">${escHtml(opt)}</span>`
+        ).join(" &nbsp;·&nbsp; ");
+        body += `</div>`;
+      });
+    } catch(e) { body += "<p style='color:#b00;'>Dati cloze non leggibili</p>"; }
   } else {
     body += `<div style="font-size:0.85em;color:#777;margin-bottom:4px;">Risposta corretta:</div>
              <div class="prev-fitb">${escHtml(q.corretta)}</div>`;
@@ -1139,7 +1150,7 @@ function renderQBrowser() {
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
         <div class="q-row-meta">
-          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple"}[q.tipo] || q.tipo)}
+          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)}
           ${(q.tags || "").split(",").map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-chip">${escHtml(t)}</span>`).join("")}
         </div>
       </div>
