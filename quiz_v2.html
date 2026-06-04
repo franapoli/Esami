@@ -1026,7 +1026,8 @@ async function restartQuiz() {
   document.getElementById("btn-restart").style.display = "none";
 
   if (EXAM_MODE === "practice") {
-    // Ricarica le domande dal server per ottenere un nuovo draw casuale
+    // Mostra overlay di caricamento e ricarica le domande dal server
+    document.getElementById("loading-overlay").classList.remove("hidden");
     try {
       const res = await callScript({ action: "getTrack", examId: EXAM_ID });
       if (res.status === "ok") {
@@ -1034,6 +1035,7 @@ async function restartQuiz() {
         TOTAL_PTS = res.total_pts || questions.reduce((s, q) => s + (q.pts || 0), 0);
       }
     } catch(e) { /* usa le domande precedenti se la rete non risponde */ }
+    document.getElementById("loading-overlay").classList.add("hidden");
 
     // Reset sul server
     await callScript({ action: "resetPractice", examId: EXAM_ID,
