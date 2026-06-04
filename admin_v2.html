@@ -570,6 +570,18 @@ function onTrackChange() {
     return;
   }
 
+  // Guard: avvisa se c'è una nuova traccia non salvata nel tab Domande
+  if (activeTab === "domande" && hasUnsavedNewTrack()) {
+    if (!confirm("Hai una nuova traccia non salvata.\nSelezionando un'altra traccia perderai le modifiche.\n\nVuoi continuare?")) {
+      // Ripristina il selettore a "__new__"
+      document.getElementById("track-select").value = "__new__";
+      return;
+    }
+    clearItems();
+    document.getElementById("new-name").value = "";
+    document.getElementById("new-date").value = "";
+  }
+
   currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
   updateAdminTab();
   if (activeTab === "monitor")   updateMonitorTab();
@@ -586,7 +598,18 @@ function updateTrackInList(t) {
 }
 
 // ---- TABS ----
+function hasUnsavedNewTrack() {
+  if (currentTrack) return false; // stiamo modificando una traccia esistente, non nuova
+  return trackItems.length > 0 || !!(document.getElementById("new-name")?.value.trim());
+}
+
 function switchTab(name) {
+  if (activeTab === "domande" && name !== "domande" && hasUnsavedNewTrack()) {
+    if (!confirm("Hai una nuova traccia non salvata.\nCambiando tab perderai le modifiche.\n\nVuoi continuare?")) return;
+    clearItems();
+    document.getElementById("new-name").value = "";
+    document.getElementById("new-date").value = "";
+  }
   activeTab = name;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
