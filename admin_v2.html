@@ -924,7 +924,7 @@ function previewQuestion(id, event) {
   const letters = ["A","B","C","D"];
   document.getElementById("preview-meta-top").textContent =
     escHtml(q.categoria) + (q.sottocateg ? " › " + escHtml(q.sottocateg) : "") +
-    " · " + (q.tipo === "fitb" ? "risposta libera" : "scelta multipla") +
+    " · " + (({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple"}[q.tipo] || q.tipo)) +
     " · " + q.punti + " pt";
 
   let body = `<div class="prev-text">${q.testo}</div>`;
@@ -1139,7 +1139,7 @@ function renderQBrowser() {
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
         <div class="q-row-meta">
-          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${q.tipo === "fitb" ? "risposta libera" : "scelta multipla"}
+          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple"}[q.tipo] || q.tipo)}
           ${(q.tags || "").split(",").map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-chip">${escHtml(t)}</span>`).join("")}
         </div>
       </div>
