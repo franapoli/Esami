@@ -515,7 +515,8 @@ function populateTrackSelect(tracks) {
     return;
   }
   const sorted = [...tracks].sort((a,b) => a.status === b.status ? 0 : a.status === "open" ? -1 : 1);
-  sel.innerHTML = '<option value="">— seleziona una traccia —</option>';
+  sel.innerHTML = '<option value="">— seleziona una traccia —</option>' +
+                  '<option value="__new__">+ Crea nuova traccia</option>';
   sorted.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t.exam_id;
@@ -529,6 +530,13 @@ function populateTrackSelect(tracks) {
 
 function onTrackChange() {
   const examId = document.getElementById("track-select").value;
+
+  if (examId === "__new__") {
+    currentTrack = null;
+    switchTab("domande");
+    return;
+  }
+
   currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
   updateAdminTab();
   if (activeTab === "monitor")   updateMonitorTab();
@@ -921,13 +929,33 @@ function renderExistingTrackInfo() {
   const dur = t.duration == 0 ? "senza limite" : (t.duration || "—") + " min";
   const info = document.getElementById("existing-track-info");
   info.className = "card";
-  info.innerHTML = `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-    <strong style="font-size:1em;">${escHtml(t.exam_name || t.exam_id)}</strong>${statusEl}
-  </div>
-  <div style="font-size:0.84em;color:#666;margin-top:6px;">
-    ${formatDateIt(t.exam_date)} &nbsp;·&nbsp; ${dur} &nbsp;·&nbsp; ${t.mode === "practice" ? "esercitazione" : "esame"}
-    ${!isOpen ? '<br><span style="color:#b00;font-size:0.9em;">Traccia chiusa — sola lettura</span>' : ""}
+  info.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+        <strong style="font-size:1em;">${escHtml(t.exam_name || t.exam_id)}</strong>${statusEl}
+      </div>
+      <div style="font-size:0.84em;color:#666;margin-top:4px;">
+        ${formatDateIt(t.exam_date)} &nbsp;·&nbsp; ${dur} &nbsp;·&nbsp; ${t.mode === "practice" ? "esercitazione" : "esame"}
+        ${!isOpen ? '<br><span style="color:#b00;font-size:0.9em;">Traccia chiusa — sola lettura</span>' : ""}
+      </div>
+    </div>
+    <button class="btn btn-sm btn-outline" onclick="duplicateTrack()" style="flex-shrink:0;">Duplica traccia</button>
   </div>`;
+}
+
+function duplicateTrack() {
+  if (!currentTrack) return;
+  // Copia items e metadati nel form nuova traccia
+  trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
+  document.getElementById("new-name").value = "Copia di " + (currentTrack.exam_name || currentTrack.exam_id);
+  document.getElementById("new-date").value = currentTrack.exam_date || "";
+  document.getElementById("new-dur").value  = currentTrack.duration  || "90";
+  document.getElementById("new-mode").value = currentTrack.mode      || "exam";
+  // Passa a modalità nuova traccia
+  currentTrack = null;
+  document.getElementById("track-select").value = "__new__";
+  setDomandeMode("new");
+  document.getElementById("create-msg").textContent = "";
 }
 
 async function saveTrackItems() {
