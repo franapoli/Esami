@@ -626,8 +626,8 @@ function renderQuestion() {
   if (q.acmg_combo)  html += q.acmg_combo_html || "";
   if (q.blast)       html += "<div class='blast-block'>" + (q.blast_html || "") + "</div>";
 
-  // Il testo domanda viene reso come innerHTML (supporta HTML embedded)
-  html += "<div class='q-text'>" + q.text + "</div>";
+  // Il testo domanda viene reso come innerHTML (per cloze è incluso nel rendering dei dropdown)
+  if (q.type !== "cloze") html += "<div class='q-text'>" + q.text + "</div>";
 
   if (q.type === "mc") {
     const order = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : q.options.map((_, i) => i);
