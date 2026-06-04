@@ -58,6 +58,32 @@
   .option-label { font-size: 0.95em; line-height: 1.5; }
   .fitb-input { width: 100%; padding: 9px 12px; border: 1px solid #bbb; font-size: 1em; font-family: monospace; margin-top: 4px; }
   .fitb-hint { font-size: 0.82em; color: #777; margin-top: 6px; }
+
+  /* MATCH */
+  .match-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .match-term { flex:1; padding:9px 12px; background:#f8f8f8; border:1px solid #ddd; font-size:0.95em; }
+  .match-slot { flex:1; min-height:40px; padding:7px 12px; border:2px dashed #bbb; cursor:pointer;
+                display:flex; align-items:center; font-size:0.95em; transition:background 0.1s; }
+  .match-slot:hover { background:#f5f5f0; }
+  .match-slot.filled { border-style:solid; border-color:#888; background:#f0f0e8; }
+  .match-slot.is-selected { border-color:#1a1a1a; background:#e8e8e0; }
+  .match-empty { color:#bbb; font-style:italic; }
+  .match-bank-label { font-size:0.82em; color:#777; margin:14px 0 6px; }
+  .match-bank { display:flex; flex-wrap:wrap; gap:8px; padding:12px; background:#f8f8f8; border:1px solid #ddd; }
+  .match-bank-item { padding:7px 14px; border:1px solid #bbb; cursor:pointer; background:#fff;
+                     font-size:0.93em; transition:background 0.12s; }
+  .match-bank-item:hover { background:#f5f5f0; }
+  .match-bank-item.selected { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+
+  /* FREE */
+  .free-textarea { width:100%; min-height:130px; padding:10px 12px; border:1px solid #bbb;
+                   font-family:inherit; font-size:0.95em; resize:vertical; line-height:1.55; margin-top:4px; }
+
+  /* MULTI-FITB */
+  .multi-fitb-grid { display:grid; gap:12px; margin-top:6px; }
+  .multi-fitb-box { display:flex; flex-direction:column; gap:4px; }
+  .multi-fitb-label { font-size:0.82em; color:#555; font-weight:bold; }
+  .multi-fitb-input { padding:8px 10px; border:1px solid #bbb; font-family:monospace; font-size:0.95em; }
   .nav { display: flex; justify-content: space-between; margin-top: 28px; }
   .acmg-table { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-bottom: 20px; }
   .acmg-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; background: #f8f8f8; }
@@ -177,6 +203,7 @@ let studentNominativo = "";
 let studentMatricola  = "";
 let studentEmail      = "";
 let shuffleMap        = [];
+let matchSelected     = null; // {qIdx, rightOrigIdx, fromSlot: null|leftIdx}
 let startTime         = null;
 let timerInterval     = null;
 
@@ -489,8 +516,9 @@ function fisherYates(arr) {
 
 function buildShuffleMap() {
   shuffleMap = questions.map(q => {
-    if (q.type !== "mc") return null;
-    return fisherYates(q.options.map((_, i) => i));
+    if (q.type === "mc")    return fisherYates(q.options.map((_, i) => i));
+    if (q.type === "match") return fisherYates(q.right.map((_, i) => i));
+    return null;
   });
 }
 
@@ -608,6 +636,16 @@ function renderQuestion() {
     html += "<input class='fitb-input' type='text' id='fitb-input' value='" + escHtml(String(val)) +
             "' placeholder='" + escHtml(ph) + "' oninput='saveText(this.value)'>" +
             "<p class='fitb-hint'>Inserisci i valori separati da virgola, senza spazi</p>";
+  } else if (q.type === "match") {
+    html += renderMatchQuestion(q);
+  } else if (q.type === "free") {
+    const val = answers[current] !== null ? answers[current] : "";
+    html += "<textarea class='free-textarea' oninput='saveText(this.value)' " +
+            "placeholder='" + escHtml(q.placeholder || "Scrivi la tua risposta qui…") + "'>" +
+            escHtml(String(val)) + "</textarea>" +
+            "<p class='fitb-hint'>La risposta verrà registrata; il punteggio sarà assegnato manualmente.</p>";
+  } else if (q.type === "multi-fitb") {
+    html += renderMultiFitbQuestion(q);
   }
 
   document.getElementById("question-container").innerHTML = html;
@@ -629,7 +667,103 @@ function renderQuestion() {
 }
 
 function selectOption(i) { answers[current] = i; saveLocal(); renderQuestion(); }
-function saveText(val)    { answers[current] = val.trim(); saveLocal(); }
+function saveText(val)    { answers[current] = val; saveLocal(); }
+
+// ---- MATCH ----
+function renderMatchQuestion(q) {
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.left.length).fill(null);
+  const ans = answers[current];
+  const sm  = (shuffleMap && shuffleMap[current]) || q.right.map((_, i) => i);
+  const used = new Set(ans.filter(x => x !== null));
+  const bank = sm.filter(i => !used.has(i));
+
+  let html = "";
+  q.left.forEach((term, li) => {
+    const ri  = ans[li];
+    const isSel = matchSelected && matchSelected.fromSlot === li;
+    html += "<div class='match-row'>" +
+      "<div class='match-term'>" + escHtml(term) + "</div>" +
+      "<div class='match-slot" + (ri !== null ? " filled" : "") + (isSel ? " is-selected" : "") +
+      "' onclick='matchClickSlot(" + li + ")'>" +
+      (ri !== null ? escHtml(q.right[ri]) : "<span class='match-empty'>—</span>") +
+      "</div></div>";
+  });
+
+  html += "<div class='match-bank-label'>Elementi disponibili — clicca per selezionare, poi clicca uno slot:</div>";
+  html += "<div class='match-bank'>";
+  if (bank.length === 0) {
+    html += "<span style='color:#aaa;font-size:0.85em;font-style:italic;'>Tutti gli elementi sono stati assegnati</span>";
+  } else {
+    bank.forEach(origIdx => {
+      const isSel = matchSelected && matchSelected.rightOrigIdx === origIdx && matchSelected.fromSlot === null;
+      html += "<div class='match-bank-item" + (isSel ? " selected" : "") +
+              "' onclick='matchClickBank(" + origIdx + ")'>" + escHtml(q.right[origIdx]) + "</div>";
+    });
+  }
+  html += "</div>";
+  return html;
+}
+
+function matchClickBank(rightOrigIdx) {
+  if (matchSelected && matchSelected.rightOrigIdx === rightOrigIdx && matchSelected.fromSlot === null) {
+    matchSelected = null; // deseleziona
+  } else {
+    matchSelected = { qIdx: current, rightOrigIdx, fromSlot: null };
+  }
+  renderQuestion();
+}
+
+function matchClickSlot(leftIdx) {
+  const q = questions[current];
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.left.length).fill(null);
+  const ans = answers[current];
+
+  if (matchSelected) {
+    const { rightOrigIdx, fromSlot } = matchSelected;
+    const existing = ans[leftIdx]; // cosa c'è già nello slot
+    if (fromSlot !== null) ans[fromSlot] = existing; // swap: rimanda al slot sorgente
+    ans[leftIdx] = rightOrigIdx;
+    matchSelected = null;
+  } else if (ans[leftIdx] !== null) {
+    matchSelected = { qIdx: current, rightOrigIdx: ans[leftIdx], fromSlot: leftIdx };
+    // Non assegnare ancora — aspettiamo il click sul nuovo slot
+    answers[current] = ans; saveLocal(); renderQuestion(); return;
+  }
+
+  answers[current] = ans;
+  saveLocal();
+  enqueueProgress(current, ans);
+  renderQuestion();
+}
+
+// ---- MULTI-FITB ----
+function renderMultiFitbQuestion(q) {
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.boxes.length).fill("");
+  const ans  = answers[current];
+  const cols = q.cols || 1;
+  const ptsList = q.boxes.map(b => b.pts || 0);
+  let html = "<div class='multi-fitb-grid' style='grid-template-columns:repeat(" + cols + ",1fr);'>";
+  q.boxes.forEach((box, i) => {
+    html += "<div class='multi-fitb-box'>" +
+      (box.label ? "<label class='multi-fitb-label'>" + escHtml(box.label) + "</label>" : "") +
+      "<input class='multi-fitb-input' type='text' " +
+      "value='" + escHtml(String(ans[i] || "")) + "' " +
+      "placeholder='" + escHtml(box.placeholder || "") + "' " +
+      "oninput='saveMultiFitbBox(" + i + ",this.value)'>" +
+      "</div>";
+  });
+  html += "</div>";
+  html += "<p class='fitb-hint'>Punteggio parziale: " + ptsList.join(" + ") + " pt</p>";
+  return html;
+}
+
+function saveMultiFitbBox(idx, val) {
+  const q = questions[current];
+  if (!Array.isArray(answers[current])) answers[current] = new Array(q.boxes.length).fill("");
+  answers[current][idx] = val;
+  saveLocal();
+  enqueueProgress(current, answers[current]);
+}
 
 // ---- SAVE PROGRESS ----
 function setSaveStatus(msg) {
@@ -641,15 +775,46 @@ function normalizeAnswer(ans) {
   return String(ans).replace(/\s/g, "").toLowerCase();
 }
 
+function scoreMatch(q, value) {
+  if (!Array.isArray(value) || !q.right) return 0;
+  let correct = 0;
+  value.forEach((rightIdx, leftIdx) => { if (rightIdx === leftIdx) correct++; });
+  return Math.round((correct / q.left.length) * q.pts);
+}
+
+function scoreMultiFitb(q, value) {
+  if (!Array.isArray(value) || !q.boxes) return 0;
+  let pts = 0;
+  q.boxes.forEach((box, i) => {
+    if (normalizeAnswer(value[i]) === normalizeAnswer(box.correct)) pts += (box.pts || 0);
+  });
+  return pts;
+}
+
 async function saveProgress(qIndex, value) {
   setSaveStatus("Salvataggio…");
   try {
     const q = questions[qIndex];
-    // ans: indice 0-based per mc, testo per fitb
-    const ans = (value !== null && value !== undefined) ? String(value) : "";
-    const pts = q.type === "mc"
-      ? (value === q.correct ? q.pts : 0)
-      : (normalizeAnswer(value) === normalizeAnswer(q.correct) ? q.pts : 0);
+    let ans, pts;
+    if (q.type === "mc") {
+      ans = (value !== null && value !== undefined) ? String(value) : "";
+      pts = value === q.correct ? q.pts : 0;
+    } else if (q.type === "fitb") {
+      ans = String(value || "");
+      pts = normalizeAnswer(value) === normalizeAnswer(q.correct) ? q.pts : 0;
+    } else if (q.type === "match") {
+      ans = JSON.stringify(value || []);
+      pts = scoreMatch(q, value);
+    } else if (q.type === "free") {
+      ans = String(value || "");
+      pts = 0;
+    } else if (q.type === "multi-fitb") {
+      ans = JSON.stringify(value || []);
+      pts = scoreMultiFitb(q, value);
+    } else {
+      ans = String(value || "");
+      pts = 0;
+    }
     await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
                        qIndex: qIndex + 1, ans, pts });
     setSaveStatus("✓ Salvato");
@@ -660,7 +825,14 @@ async function saveProgress(qIndex, value) {
 
 // ---- CONSEGNA ----
 function confirmSubmit() {
-  const answered   = answers.filter(a => a !== null).length;
+  const answered = answers.filter((a, i) => {
+    if (a === null) return false;
+    const q = questions[i];
+    if (q.type === "match")      return Array.isArray(a) && !a.includes(null);
+    if (q.type === "multi-fitb") return Array.isArray(a) && a.some(v => v !== "");
+    if (q.type === "free")       return String(a).trim() !== "";
+    return true;
+  }).length;
   const total      = questions.length;
   const unanswered = total - answered;
   let msg = "Hai risposto a " + answered + " domande su " + total + ".";
@@ -684,14 +856,41 @@ async function showResults() {
 
   questions.forEach((q, i) => {
     const userAns = answers[i];
-    let correct = false;
-    if (q.type === "mc")   correct = userAns === q.correct;
-    else if (q.type === "fitb") correct = normalizeAnswer(userAns) === normalizeAnswer(q.correct);
-    const pts = correct ? q.pts : 0;
+    let correct = false, pts = 0, userDisplay = "—", correctDisplay = "—", ansRaw = "";
+
+    if (q.type === "mc") {
+      pts = (userAns === q.correct) ? q.pts : 0;
+      correct = (pts === q.pts);
+      userDisplay    = userAns !== null ? q.options[userAns] : "—";
+      correctDisplay = q.options[q.correct];
+      ansRaw = userAns !== null ? String(userAns) : "";
+    } else if (q.type === "fitb") {
+      pts = normalizeAnswer(userAns) === normalizeAnswer(q.correct) ? q.pts : 0;
+      correct = (pts === q.pts);
+      userDisplay    = userAns || "—";
+      correctDisplay = q.correct;
+      ansRaw = String(userAns || "");
+    } else if (q.type === "match") {
+      pts = scoreMatch(q, userAns);
+      correct = (pts === q.pts);
+      userDisplay    = Array.isArray(userAns) ? q.left.map((l, j) => l + " → " + (userAns[j] !== null ? q.right[userAns[j]] : "—")).join("; ") : "—";
+      correctDisplay = q.left.map((l, j) => l + " → " + q.right[j]).join("; ");
+      ansRaw = JSON.stringify(userAns || []);
+    } else if (q.type === "free") {
+      pts = 0;
+      correct = false;
+      userDisplay    = String(userAns || "—");
+      correctDisplay = "(valutazione manuale)";
+      ansRaw = String(userAns || "");
+    } else if (q.type === "multi-fitb") {
+      pts = scoreMultiFitb(q, userAns);
+      correct = (pts === q.pts);
+      userDisplay    = Array.isArray(userAns) ? q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (userAns[j] || "—")).join(", ") : "—";
+      correctDisplay = q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + b.correct).join(", ");
+      ansRaw = JSON.stringify(userAns || []);
+    }
+
     score += pts;
-    const userDisplay    = q.type === "mc" ? (userAns !== null ? q.options[userAns] : "—") : (userAns || "—");
-    const correctDisplay = q.type === "mc" ? q.options[q.correct] : q.correct;
-    const ansRaw = userAns !== null && userAns !== undefined ? String(userAns) : "";
     resultRows.push({ ans: ansRaw, pts, correct, correctDisplay, qText: q.text, qPts: q.pts, userDisplay });
   });
 

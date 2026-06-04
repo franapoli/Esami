@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.6.0"; // aggiornare ad ogni deploy
+const VERSION = "2.7.0"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -41,6 +41,7 @@ const Q_PUNTI         = 11; // L
 const Q_FLAGS         = 12; // M  es. "blast,context" (non più usato per contenuto ricco — il testo è nella cella)
 const Q_PLACEHOLDER   = 13; // N  solo per fitb
 const Q_TAGS          = 14; // O  tag separati da virgola (es. "blast,phylogeny")
+const Q_DATA          = 15; // P  JSON per tipi complessi (multi-fitb, ecc.)
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -108,7 +109,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tipo",
-                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags"];
+                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags", "Data"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -150,7 +151,8 @@ function loadAllQuestions() {
       punti:        Number(row[Q_PUNTI]) || 1,
       flags:        String(row[Q_FLAGS]).trim(),
       placeholder:  String(row[Q_PLACEHOLDER]).trim(),
-      tags:         String(row[Q_TAGS] || "").trim()
+      tags:         String(row[Q_TAGS] || "").trim(),
+      data:         String(row[Q_DATA] || "").trim()
     };
   }
   return map;
@@ -199,10 +201,27 @@ function buildQuestionObj(q, pos) {
     pts:     q.punti,
     type:    q.tipo,
     text:    q.testo,
-    correct: q.tipo === "mc" ? letterToIndex(q.corretta) : q.corretta
+    correct: q.tipo === "mc" ? letterToIndex(q.corretta) : (q.tipo === "fitb" ? q.corretta : null)
   };
-  if (q.tipo === "mc") obj.options = q.options;
-  if (q.tipo === "fitb" && q.placeholder) obj.placeholder = q.placeholder;
+  if (q.tipo === "mc") {
+    obj.options = q.options;
+  } else if (q.tipo === "fitb") {
+    if (q.placeholder) obj.placeholder = q.placeholder;
+  } else if (q.tipo === "match") {
+    obj.left  = q.options; // A-D = termini sinistri
+    try { obj.right = JSON.parse(q.corretta); } catch(e) { obj.right = []; }
+    obj.correct = obj.right.slice(); // right[i] è la risposta corretta per left[i]
+  } else if (q.tipo === "free") {
+    if (q.placeholder) obj.placeholder = q.placeholder;
+    obj.correct = null;
+  } else if (q.tipo === "multi-fitb") {
+    try {
+      const d = JSON.parse(q.data || "{}");
+      obj.boxes = d.boxes || [];
+      obj.cols  = d.cols  || 1;
+    } catch(e) { obj.boxes = []; obj.cols = 1; }
+    obj.correct = obj.boxes.map(b => String(b.correct || "").trim());
+  }
   if (q.flags) {
     q.flags.split(",").forEach(f => { const flag = f.trim(); if (flag) obj[flag] = true; });
   }
@@ -623,7 +642,8 @@ function doPost(e) {
         data.punti       || 1,
         data.flags       || "",
         data.placeholder || "",
-        data.tags        || ""
+        data.tags        || "",
+        data.data        || ""
       ]);
       return corsResponse({ status: "ok", id: newId });
     }
