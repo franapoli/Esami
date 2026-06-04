@@ -738,6 +738,7 @@ function matchClickSlot(leftIdx) {
 
 // ---- MULTI-FITB ----
 function renderMultiFitbQuestion(q) {
+  if (!q.boxes || q.boxes.length === 0) return "<p style='color:#b00;font-size:0.9em;'>Errore: configurazione caselle mancante (aggiornare il deploy dello script).</p>";
   if (!Array.isArray(answers[current])) answers[current] = new Array(q.boxes.length).fill("");
   const ans  = answers[current];
   const cols = q.cols || 1;
