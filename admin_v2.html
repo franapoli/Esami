@@ -893,7 +893,7 @@ function updateDomandeTab() {
   }
 }
 
-function setDomandeMode(mode) {
+function setDomandeMode(mode, keepItems = false) {
   isEditingItems = (mode !== "readonly");
 
   // Visibilità browser sinistro
@@ -908,7 +908,7 @@ function setDomandeMode(mode) {
   document.getElementById("btn-clear-items").style.display      = isEditingItems ? "" : "none";
 
   if (mode === "new") {
-    trackItems = [];
+    if (!keepItems) trackItems = [];
     document.getElementById("create-msg").textContent = "";
   } else {
     trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
@@ -954,7 +954,7 @@ function duplicateTrack() {
   // Passa a modalità nuova traccia
   currentTrack = null;
   document.getElementById("track-select").value = "__new__";
-  setDomandeMode("new");
+  setDomandeMode("new", true); // keepItems: non azzera la copia
   document.getElementById("create-msg").textContent = "";
 }
 
