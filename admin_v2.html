@@ -618,6 +618,7 @@ function onTrackChange() {
   }
 
   currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
+  trackItems    = currentTrack ? JSON.parse(JSON.stringify(currentTrack.items || [])) : [];
   editFormDirty = false;
   updateAdminTab();
   if (activeTab === "monitor")   { showTabLoading("monitor");   updateMonitorTab(); }
