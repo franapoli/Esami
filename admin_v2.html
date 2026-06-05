@@ -253,6 +253,10 @@
       <div class="card">
         <h2>Modifica attributi traccia</h2>
         <div class="field">
+          <label for="cfg-corso">Corso</label>
+          <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+        </div>
+        <div class="field" style="margin-top:10px;">
           <label for="cfg-name">Nome visualizzato</label>
           <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Es. Prova in itinere 1 — VHL">
         </div>
@@ -363,6 +367,10 @@
         <div id="new-track-form" class="card" style="margin-bottom:12px;">
           <h2>Nuova traccia</h2>
           <div class="field">
+            <label for="new-corso">Corso</label>
+            <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+          </div>
+          <div class="field" style="margin-top:10px;">
             <label for="new-name">Nome</label>
             <input type="text" id="new-name" autocomplete="new-password" placeholder="Es. Esercitazione BLAST">
           </div>
@@ -681,11 +689,12 @@ function renderTrackStatus(t) {
 }
 
 function populateEditForm(t) {
-  document.getElementById("cfg-name").value = t.exam_name || "";
-  document.getElementById("cfg-date").value = t.exam_date || "";
-  document.getElementById("cfg-dur").value  = t.duration  || "90";
-  document.getElementById("cfg-mode").value = t.mode      || "exam";
-  document.getElementById("cfg-pwd").value  = t.password  || "";
+  document.getElementById("cfg-corso").value = t.corso     || "";
+  document.getElementById("cfg-name").value  = t.exam_name || "";
+  document.getElementById("cfg-date").value  = t.exam_date || "";
+  document.getElementById("cfg-dur").value   = t.duration  || "90";
+  document.getElementById("cfg-mode").value  = t.mode      || "exam";
+  document.getElementById("cfg-pwd").value   = t.password  || "";
 }
 
 async function setStatus(newStatus) {
@@ -710,6 +719,7 @@ async function saveTrack() {
   try {
     const res = await callScript({
       action:"setTrack", password:adminPassword, examId:currentTrack.exam_id,
+      corso:     document.getElementById("cfg-corso").value.trim(),
       exam_name: document.getElementById("cfg-name").value.trim(),
       exam_date: document.getElementById("cfg-date").value.trim(),
       duration:  document.getElementById("cfg-dur").value.trim(),
@@ -717,6 +727,7 @@ async function saveTrack() {
       track_password: document.getElementById("cfg-pwd").value.trim()
     });
     if (res.status === "ok") {
+      currentTrack.corso     = document.getElementById("cfg-corso").value.trim();
       currentTrack.exam_name = document.getElementById("cfg-name").value.trim();
       currentTrack.exam_date = document.getElementById("cfg-date").value.trim();
       currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
@@ -1063,10 +1074,11 @@ function duplicateTrack() {
   if (!currentTrack) return;
   // Copia items e metadati nel form nuova traccia
   trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
-  document.getElementById("new-name").value = "Copia di " + (currentTrack.exam_name || currentTrack.exam_id);
-  document.getElementById("new-date").value = currentTrack.exam_date || "";
-  document.getElementById("new-dur").value  = currentTrack.duration  || "90";
-  document.getElementById("new-mode").value = currentTrack.mode      || "exam";
+  document.getElementById("new-corso").value = currentTrack.corso     || "";
+  document.getElementById("new-name").value  = "Copia di " + (currentTrack.exam_name || currentTrack.exam_id);
+  document.getElementById("new-date").value  = currentTrack.exam_date || "";
+  document.getElementById("new-dur").value   = currentTrack.duration  || "90";
+  document.getElementById("new-mode").value  = currentTrack.mode      || "exam";
   // Passa a modalità nuova traccia
   currentTrack = null;
   document.getElementById("track-select").value = "__new__";
@@ -1287,11 +1299,13 @@ async function doCreateTrack() {
   try {
     const res = await callScript({
       action: "createTrack", password: adminPassword,
+      corso: document.getElementById("new-corso").value.trim(),
       exam_name: name, exam_date: date, duration: dur, mode, items: trackItems
     });
     if (res.status !== "ok") throw new Error(res.message);
 
-    allTracks.push({ exam_id: res.track_id, exam_name: name, exam_date: date,
+    const corso = document.getElementById("new-corso").value.trim();
+    allTracks.push({ exam_id: res.track_id, corso, exam_name: name, exam_date: date,
                      duration: dur, mode, status: "closed" });
     populateTrackSelect(allTracks);
     msg.style.color = "#2e7d32";

@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.0"; // aggiornare ad ogni deploy
+const VERSION = "2.8.1"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -523,6 +523,7 @@ function doPost(e) {
       for (let i = 1; i < values.length; i++) {
         if (String(values[i][T_ID]).trim() !== data.examId) continue;
         const row = i + 1;
+        if (data.corso     !== undefined) sheet.getRange(row, T_CORSO + 1).setValue(data.corso);
         if (data.exam_name !== undefined) sheet.getRange(row, T_NOME + 1).setValue(data.exam_name);
         if (data.exam_date !== undefined) sheet.getRange(row, T_DATA + 1).setValue(data.exam_date);
         if (data.duration  !== undefined) sheet.getRange(row, T_DURATA + 1).setValue(data.duration);
