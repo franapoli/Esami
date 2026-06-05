@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.1"; // aggiornare ad ogni deploy
+const VERSION = "2.8.2"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -559,7 +559,7 @@ function doPost(e) {
       }
       const examId  = data.examId;
       const traccia = readTraccia(examId);
-      const nQ      = traccia ? traccia.questionIds.length : 20;
+      const nQ      = traccia ? traccia.items.length : 20;
       const ss      = SpreadsheetApp.openById(SHEET_RESULTS_ID);
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
@@ -568,8 +568,10 @@ function doPost(e) {
       const rows   = [];
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
+        const qids = String(row[COL_QIDS - 1] || "");
+        const rowNQ = qids ? qids.split(",").filter(x => x.trim()).length : nQ;
         let answered = 0;
-        for (let q = 0; q < nQ; q++) {
+        for (let q = 0; q < rowNQ; q++) {
           if (row[COL_ANS_FIRST - 1 + q * 2] !== "") answered++;
         }
         rows.push({
@@ -596,7 +598,7 @@ function doPost(e) {
       }
       const examId  = data.examId;
       const traccia = readTraccia(examId);
-      const nQ      = traccia ? traccia.questionIds.length : 20;
+      const nQ      = traccia ? traccia.items.length : 20;
       const ss      = SpreadsheetApp.openById(SHEET_RESULTS_ID);
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
@@ -606,8 +608,10 @@ function doPost(e) {
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         if (row[COL_TS_END - 1] === "") continue;
+        const qids = String(row[COL_QIDS - 1] || "");
+        const rowNQ = qids ? qids.split(",").filter(x => x.trim()).length : nQ;
         const pts = [];
-        for (let q = 0; q < nQ; q++) {
+        for (let q = 0; q < rowNQ; q++) {
           pts.push(Number(row[COL_ANS_FIRST - 1 + q * 2 + 1]) || 0);
         }
         rows.push({
