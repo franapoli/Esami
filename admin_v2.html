@@ -264,6 +264,7 @@
         <div class="monitor-meta" id="monitor-meta"></div>
         <div class="controls">
           <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
+          <span id="monitor-updating" style="display:none;font-size:0.78em;color:#aaa;font-style:italic;">Aggiornamento…</span>
           <span id="last-update"></span>
           <span style="font-size:0.78em;color:#aaa;">auto ogni 30s</span>
         </div>
@@ -290,42 +291,7 @@
   <div class="tab-panel" id="panel-domande">
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
 
-      <!-- Colonna sinistra: browser domande -->
-      <div id="browser-col" style="flex:1;min-width:320px;">
-        <div class="card" style="margin-bottom:12px;">
-          <h2>Filtri</h2>
-          <div class="row2">
-            <div class="field">
-              <label for="f-cat">Categoria</label>
-              <select id="f-cat" onchange="onCatChange()">
-                <option value="">— tutte —</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="f-subcat">Sottocategoria</label>
-              <select id="f-subcat" onchange="filterQuestions()">
-                <option value="">— tutte —</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="f-tag">Tag</label>
-              <select id="f-tag" onchange="filterQuestions()">
-                <option value="">— tutti —</option>
-              </select>
-            </div>
-          </div>
-          <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <span style="font-size:0.82em;color:#888;" id="q-count"></span>
-            <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
-          </div>
-        </div>
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div id="q-browser" style="max-height:520px;overflow-y:auto;"></div>
-          <div id="q-loading" style="padding:20px;color:#888;font-size:0.88em;font-style:italic;">Caricamento domande…</div>
-        </div>
-      </div>
-
-      <!-- Colonna destra -->
+      <!-- Colonna sinistra: traccia (form + attributi + items) -->
       <div style="flex:1;min-width:300px;">
 
         <!-- Nuova traccia -->
@@ -357,9 +323,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Traccia esistente: header -->
-        <div id="existing-track-info" style="display:none;margin-bottom:12px;"></div>
 
         <!-- Traccia esistente: modifica attributi (solo edit mode) -->
         <div id="cfg-card" class="card" style="display:none;margin-bottom:12px;">
@@ -421,6 +384,42 @@
         </div>
 
       </div>
+
+      <!-- Colonna destra: aggiungi domande -->
+      <div id="browser-col" style="flex:1;min-width:320px;">
+        <div class="card" style="margin-bottom:12px;">
+          <h2>Aggiungi domande</h2>
+          <div class="row2">
+            <div class="field">
+              <label for="f-cat">Categoria</label>
+              <select id="f-cat" onchange="onCatChange()">
+                <option value="">— tutte —</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-subcat">Sottocategoria</label>
+              <select id="f-subcat" onchange="filterQuestions()">
+                <option value="">— tutte —</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-tag">Tag</label>
+              <select id="f-tag" onchange="filterQuestions()">
+                <option value="">— tutti —</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-size:0.82em;color:#888;" id="q-count"></span>
+            <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div id="q-browser" style="max-height:520px;overflow-y:auto;"></div>
+          <div id="q-loading" style="padding:20px;color:#888;font-size:0.88em;font-style:italic;">Caricamento domande…</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -437,6 +436,7 @@
         <div class="monitor-meta" id="risultati-meta"></div>
         <div class="controls">
           <button class="btn btn-sm" onclick="loadRisultatiData()">↻ Aggiorna</button>
+          <span id="risultati-updating" style="display:none;font-size:0.78em;color:#aaa;font-style:italic;">Aggiornamento…</span>
           <span id="risultati-last-update"></span>
         </div>
       </div>
@@ -756,16 +756,23 @@ function updateMonitorTab() {
 
 async function loadMonitorData() {
   if (!currentTrack) return;
-  document.getElementById("monitor-loading").style.display = "block";
-  document.getElementById("monitor-content").style.display = "none";
+  const isFirstLoad = document.getElementById("monitor-content").style.display === "none";
+  if (isFirstLoad) {
+    document.getElementById("monitor-loading").style.display = "block";
+    document.getElementById("monitor-content").style.display = "none";
+  } else {
+    document.getElementById("monitor-updating").style.display = "inline";
+  }
   try {
     const res = await callScript({ action:"getMonitor", password:adminPassword, examId:currentTrack.exam_id });
     if (res.status === "ok") renderMonitorData(res);
-    document.getElementById("monitor-loading").style.display = "none";
-    document.getElementById("monitor-content").style.display = "block";
+    document.getElementById("monitor-loading").style.display  = "none";
+    document.getElementById("monitor-updating").style.display = "none";
+    document.getElementById("monitor-content").style.display  = "block";
     document.getElementById("last-update").textContent = new Date().toLocaleTimeString("it-IT");
   } catch(e) {
-    document.getElementById("monitor-loading").textContent = "Errore di caricamento.";
+    document.getElementById("monitor-updating").style.display = "none";
+    if (isFirstLoad) document.getElementById("monitor-loading").textContent = "Errore di caricamento.";
     console.error("Monitor error:", e);
   }
 }
@@ -833,16 +840,23 @@ function updateRisultatiTab() {
 
 async function loadRisultatiData() {
   if (!currentTrack) return;
-  document.getElementById("risultati-loading").style.display = "block";
-  document.getElementById("risultati-content").style.display = "none";
+  const isFirstLoad = document.getElementById("risultati-content").style.display === "none";
+  if (isFirstLoad) {
+    document.getElementById("risultati-loading").style.display = "block";
+    document.getElementById("risultati-content").style.display = "none";
+  } else {
+    document.getElementById("risultati-updating").style.display = "inline";
+  }
   try {
     const res = await callScript({ action:"getResults", password:adminPassword, examId:currentTrack.exam_id });
     if (res.status === "ok") renderRisultati(res);
-    document.getElementById("risultati-loading").style.display = "none";
-    document.getElementById("risultati-content").style.display = "block";
+    document.getElementById("risultati-loading").style.display  = "none";
+    document.getElementById("risultati-updating").style.display = "none";
+    document.getElementById("risultati-content").style.display  = "block";
     document.getElementById("risultati-last-update").textContent = new Date().toLocaleTimeString("it-IT");
   } catch(e) {
-    document.getElementById("risultati-loading").textContent = "Errore di caricamento.";
+    document.getElementById("risultati-updating").style.display = "none";
+    if (isFirstLoad) document.getElementById("risultati-loading").textContent = "Errore di caricamento.";
     console.error("Risultati error:", e);
   }
 }
@@ -1046,7 +1060,6 @@ function setDomandeMode(mode, keepItems = false) {
 
   document.getElementById("browser-col").style.display         = mode === "readonly" ? "none" : "";
   document.getElementById("new-track-form").style.display      = mode === "new"  ? "" : "none";
-  document.getElementById("existing-track-info").style.display = mode !== "new"  ? "" : "none";
   document.getElementById("cfg-card").style.display            = mode === "edit" ? "" : "none";
   document.getElementById("actions-new").style.display         = mode === "new"  ? "flex" : "none";
   document.getElementById("actions-edit").style.display        = mode === "edit" ? "flex" : "none";
@@ -1057,7 +1070,6 @@ function setDomandeMode(mode, keepItems = false) {
     document.getElementById("create-msg").textContent = "";
   } else {
     trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
-    renderExistingTrackInfo();
     populateEditForm(currentTrack);
     document.getElementById("edit-msg").textContent       = "";
     document.getElementById("save-items-msg").textContent = "";
@@ -1067,25 +1079,6 @@ function setDomandeMode(mode, keepItems = false) {
   renderItemsList();
 }
 
-function renderExistingTrackInfo() {
-  const t = currentTrack;
-  const isOpen = t.status === "open";
-  const statusEl = isOpen
-    ? '<span class="badge badge-exam" style="background:#c8e6c9;color:#1b5e20;">APERTO</span>'
-    : '<span class="badge" style="background:#eee;color:#666;padding:1px 8px;font-size:0.78em;border-radius:2px;">CHIUSO</span>';
-  const dur = t.duration == 0 ? "senza limite" : (t.duration || "—") + " min";
-  const info = document.getElementById("existing-track-info");
-  info.className = "card";
-  info.innerHTML = `<div>
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-      <strong style="font-size:1em;">${escHtml(t.exam_name || t.exam_id)}</strong>${statusEl}
-    </div>
-    <div style="font-size:0.84em;color:#666;margin-top:4px;">
-      ${formatDateIt(t.exam_date)} &nbsp;·&nbsp; ${dur} &nbsp;·&nbsp; ${t.mode === "practice" ? "esercitazione" : "esame"}
-      ${!isOpen ? '<br><span style="color:#b00;font-size:0.9em;">Traccia chiusa — sola lettura</span>' : ""}
-    </div>
-  </div>`;
-}
 
 function duplicateTrack() {
   if (!currentTrack) return;
