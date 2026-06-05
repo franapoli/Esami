@@ -224,56 +224,14 @@
     <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Gestione traccia</button>
     <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
     <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
-    <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Domande</button>
+    <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Modifica traccia</button>
   </div>
 
   <!-- TAB: GESTIONE TRACCIA -->
   <div class="tab-panel active" id="panel-admin">
     <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
-      Seleziona una traccia per gestirla, oppure scegli "+ Crea nuova traccia".
+      Seleziona una traccia per gestirla.
     </div>
-
-    <!-- Nuova traccia -->
-    <div id="admin-new-track" style="display:none;">
-      <div id="new-track-form" class="card">
-        <h2>Nuova traccia</h2>
-        <div class="field">
-          <label for="new-corso">Corso</label>
-          <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica" oninput="markNewDirty()">
-        </div>
-        <div class="field" style="margin-top:10px;">
-          <label for="new-name">Nome</label>
-          <input type="text" id="new-name" autocomplete="new-password" placeholder="Es. Esercitazione BLAST" oninput="markNewDirty()">
-        </div>
-        <div class="row2" style="margin-top:10px;">
-          <div class="field">
-            <label for="new-date">Data</label>
-            <input type="date" id="new-date" autocomplete="new-password" oninput="markNewDirty()">
-          </div>
-          <div class="field">
-            <label for="new-dur">Durata (min)</label>
-            <input type="number" id="new-dur" autocomplete="new-password" value="90" min="0" max="240" step="5" oninput="markNewDirty()">
-          </div>
-          <div class="field" style="min-width:140px;">
-            <label for="new-mode">Modalità</label>
-            <select id="new-mode" onchange="markNewDirty()">
-              <option value="exam">Esame</option>
-              <option value="practice">Esercitazione</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="card" style="padding:14px 28px;">
-        <span style="font-size:0.88em;color:#555;">Domande: </span>
-        <span id="admin-items-summary" style="font-size:0.88em;color:#888;font-style:italic;">nessuno slot — aggiungile nel tab <em>Domande</em></span>
-      </div>
-      <div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-green" onclick="doCreateTrack()">Crea traccia</button>
-        <span id="create-msg" style="font-size:0.85em;"></span>
-      </div>
-    </div>
-
-    <!-- Traccia esistente -->
     <div id="track-card" style="display:none;">
       <div class="card">
         <h2>Stato e controllo</h2>
@@ -289,42 +247,7 @@
         </div>
         <div id="status-msg" class="ok-msg"></div>
       </div>
-      <div class="card">
-        <h2>Modifica attributi traccia</h2>
-        <div class="field">
-          <label for="cfg-corso">Corso</label>
-          <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica" oninput="editFormDirty=true">
-        </div>
-        <div class="field" style="margin-top:10px;">
-          <label for="cfg-name">Nome visualizzato</label>
-          <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Es. Prova in itinere 1 — VHL" oninput="editFormDirty=true">
-        </div>
-        <div class="row2" style="margin-top:12px;">
-          <div class="field">
-            <label for="cfg-date">Data</label>
-            <input type="date" id="cfg-date" autocomplete="new-password" oninput="editFormDirty=true">
-          </div>
-          <div class="field">
-            <label for="cfg-dur">Durata (minuti, 0 = illimitata)</label>
-            <input type="number" id="cfg-dur" autocomplete="new-password" min="0" max="240" step="5" oninput="editFormDirty=true">
-          </div>
-          <div class="field" style="min-width:150px;max-width:180px;">
-            <label for="cfg-mode">Modalità</label>
-            <select id="cfg-mode" onchange="editFormDirty=true">
-              <option value="exam">Esame</option>
-              <option value="practice">Esercitazione</option>
-            </select>
-            <p class="hint">Esercitazione: salvataggio abilitato, risposte mostrate alla fine. Tentativi multipli consentiti.</p>
-          </div>
-        </div>
-        <div class="field" style="margin-top:14px;">
-          <label for="cfg-pwd">Password d'accesso <span style="font-weight:normal;color:#aaa;">(solo esame — lascia vuoto per nessuna)</span></label>
-          <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;" oninput="editFormDirty=true">
-        </div>
-        <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva modifiche</button>
-        <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento della pagina.</p>
-        <div id="edit-msg" class="ok-msg"></div>
-      </div>
+      <div class="card" id="track-info-readonly"></div>
     </div>
   </div>
 
@@ -363,7 +286,7 @@
     </div>
   </div>
 
-  <!-- TAB: DOMANDE -->
+  <!-- TAB: MODIFICA TRACCIA -->
   <div class="tab-panel" id="panel-domande">
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
 
@@ -402,24 +325,82 @@
         </div>
       </div>
 
-      <!-- Colonna destra: items list -->
+      <!-- Colonna destra -->
       <div style="flex:1;min-width:300px;">
 
-        <!-- Header: nuova traccia in costruzione -->
-        <div id="domande-new-header" style="display:none;margin-bottom:12px;padding:12px 16px;background:#fffbf0;border:1px solid #f0e0a0;font-size:0.85em;color:#7b5e00;">
-          Stai costruendo una <strong>nuova traccia</strong>. Configura nome, data e modalità nel tab <em>Gestione traccia</em>.
+        <!-- Nuova traccia -->
+        <div id="new-track-form" class="card" style="margin-bottom:12px;">
+          <h2>Nuova traccia</h2>
+          <div class="field">
+            <label for="new-corso">Corso</label>
+            <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label for="new-name">Nome</label>
+            <input type="text" id="new-name" autocomplete="new-password" placeholder="Es. Esercitazione BLAST">
+          </div>
+          <div class="row2" style="margin-top:10px;">
+            <div class="field">
+              <label for="new-date">Data</label>
+              <input type="date" id="new-date" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="new-dur">Durata (min)</label>
+              <input type="number" id="new-dur" autocomplete="new-password" value="90" min="0" max="240" step="5">
+            </div>
+            <div class="field" style="min-width:140px;">
+              <label for="new-mode">Modalità</label>
+              <select id="new-mode">
+                <option value="exam">Esame</option>
+                <option value="practice">Esercitazione</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <!-- Traccia esistente selezionata -->
+        <!-- Traccia esistente: header -->
         <div id="existing-track-info" style="display:none;margin-bottom:12px;"></div>
 
-        <!-- Placeholder: nessuna traccia e non in modalità nuova -->
-        <div id="domande-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;display:none;">
-          Seleziona una traccia o scegli "+ Crea nuova traccia" per iniziare.
+        <!-- Traccia esistente: modifica attributi (solo edit mode) -->
+        <div id="cfg-card" class="card" style="display:none;margin-bottom:12px;">
+          <h2>Attributi traccia</h2>
+          <div class="field">
+            <label for="cfg-corso">Corso</label>
+            <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label for="cfg-name">Nome visualizzato</label>
+            <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Es. Prova in itinere 1 — VHL">
+          </div>
+          <div class="row2" style="margin-top:12px;">
+            <div class="field">
+              <label for="cfg-date">Data</label>
+              <input type="date" id="cfg-date" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="cfg-dur">Durata (min, 0 = illimitata)</label>
+              <input type="number" id="cfg-dur" autocomplete="new-password" min="0" max="240" step="5">
+            </div>
+            <div class="field" style="min-width:150px;max-width:180px;">
+              <label for="cfg-mode">Modalità</label>
+              <select id="cfg-mode">
+                <option value="exam">Esame</option>
+                <option value="practice">Esercitazione</option>
+              </select>
+              <p class="hint">Esercitazione: risposte mostrate alla fine, tentativi multipli.</p>
+            </div>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label for="cfg-pwd">Password d'accesso <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
+            <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
+          </div>
+          <button class="btn btn-sm" style="margin-top:16px;" onclick="saveTrack()">Salva attributi</button>
+          <p class="note">Le modifiche sono visibili agli studenti al prossimo caricamento.</p>
+          <div id="edit-msg" class="ok-msg"></div>
         </div>
 
         <!-- Lista items -->
-        <div id="domande-items-card" class="card" style="padding:0;overflow:hidden;">
+        <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
             <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
             <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
@@ -427,14 +408,19 @@
           <div id="items-list" style="max-height:460px;overflow-y:auto;min-height:60px;"></div>
         </div>
 
+        <!-- Azioni nuova traccia -->
+        <div id="actions-new" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-green" onclick="doCreateTrack()">Crea traccia</button>
+          <span id="create-msg" style="font-size:0.85em;"></span>
+        </div>
+
         <!-- Azioni traccia esistente aperta -->
         <div id="actions-edit" style="display:none;margin-top:14px;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button class="btn btn-sm" onclick="saveTrackItems()">Salva modifiche domande</button>
+          <button class="btn btn-sm" onclick="saveTrackItems()">Salva domande</button>
           <span id="save-items-msg" style="font-size:0.85em;"></span>
         </div>
 
       </div>
-
     </div>
   </div>
 
@@ -500,14 +486,12 @@ const BUILD = "fdffead";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
-let adminPassword  = "";
-let allTracks      = [];
-let currentTrack   = null;
-let refreshTimer   = null;
-let activeTab      = "admin";
-let editFormDirty  = false;  // form attributi traccia esistente modificato
-let newTrackDirty  = false;  // form nuova traccia modificato
-let currentNQ      = 20;
+let adminPassword = "";
+let allTracks     = [];
+let currentTrack  = null;
+let refreshTimer  = null;
+let activeTab     = "admin";
+let currentNQ     = 20;
 
 async function callScript(payload) {
   const resp = await fetch(SCRIPT_URL, {
@@ -558,13 +542,11 @@ async function doLogin() {
 
 function logout() {
   if (refreshTimer) clearInterval(refreshTimer);
-  adminPassword = ""; currentTrack = null; refreshTimer = null;
-  editFormDirty = false; newTrackDirty = false; trackItems = [];
+  adminPassword = ""; currentTrack = null; refreshTimer = null; trackItems = [];
   document.getElementById("main-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
   document.getElementById("pwd").value = "";
   document.getElementById("login-error").textContent = "";
-  // Reset tab visivamente senza guard
   activeTab = "admin";
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
@@ -598,31 +580,27 @@ function populateTrackSelect(tracks) {
 function onTrackChange() {
   const examId = document.getElementById("track-select").value;
 
-  if (hasUnsavedChanges()) {
-    if (!confirm("Hai modifiche non salvate che andranno perse.\n\nVuoi continuare?")) {
-      // Ripristina il selettore al valore precedente
-      document.getElementById("track-select").value = currentTrack ? currentTrack.exam_id : (examId === "__new__" ? "" : "__new__");
+  if (activeTab === "domande" && hasUnsavedNewTrack()) {
+    if (!confirm("Hai una nuova traccia non salvata.\nSelezionando un'altra traccia perderai le modifiche.\n\nVuoi continuare?")) {
+      document.getElementById("track-select").value = "__new__";
       return;
     }
-    discardChanges();
+    trackItems = [];
+    document.getElementById("new-name").value = "";
+    document.getElementById("new-date").value = "";
   }
 
   if (examId === "__new__") {
     currentTrack = null;
-    newTrackDirty = false;
-    trackItems = [];
-    resetNewTrackForm();
-    updateAdminTab();
-    if (activeTab !== "admin") switchTab("admin");
+    switchTab("domande");
     return;
   }
 
   currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
   trackItems    = currentTrack ? JSON.parse(JSON.stringify(currentTrack.items || [])) : [];
-  editFormDirty = false;
   updateAdminTab();
-  if (activeTab === "monitor")   { showTabLoading("monitor");   updateMonitorTab(); }
-  if (activeTab === "risultati") { showTabLoading("risultati"); updateRisultatiTab(); }
+  if (activeTab === "monitor")   updateMonitorTab();
+  if (activeTab === "risultati") updateRisultatiTab();
   if (activeTab === "domande")   updateDomandeTab();
 }
 
@@ -635,53 +613,17 @@ function updateTrackInList(t) {
 }
 
 // ---- TABS ----
-function markNewDirty()  { newTrackDirty = true; }
-
-function hasUnsavedChanges() {
-  if (currentTrack === null) {
-    return newTrackDirty || trackItems.length > 0;
-  }
-  const itemsChanged = JSON.stringify(trackItems) !== JSON.stringify(currentTrack.items || []);
-  return editFormDirty || itemsChanged;
-}
-
-function discardChanges() {
-  if (currentTrack === null) {
-    trackItems = [];
-    newTrackDirty = false;
-    resetNewTrackForm();
-  } else {
-    trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
-    populateEditForm(currentTrack);
-    editFormDirty = false;
-  }
-}
-
-function resetNewTrackForm() {
-  ["new-corso","new-name","new-date"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
-  document.getElementById("new-dur").value  = "90";
-  document.getElementById("new-mode").value = "exam";
-  document.getElementById("create-msg").textContent = "";
-}
-
-function showTabLoading(name) {
-  if (name === "monitor") {
-    document.getElementById("monitor-placeholder").style.display = "none";
-    document.getElementById("monitor-loading").style.display     = currentTrack ? "block" : "none";
-    document.getElementById("monitor-content").style.display     = "none";
-  } else if (name === "risultati") {
-    document.getElementById("risultati-placeholder").style.display = "none";
-    document.getElementById("risultati-loading").style.display     = currentTrack ? "block" : "none";
-    document.getElementById("risultati-content").style.display     = "none";
-  }
+function hasUnsavedNewTrack() {
+  if (currentTrack) return false;
+  return trackItems.length > 0 || !!(document.getElementById("new-name")?.value.trim());
 }
 
 function switchTab(name) {
-  if (name === activeTab) return;
-  if (hasUnsavedChanges()) {
-    const labels = { admin:"Gestione traccia", domande:"Domande", monitor:"Monitor studenti", risultati:"Risultati" };
-    if (!confirm("Hai modifiche non salvate che andranno perse.\n\nVuoi passare a \"" + (labels[name] || name) + "\"?")) return;
-    discardChanges();
+  if (activeTab === "domande" && name !== "domande" && hasUnsavedNewTrack()) {
+    if (!confirm("Hai una nuova traccia non salvata.\nCambiando tab perderai le modifiche.\n\nVuoi continuare?")) return;
+    trackItems = [];
+    document.getElementById("new-name").value = "";
+    document.getElementById("new-date").value = "";
   }
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   activeTab = name;
@@ -691,11 +633,9 @@ function switchTab(name) {
   document.getElementById("panel-" + name).classList.add("active");
 
   if (name === "monitor") {
-    showTabLoading("monitor");
     updateMonitorTab();
     startAutoRefresh();
   } else if (name === "risultati") {
-    showTabLoading("risultati");
     updateRisultatiTab();
   } else if (name === "domande") {
     initDomandeTab();
@@ -706,33 +646,30 @@ function switchTab(name) {
 
 // ---- TAB GESTIONE TRACCIA ----
 function updateAdminTab() {
-  const isNew = (currentTrack === null && document.getElementById("track-select").value === "__new__");
-  const has   = !!currentTrack;
-  document.getElementById("admin-placeholder").style.display  = (!isNew && !has) ? "block" : "none";
-  document.getElementById("admin-new-track").style.display    = isNew ? "block" : "none";
-  document.getElementById("track-card").style.display         = has   ? "block" : "none";
-  if (isNew) { updateAdminItemsSummary(); return; }
-  if (!has)  return;
+  const has = !!currentTrack;
+  document.getElementById("admin-placeholder").style.display = has ? "none" : "block";
+  document.getElementById("track-card").style.display        = has ? "block" : "none";
+  if (!has) return;
   renderTrackStatus(currentTrack);
-  populateEditForm(currentTrack);
+  renderTrackInfoReadonly(currentTrack);
   updateProvaLink(currentTrack.exam_id);
   document.getElementById("status-msg").textContent = "";
-  document.getElementById("edit-msg").textContent   = "";
 }
 
-function updateAdminItemsSummary() {
-  const el = document.getElementById("admin-items-summary");
-  if (!el) return;
-  if (trackItems.length === 0) {
-    el.innerHTML = "nessuno slot — aggiungile nel tab <em>Domande</em>";
-  } else {
-    const fixed  = trackItems.filter(i => i.type === "fixed").length;
-    const random = trackItems.filter(i => i.type === "random").length;
-    const parts  = [];
-    if (fixed)  parts.push(fixed  + " fiss" + (fixed  === 1 ? "a" : "e"));
-    if (random) parts.push(random + " casual" + (random === 1 ? "e" : "i"));
-    el.textContent = trackItems.length + " slot (" + parts.join(", ") + ")";
-  }
+function renderTrackInfoReadonly(t) {
+  const dur  = t.duration === "0" || t.duration === 0 ? "senza limite" : (t.duration || "—") + " min";
+  const mode = t.mode === "practice" ? "Esercitazione" : "Esame";
+  const card = document.getElementById("track-info-readonly");
+  card.innerHTML =
+    "<h2>Informazioni traccia</h2>" +
+    "<div style='display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;font-size:0.88em;line-height:1.8;'>" +
+    (t.corso     ? "<span style='color:#888;'>Corso</span><span>"     + escHtml(t.corso)     + "</span>" : "") +
+    "<span style='color:#888;'>Nome</span><span>"       + escHtml(t.exam_name || t.exam_id) + "</span>" +
+    "<span style='color:#888;'>Data</span><span>"       + formatDateIt(t.exam_date)         + "</span>" +
+    "<span style='color:#888;'>Durata</span><span>"     + escHtml(dur)                      + "</span>" +
+    "<span style='color:#888;'>Modalità</span><span>"   + mode                              + "</span>" +
+    "<span style='color:#888;'>ID</span><span style='font-family:monospace;font-size:0.92em;'>" + escHtml(t.exam_id) + "</span>" +
+    "</div>";
 }
 
 function updateProvaLink(examId) {
@@ -800,9 +737,9 @@ async function saveTrack() {
       currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
       currentTrack.mode      = document.getElementById("cfg-mode").value;
       currentTrack.password  = document.getElementById("cfg-pwd").value.trim();
-      editFormDirty = false;
       updateTrackInList(currentTrack);
       renderTrackStatus(currentTrack);
+      renderTrackInfoReadonly(currentTrack);
       msg.textContent = "✓ Modifiche salvate.";
     } else { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; }
   } catch(e) { msg.className = "error-msg"; msg.textContent = "Errore di rete: " + e.message; }
@@ -1095,17 +1032,6 @@ async function initDomandeTab() {
 
 function updateDomandeTab() {
   if (!allQuestions) return;
-  const selVal = document.getElementById("track-select").value;
-  if (!currentTrack && selVal !== "__new__") {
-    // nessuna traccia selezionata e non in modalità nuova
-    document.getElementById("browser-col").style.display          = "none";
-    document.getElementById("domande-new-header").style.display   = "none";
-    document.getElementById("existing-track-info").style.display  = "none";
-    document.getElementById("domande-placeholder").style.display  = "block";
-    document.getElementById("domande-items-card").style.display   = "none";
-    document.getElementById("actions-edit").style.display         = "none";
-    return;
-  }
   if (!currentTrack) {
     setDomandeMode("new");
   } else if (currentTrack.status === "closed") {
@@ -1118,26 +1044,22 @@ function updateDomandeTab() {
 function setDomandeMode(mode, keepItems = false) {
   isEditingItems = (mode !== "readonly");
 
-  const isNew      = (mode === "new");
-  const isExisting = !isNew;
+  document.getElementById("browser-col").style.display         = mode === "readonly" ? "none" : "";
+  document.getElementById("new-track-form").style.display      = mode === "new"  ? "" : "none";
+  document.getElementById("existing-track-info").style.display = mode !== "new"  ? "" : "none";
+  document.getElementById("cfg-card").style.display            = mode === "edit" ? "" : "none";
+  document.getElementById("actions-new").style.display         = mode === "new"  ? "flex" : "none";
+  document.getElementById("actions-edit").style.display        = mode === "edit" ? "flex" : "none";
+  document.getElementById("btn-clear-items").style.display     = isEditingItems  ? "" : "none";
 
-  // Browser sinistro: visibile solo in new/edit
-  const browserCol = document.getElementById("browser-col");
-  if (browserCol) browserCol.style.display = mode === "readonly" ? "none" : "";
-
-  // Colonna destra header
-  document.getElementById("domande-new-header").style.display   = isNew      ? "block" : "none";
-  document.getElementById("existing-track-info").style.display  = isExisting ? ""      : "none";
-  document.getElementById("domande-placeholder").style.display  = "none";
-  document.getElementById("domande-items-card").style.display   = "";
-  document.getElementById("actions-edit").style.display         = mode === "edit" ? "flex" : "none";
-  document.getElementById("btn-clear-items").style.display      = isEditingItems ? "" : "none";
-
-  if (isNew) {
+  if (mode === "new") {
     if (!keepItems) trackItems = [];
+    document.getElementById("create-msg").textContent = "";
   } else {
     trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
     renderExistingTrackInfo();
+    populateEditForm(currentTrack);
+    document.getElementById("edit-msg").textContent       = "";
     document.getElementById("save-items-msg").textContent = "";
   }
 
@@ -1174,19 +1096,8 @@ function duplicateTrack() {
   document.getElementById("new-dur").value   = currentTrack.duration  || "90";
   document.getElementById("new-mode").value  = currentTrack.mode      || "exam";
   currentTrack = null;
-  newTrackDirty = true;
   document.getElementById("track-select").value = "__new__";
-  document.getElementById("create-msg").textContent = "";
-  // Aggiorna Domande se già caricato (items list), poi vai a Gestione traccia
-  if (allQuestions) setDomandeMode("new", true);
-  updateAdminTab();
-  if (activeTab !== "admin") {
-    activeTab = "admin";
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-    document.getElementById("tab-admin").classList.add("active");
-    document.getElementById("panel-admin").classList.add("active");
-  }
+  switchTab("domande");
 }
 
 async function saveTrackItems() {
@@ -1378,7 +1289,6 @@ function renderItemsList() {
 
   container.innerHTML = rows;
   countEl.textContent = trackItems.length + " slot — " + totalPt + " pt fissi";
-  updateAdminItemsSummary();
 }
 
 function clearItems() {
