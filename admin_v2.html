@@ -289,7 +289,10 @@
 
   <!-- TAB: MODIFICA TRACCIA -->
   <div class="tab-panel" id="panel-domande">
-    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+    <div id="domande-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Caricamento in corso…
+    </div>
+    <div id="domande-content" style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
 
       <!-- Colonna sinistra: traccia (form + attributi + items) -->
       <div style="flex:1;min-width:300px;">
@@ -365,8 +368,11 @@
         <!-- Lista items -->
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-            <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
-            <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
+            <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Domande traccia</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
+              <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
+            </div>
           </div>
           <div id="items-list" style="max-height:460px;overflow-y:auto;min-height:60px;"></div>
         </div>
@@ -415,6 +421,9 @@
           </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden;">
+          <div style="padding:10px 16px;border-bottom:1px solid #eee;">
+            <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Database delle domande</span>
+          </div>
           <div id="q-browser" style="max-height:520px;overflow-y:auto;"></div>
           <div id="q-loading" style="padding:20px;color:#888;font-size:0.88em;font-style:italic;">Caricamento domande…</div>
         </div>
@@ -1029,18 +1038,20 @@ let isEditingItems = true;  // false = sola lettura (traccia chiusa)
 // ---- INIT ----
 async function initDomandeTab() {
   if (!allQuestions) {
-    document.getElementById("q-loading").style.display = "block";
-    document.getElementById("q-browser").style.display = "none";
+    document.getElementById("domande-loading").style.display = "block";
+    document.getElementById("domande-content").style.display = "none";
     try {
       const res = await callScript({ action: "getQuestions", password: adminPassword });
       if (res.status !== "ok") throw new Error(res.message);
       allQuestions = res.questions || [];
       buildCategoryFilters();
     } catch(e) {
-      document.getElementById("q-loading").textContent = "Errore: " + e.message;
+      document.getElementById("domande-loading").textContent = "Errore: " + e.message;
       return;
     }
   }
+  document.getElementById("domande-loading").style.display = "none";
+  document.getElementById("domande-content").style.display = "flex";
   updateDomandeTab();
 }
 
@@ -1137,6 +1148,29 @@ function updateSubcatFilter() {
 
 function onCatChange()     { updateSubcatFilter(); renderQBrowser(); }
 function filterQuestions() { renderQBrowser(); }
+
+function setFiltersFromItem(item) {
+  if (!allQuestions) return;
+  let cat = "", subcat = "", tag = "";
+  if (item.type === "fixed") {
+    const qMap = Object.fromEntries(allQuestions.map(q => [q.id, q]));
+    const q = qMap[item.id];
+    if (!q) return;
+    cat    = q.categoria   || "";
+    subcat = q.sottocateg  || "";
+    tag    = q.tags ? q.tags.split(",")[0].trim() : "";
+  } else {
+    cat    = item.categoria  || "";
+    subcat = item.sottocateg || "";
+    tag    = item.tag        || "";
+  }
+  document.getElementById("f-cat").value = cat;
+  updateSubcatFilter();
+  document.getElementById("f-subcat").value = subcat;
+  document.getElementById("f-tag").value = tag;
+  renderQBrowser();
+  document.getElementById("browser-col").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
 // ---- BROWSER DOMANDE ----
 function renderQBrowser() {
@@ -1255,7 +1289,7 @@ function renderItemsList() {
       if (!q) return `<div class="sel-row"><span class="sel-num">${i+1}.</span><span class="sel-text" style="color:#b00;">ID non trovato: ${escHtml(item.id)}</span>${arrows}</div>`;
       totalPt += q.punti;
       const shortText = q.testo.length > 90 ? q.testo.substring(0, 90) + "…" : q.testo;
-      return `<div class="sel-row">
+      return `<div class="sel-row" style="cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Mostra nel database">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text">${escHtml(shortText)}</span>
         <span class="sel-pts">${q.punti} pt</span>
@@ -1271,7 +1305,7 @@ function renderItemsList() {
       const desc   = parts.length ? parts.join(" · ") : "qualsiasi";
       const count  = item._count !== undefined ? item._count : getRandomMatchCount(item);
       const countStr = count + " disponibili";
-      return `<div class="sel-row" style="background:#fffbf0;">
+      return `<div class="sel-row" style="background:#fffbf0;cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Filtra nel database">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text" style="font-style:italic;color:#7b5e00;">🎲 ${escHtml(desc)}</span>
         <span class="sel-pts rule-count${count===0?" zero":""}">${countStr}</span>
