@@ -7,11 +7,13 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.9.0"; // aggiornare ad ogni deploy
+const VERSION = "2.10.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
 const SHEET_RESULTS_ID_DEFAULT   = "1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA";
+// Cartella Drive dove risiedono i fogli gestiti (default = cartella QuizForge)
+const DRIVE_FOLDER_ID_DEFAULT    = "1FCl15simn4Ev363a59aEfOq1qZF4T78H";
 
 // Legge gli ID attivi: prima da ScriptProperties, poi dal default hardcoded.
 // ScriptProperties è indipendente da entrambi i fogli → nessuna circolarità.
@@ -20,6 +22,9 @@ function getSheetQuestionsId() {
 }
 function getSheetResultsId() {
   return PropertiesService.getScriptProperties().getProperty("SHEET_RESULTS_ID") || SHEET_RESULTS_ID_DEFAULT;
+}
+function getDriveFolderId() {
+  return PropertiesService.getScriptProperties().getProperty("DRIVE_FOLDER_ID") || DRIVE_FOLDER_ID_DEFAULT;
 }
 
 // Indici colonne foglio risultati (1-based, identici a v1)
@@ -419,14 +424,17 @@ function doPost(e) {
       if (data.password !== getAdminPassword()) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
-      const qId = getSheetQuestionsId();
-      const rId = getSheetResultsId();
+      const qId  = getSheetQuestionsId();
+      const rId  = getSheetResultsId();
+      const fId  = getDriveFolderId();
       return corsResponse({
         status: "ok",
         questions_id:  qId,
         results_id:    rId,
+        folder_id:     fId,
         questions_url: "https://docs.google.com/spreadsheets/d/" + qId + "/edit",
-        results_url:   "https://docs.google.com/spreadsheets/d/" + rId + "/edit"
+        results_url:   "https://docs.google.com/spreadsheets/d/" + rId + "/edit",
+        folder_url:    "https://drive.google.com/drive/folders/" + fId
       });
     }
 
@@ -447,7 +455,82 @@ function doPost(e) {
         data.results_id ? props.setProperty("SHEET_RESULTS_ID", data.results_id)
                         : props.deleteProperty("SHEET_RESULTS_ID");
       }
+      if (data.folder_id !== undefined) {
+        data.folder_id ? props.setProperty("DRIVE_FOLDER_ID", data.folder_id)
+                       : props.deleteProperty("DRIVE_FOLDER_ID");
+      }
       return corsResponse({ status: "ok" });
+    }
+
+    // ----------------------------------------------------------------
+    // listDriveFolder — elenco spreadsheet nella cartella Drive configurata
+    // ----------------------------------------------------------------
+    if (data.action === "listDriveFolder") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const folderId = data.folder_id || getDriveFolderId();
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+        const iter   = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+        const list   = [];
+        while (iter.hasNext()) {
+          const f = iter.next();
+          list.push({
+            id:   f.getId(),
+            name: f.getName(),
+            url:  "https://docs.google.com/spreadsheets/d/" + f.getId() + "/edit"
+          });
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        return corsResponse({ status: "ok", files: list });
+      } catch(e) {
+        return corsResponse({ status: "error", message: "Cartella non accessibile: " + e.message });
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // createSheet — crea un nuovo foglio nella cartella Drive e lo inizializza
+    // sheet_type: "questions" | "results"
+    // ----------------------------------------------------------------
+    if (data.action === "createSheet") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const folderId  = data.folder_id || getDriveFolderId();
+      const sheetName = String(data.name || "Nuovo foglio").trim();
+      const type      = data.sheet_type; // "questions" | "results"
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+        const ss     = SpreadsheetApp.create(sheetName);
+        const file   = DriveApp.getFileById(ss.getId());
+        // Sposta nella cartella e rimuovi da My Drive
+        folder.addFile(file);
+        DriveApp.getRootFolder().removeFile(file);
+
+        if (type === "questions") {
+          const qs = ss.getSheets()[0];
+          qs.setName("questions");
+          qs.appendRow(["ID","Corso","Categoria","Sottocategoria","Tags","Stato","Tipo","Testo","Opzioni","Corretta","Punti","Placeholder","Data"]);
+          const tr = ss.insertSheet("tracce");
+          tr.appendRow(["ID","Nome","Data","Durata","Corso","Modalità","Stato","Items","Password"]);
+        } else if (type === "results") {
+          const cfg = ss.getSheets()[0];
+          cfg.setName("_config");
+          cfg.appendRow(["admin_password", "cambiami"]);
+          ss.insertSheet("_meta");
+        }
+
+        const id = ss.getId();
+        return corsResponse({
+          status: "ok",
+          id:   id,
+          name: sheetName,
+          url:  "https://docs.google.com/spreadsheets/d/" + id + "/edit"
+        });
+      } catch(e) {
+        return corsResponse({ status: "error", message: "Errore creazione foglio: " + e.message });
+      }
     }
 
     // ----------------------------------------------------------------

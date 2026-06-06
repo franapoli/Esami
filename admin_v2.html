@@ -32,9 +32,19 @@
   #main-panel { display: none; max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
   #main-panel.active { display: block; }
 
-  .panel-header { display: flex; align-items: center; justify-content: space-between;
-                  padding: 18px 0 16px; flex-wrap: wrap; gap: 12px; }
-  .panel-header h1 { font-size: 1.2em; }
+  .panel-header { display: flex; flex-direction: column; padding: 18px 0 12px; gap: 10px; }
+  .panel-header-row1 { display: flex; align-items: center; gap: 8px; }
+  .panel-header-row1 h1 { font-size: 1.2em; flex-shrink: 0; }
+  .panel-header-row2 { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+                       background: #f8f8f4; border: 1px solid #eee; font-size: 0.78em; }
+  .panel-header-row2 .ph-label { color: #888; white-space: nowrap; flex-shrink: 0; }
+  .panel-header-row2 input[type=text] { flex: 1; min-width: 0; padding: 3px 6px;
+    font-size: 0.78em; border: 1px solid #ddd; font-family: monospace; width: auto; }
+  .panel-header-row2 select { flex: 1; min-width: 0; padding: 3px 6px; font-size: 0.78em;
+    border: 1px solid #ddd; font-family: inherit; background: #fff; width: auto; display: none; }
+  .panel-header-row2 .ph-sep { color: #ddd; flex-shrink: 0; }
+  .panel-header-row2 .btn-ph { padding: 3px 12px; font-size: 0.78em; margin-top: 0;
+    flex-shrink: 0; cursor: pointer; }
 
   .track-selector-bar { background: #fff; border: 1px solid #ddd; padding: 16px 24px;
                         display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 0; }
@@ -207,21 +217,44 @@
 <div id="main-panel">
 
   <div class="panel-header">
-    <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
-    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin-left:24px;">
-      <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
-        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande:</span>
-        <input type="text" id="cfg-qs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio domande">
-        <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
+    <!-- Riga 1: titolo + fogli attivi + pulsanti -->
+    <div class="panel-header-row1">
+      <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin-left:24px;">
+        <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
+          <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande:</span>
+          <input type="text" id="cfg-qs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio domande">
+          <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
+          <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati:</span>
+          <input type="text" id="cfg-rs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio risultati">
+          <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
+        </div>
+        <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
+        <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;flex-shrink:0;">Salva</button>
+        <button class="btn btn-sm btn-outline" onclick="logout()" style="flex-shrink:0;">Esci</button>
       </div>
-      <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
-        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati:</span>
-        <input type="text" id="cfg-rs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio risultati">
-        <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
-      </div>
-      <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
-      <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;flex-shrink:0;">Salva</button>
-      <button class="btn btn-sm btn-outline" onclick="logout()" style="flex-shrink:0;">Esci</button>
+    </div>
+    <!-- Riga 2: cartella Drive + lista fogli + crea nuovo -->
+    <div class="panel-header-row2">
+      <span class="ph-label">Cartella Drive:</span>
+      <input type="text" id="cfg-folder-url" placeholder="URL o ID cartella Drive">
+      <a id="link-folder" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri cartella">↗</a>
+      <button class="btn btn-outline btn-ph" onclick="loadDriveList()">Carica lista</button>
+      <span class="ph-sep">|</span>
+      <span class="ph-label">Domande:</span>
+      <select id="drive-qs-select" onchange="driveSelectChanged('qs')">
+        <option value="">— carica lista —</option>
+      </select>
+      <button class="btn btn-outline btn-ph" onclick="createNewSheet('questions')" title="Crea nuovo foglio domande">+ Nuovo</button>
+      <span class="ph-sep">|</span>
+      <span class="ph-label">Risultati:</span>
+      <select id="drive-rs-select" onchange="driveSelectChanged('rs')">
+        <option value="">— carica lista —</option>
+      </select>
+      <button class="btn btn-outline btn-ph" onclick="createNewSheet('results')" title="Crea nuovo foglio risultati">+ Nuovo</button>
+      <span id="drive-msg" style="color:#888;flex-shrink:0;white-space:nowrap;"></span>
     </div>
   </div>
 
@@ -587,6 +620,10 @@ async function loadSheetConfig() {
     document.getElementById("cfg-rs-url").value = res.results_url  || "";
     if (res.questions_url) document.getElementById("link-questions").href = res.questions_url;
     if (res.results_url)   document.getElementById("link-results").href   = res.results_url;
+    if (res.folder_url) {
+      document.getElementById("cfg-folder-url").value = res.folder_url;
+      document.getElementById("link-folder").href = res.folder_url;
+    }
   } catch(e) { /* silenzioso — non blocca il login */ }
 }
 
@@ -595,28 +632,100 @@ function extractSheetId(urlOrId) {
   return m ? m[1] : String(urlOrId).trim();
 }
 
+function extractFolderId(urlOrId) {
+  const m = String(urlOrId).match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : String(urlOrId).trim();
+}
+
 async function saveSheetConfig() {
   const msg = document.getElementById("cfg-msg");
   const qsId = extractSheetId(document.getElementById("cfg-qs-url").value.trim());
   const rsId = extractSheetId(document.getElementById("cfg-rs-url").value.trim());
+  const fId  = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
   msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setConfig", password: adminPassword,
-      questions_id: qsId,
-      results_id:   rsId
+      questions_id: qsId, results_id: rsId, folder_id: fId
     });
     if (res.status === "ok") {
       msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
-      // Aggiorna link ↗
       if (qsId) document.getElementById("link-questions").href =
         "https://docs.google.com/spreadsheets/d/" + qsId + "/edit";
       if (rsId) document.getElementById("link-results").href =
         "https://docs.google.com/spreadsheets/d/" + rsId + "/edit";
+      if (fId) document.getElementById("link-folder").href =
+        "https://drive.google.com/drive/folders/" + fId;
     } else {
       msg.style.color = "#b00"; msg.textContent = res.message || "Errore.";
     }
   } catch(e) { msg.style.color = "#b00"; msg.textContent = "Errore di rete."; }
+}
+
+// ── Drive folder ─────────────────────────────────────────────────────────────
+async function loadDriveList() {
+  const msg = document.getElementById("drive-msg");
+  const fId = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
+  if (!fId) { msg.style.color="#b00"; msg.textContent="Inserisci l'URL della cartella."; return; }
+  msg.style.color = "#555"; msg.textContent = "Caricamento…";
+  try {
+    const res = await callScript({ action: "listDriveFolder", password: adminPassword, folder_id: fId });
+    if (res.status !== "ok") { msg.style.color="#b00"; msg.textContent = res.message||"Errore."; return; }
+    populateDriveSelect("drive-qs-select", res.files);
+    populateDriveSelect("drive-rs-select", res.files);
+    msg.style.color = "#2e7d32";
+    msg.textContent = res.files.length ? "✓ " + res.files.length + " fogli" : "Cartella vuota";
+    // Salva folder_id in config se è cambiato
+    document.getElementById("cfg-folder-url").value =
+      "https://drive.google.com/drive/folders/" + fId;
+    document.getElementById("link-folder").href =
+      "https://drive.google.com/drive/folders/" + fId;
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore di rete."; }
+}
+
+function populateDriveSelect(selectId, files) {
+  const sel = document.getElementById(selectId);
+  sel.style.display = "";
+  sel.innerHTML = '<option value="">— seleziona —</option>' +
+    files.map(f => `<option value="${f.id}" data-url="${f.url}">${f.name}</option>`).join("");
+  sel.style.display = ""; // show
+}
+
+function driveSelectChanged(which) {
+  const sel = document.getElementById(which === "qs" ? "drive-qs-select" : "drive-rs-select");
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const urlField = document.getElementById(which === "qs" ? "cfg-qs-url" : "cfg-rs-url");
+  const linkEl   = document.getElementById(which === "qs" ? "link-questions" : "link-results");
+  urlField.value = opt.dataset.url || "";
+  if (opt.dataset.url) linkEl.href = opt.dataset.url;
+  // Salva automaticamente
+  saveSheetConfig();
+}
+
+async function createNewSheet(type) {
+  const label = type === "questions" ? "domande" : "risultati";
+  const name = prompt("Nome del nuovo foglio " + label + ":");
+  if (!name || !name.trim()) return;
+  const fId = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
+  const msg = document.getElementById("drive-msg");
+  msg.style.color = "#555"; msg.textContent = "Creazione…";
+  try {
+    const res = await callScript({
+      action: "createSheet", password: adminPassword,
+      name: name.trim(), sheet_type: type, folder_id: fId
+    });
+    if (res.status !== "ok") { msg.style.color="#b00"; msg.textContent = res.message||"Errore."; return; }
+    msg.style.color = "#2e7d32"; msg.textContent = "✓ Creato";
+    // Imposta come foglio attivo e salva
+    const urlField = document.getElementById(type === "questions" ? "cfg-qs-url" : "cfg-rs-url");
+    const linkEl   = document.getElementById(type === "questions" ? "link-questions" : "link-results");
+    urlField.value = res.url;
+    if (linkEl) linkEl.href = res.url;
+    await saveSheetConfig();
+    // Ricarica la lista Drive
+    await loadDriveList();
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore di rete."; }
 }
 
 function logout() {
