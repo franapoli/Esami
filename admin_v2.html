@@ -140,6 +140,9 @@
   .prev-btn { background:none; border:none; cursor:pointer; color:#888; font-size:0.82em;
               padding:2px 6px; flex-shrink:0; line-height:1; }
   .prev-btn:hover { color:#1a1a1a; }
+  .add-btn { background:none; border:1px solid #bbb; cursor:pointer; color:#555; font-size:0.88em;
+             padding:2px 7px; flex-shrink:0; line-height:1.4; border-radius:2px; }
+  .add-btn:hover { background:#e8f4e8; border-color:#4caf50; color:#2e7d32; }
 
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
@@ -373,7 +376,7 @@
         <div style="flex:1;min-width:280px;">
           <div class="card" style="padding:0;overflow:hidden;">
             <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-              <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Domande nella traccia</span>
+              <h2 style="margin:0;padding:0;border:none;">Domande nella traccia</h2>
               <div style="display:flex;align-items:center;gap:10px;">
                 <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
                 <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
@@ -397,7 +400,7 @@
         <div id="browser-col" style="flex:1;min-width:280px;">
           <div class="card" style="padding:0;overflow:hidden;">
             <div style="padding:16px 20px;border-bottom:1px solid #eee;">
-              <h2 style="margin:0;padding:0;border:none;">Aggiungi domande</h2>
+              <h2 style="margin:0;padding:0;border:none;">Domande nel database</h2>
               <div class="row2" style="margin-top:12px;flex-wrap:nowrap;">
                 <div class="field" style="min-width:0;flex:2;">
                   <label for="f-cat">Categoria</label>
@@ -1214,7 +1217,8 @@ function renderQBrowser() {
 
   browser.innerHTML = filtered.map(q => {
     const shortText = q.testo.length > 110 ? q.testo.substring(0, 110) + "…" : q.testo;
-    return `<div class="q-row" onclick="addFixedItem('${q.id}')">
+    return `<div class="q-row" onclick="previewQuestion('${q.id}',event)">
+      <button class="add-btn" onclick="event.stopPropagation();addFixedItem('${q.id}')" title="Aggiungi alla traccia">←</button>
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
         <div class="q-row-meta">
@@ -1223,7 +1227,6 @@ function renderQBrowser() {
         </div>
       </div>
       <div class="q-row-pts">${q.punti} pt</div>
-      <button class="prev-btn" onclick="previewQuestion('${q.id}',event)" title="Anteprima">👁</button>
     </div>`;
   }).join("");
 }
