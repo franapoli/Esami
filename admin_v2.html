@@ -299,19 +299,19 @@
       <div id="new-track-form" class="card" style="margin-bottom:16px;">
         <h2>Nuova traccia</h2>
         <div class="row2">
-          <div class="field" style="min-width:200px;">
+          <div class="field" style="flex:2;min-width:180px;">
             <label for="new-corso">Corso</label>
             <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
           </div>
-          <div class="field" style="min-width:200px;">
+          <div class="field" style="flex:2;min-width:180px;">
             <label for="new-name">Nome</label>
             <input type="text" id="new-name" autocomplete="new-password" placeholder="Es. Esercitazione BLAST">
           </div>
-          <div class="field">
+          <div class="field" style="min-width:140px;">
             <label for="new-date">Data</label>
             <input type="date" id="new-date" autocomplete="new-password">
           </div>
-          <div class="field">
+          <div class="field" style="min-width:110px;">
             <label for="new-dur">Durata (min)</label>
             <input type="number" id="new-dur" autocomplete="new-password" value="90" min="0" max="240" step="5">
           </div>
@@ -329,32 +329,33 @@
       <div id="cfg-card" class="card" style="display:none;margin-bottom:16px;">
         <h2>Attributi traccia</h2>
         <div class="row2">
-          <div class="field" style="min-width:200px;">
+          <div class="field" style="flex:2;min-width:180px;">
             <label for="cfg-corso">Corso</label>
             <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
           </div>
-          <div class="field" style="min-width:200px;">
+          <div class="field" style="flex:2;min-width:180px;">
             <label for="cfg-name">Nome visualizzato</label>
             <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Es. Prova in itinere 1 — VHL">
           </div>
-          <div class="field">
+          <div class="field" style="min-width:140px;">
             <label for="cfg-date">Data</label>
             <input type="date" id="cfg-date" autocomplete="new-password">
           </div>
-          <div class="field">
-            <label for="cfg-dur">Durata (min, 0 = illimitata)</label>
+          <div class="field" style="min-width:110px;">
+            <label for="cfg-dur">Durata (min)</label>
             <input type="number" id="cfg-dur" autocomplete="new-password" min="0" max="240" step="5">
+            <p class="hint">0 = illimitata</p>
           </div>
-          <div class="field" style="min-width:150px;">
+          <div class="field" style="min-width:140px;">
             <label for="cfg-mode">Modalità</label>
             <select id="cfg-mode">
               <option value="exam">Esame</option>
               <option value="practice">Esercitazione</option>
             </select>
-            <p class="hint">Esercitazione: risposte mostrate alla fine, tentativi multipli.</p>
+            <p class="hint">Esercitazione: risposte mostrate alla fine.</p>
           </div>
-          <div class="field" style="min-width:200px;">
-            <label for="cfg-pwd">Password d'accesso <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
             <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
           </div>
         </div>
@@ -372,7 +373,7 @@
         <div style="flex:1;min-width:280px;">
           <div class="card" style="padding:0;overflow:hidden;">
             <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-              <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Domande traccia</span>
+              <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Domande nella traccia</span>
               <div style="display:flex;align-items:center;gap:10px;">
                 <span id="items-count" style="font-size:0.82em;color:#888;">0 slot — 0 pt</span>
                 <button id="btn-clear-items" class="btn btn-sm btn-outline" onclick="clearItems()" style="color:#b00;border-color:#b00;margin-top:0;">Svuota</button>
@@ -394,38 +395,35 @@
 
         <!-- Colonna destra: aggiungi domande -->
         <div id="browser-col" style="flex:1;min-width:280px;">
-          <div class="card" style="margin-bottom:12px;">
-            <h2>Aggiungi domande</h2>
-            <div class="row2">
-              <div class="field">
-                <label for="f-cat">Categoria</label>
-                <select id="f-cat" onchange="onCatChange()">
-                  <option value="">— tutte —</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="f-subcat">Sottocategoria</label>
-                <select id="f-subcat" onchange="filterQuestions()">
-                  <option value="">— tutte —</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="f-tag">Tag</label>
-                <select id="f-tag" onchange="filterQuestions()">
-                  <option value="">— tutti —</option>
-                </select>
-              </div>
-            </div>
-            <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <span style="font-size:0.82em;color:#888;" id="q-count"></span>
-              <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
-            </div>
-          </div>
           <div class="card" style="padding:0;overflow:hidden;">
-            <div style="padding:10px 16px;border-bottom:1px solid #eee;">
-              <span style="font-size:0.9em;font-weight:bold;color:#444;text-transform:uppercase;letter-spacing:0.04em;">Database delle domande</span>
+            <div style="padding:16px 20px;border-bottom:1px solid #eee;">
+              <h2 style="margin:0;padding:0;border:none;">Aggiungi domande</h2>
+              <div class="row2" style="margin-top:12px;">
+                <div class="field">
+                  <label for="f-cat">Categoria</label>
+                  <select id="f-cat" onchange="onCatChange()">
+                    <option value="">— tutte —</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="f-subcat">Sottocategoria</label>
+                  <select id="f-subcat" onchange="filterQuestions()">
+                    <option value="">— tutte —</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="f-tag">Tag</label>
+                  <select id="f-tag" onchange="filterQuestions()">
+                    <option value="">— tutti —</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <span style="font-size:0.82em;color:#888;" id="q-count"></span>
+                <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
+              </div>
             </div>
-            <div id="q-browser" style="max-height:520px;overflow-y:auto;"></div>
+            <div id="q-browser" style="max-height:480px;overflow-y:auto;"></div>
             <div id="q-loading" style="padding:20px;color:#888;font-size:0.88em;font-style:italic;">Caricamento domande…</div>
           </div>
         </div>
