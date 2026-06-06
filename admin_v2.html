@@ -1313,11 +1313,11 @@ function renderItemsList() {
       if (!q) return `<div class="sel-row"><span class="sel-num">${i+1}.</span><span class="sel-text" style="color:#b00;">ID non trovato: ${escHtml(item.id)}</span>${arrows}</div>`;
       totalPt += q.punti;
       const shortText = q.testo.length > 90 ? q.testo.substring(0, 90) + "…" : q.testo;
-      return `<div class="sel-row" style="cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Mostra nel database">
+      return `<div class="sel-row" style="cursor:pointer;" onclick="previewQuestion('${item.id}',event)" title="Anteprima">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text">${escHtml(shortText)}</span>
         <span class="sel-pts">${q.punti} pt</span>
-        <button class="prev-btn" onclick="previewQuestion('${item.id}',event)" title="Anteprima">👁</button>
+        <button class="prev-btn" onclick="event.stopPropagation();setFiltersFromItem(trackItems[${i}])" title="Mostra origine nel database">🔍</button>
         ${arrows}
       </div>`;
     } else {
