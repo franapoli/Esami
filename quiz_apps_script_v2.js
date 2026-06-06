@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.7"; // aggiornare ad ogni deploy
+const VERSION = "2.8.8"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -40,9 +40,8 @@ const Q_C             = 10; // K
 const Q_D             = 11; // L
 const Q_CORRETTA      = 12; // M  lettera (A/B/C/D) o testo esatto per fitb
 const Q_PUNTI         = 13; // N
-const Q_FLAGS         = 14; // O  es. "blast,context"
-const Q_PLACEHOLDER   = 15; // P  solo per fitb
-const Q_DATA          = 16; // Q  JSON per tipi complessi (multi-fitb, cloze)
+const Q_PLACEHOLDER   = 14; // O  solo per fitb
+const Q_DATA          = 15; // P  JSON per tipi complessi (multi-fitb, cloze)
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -110,7 +109,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tags",
-                     "Stato", "Tipo", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Data"];
+                     "Stato", "Tipo", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Placeholder", "Data"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -150,7 +149,6 @@ function loadAllQuestions() {
       options:      [row[Q_A], row[Q_B], row[Q_C], row[Q_D]].map(String).filter(s => s.trim() !== ""),
       corretta:     String(row[Q_CORRETTA]).trim(),
       punti:        Number(row[Q_PUNTI]) || 1,
-      flags:        String(row[Q_FLAGS]).trim(),
       placeholder:  String(row[Q_PLACEHOLDER]).trim(),
       tags:         String(row[Q_TAGS] || "").trim(),
       data:         String(row[Q_DATA] || "").trim(),
@@ -229,9 +227,6 @@ function buildQuestionObj(q, pos) {
       obj.dropdowns = d.dropdowns || [];
     } catch(e) { obj.dropdowns = []; }
     obj.correct = obj.dropdowns.map(dd => dd.correct ?? 0);
-  }
-  if (q.flags) {
-    q.flags.split(",").forEach(f => { const flag = f.trim(); if (flag) obj[flag] = true; });
   }
   return obj;
 }
@@ -657,9 +652,8 @@ function doPost(e) {
         data.D           || "",  // L  D
         data.corretta    || "A", // M  Corretta
         data.punti       || 1,   // N  Punti
-        data.flags       || "",  // O  Flags
-        data.placeholder || "",  // P  Placeholder
-        data.data        || ""   // Q  Data JSON
+        data.placeholder || "",  // O  Placeholder
+        data.data        || ""   // P  Data JSON
       ]);
       return corsResponse({ status: "ok", id: newId });
     }

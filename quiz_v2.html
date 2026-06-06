@@ -50,7 +50,7 @@
   .q-number { font-size: 0.82em; color: #777; margin-bottom: 6px; }
   .q-points { font-size: 0.82em; color: #777; margin-left: 8px; }
   .q-text { font-size: 1.05em; line-height: 1.65; margin-bottom: 22px; }
-  .blast-block { background: #f8f8f8; border: 1px solid #ddd; padding: 12px 14px; font-family: monospace; font-size: 0.78em; line-height: 1.5; overflow-x: auto; margin-bottom: 20px; white-space: pre; }
+
   .option { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
   .option:hover { background: #f5f5f0; }
   .option.selected { background: #e8e8e0; border-color: #999; }
@@ -92,9 +92,7 @@
   .multi-fitb-label { font-size:0.82em; color:#555; font-weight:bold; }
   .multi-fitb-input { padding:8px 10px; border:1px solid #bbb; font-family:monospace; font-size:0.95em; }
   .nav { display: flex; justify-content: space-between; margin-top: 28px; }
-  .acmg-table { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-bottom: 20px; }
-  .acmg-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; background: #f8f8f8; }
-  .acmg-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+
 
   /* THANK YOU */
   #thankyou { display: none; max-width: 780px; margin: 40px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
@@ -618,13 +616,6 @@ function renderQuestion() {
 
   let html = "<div class='q-number'>Domanda " + (q.pos || current + 1) +
              " <span class='q-points'>[" + q.pts + " pt]</span></div>";
-
-  // Contenuto ricco: il testo della domanda può contenere HTML diretto
-  // oppure indicare blocchi speciali tramite flag (retrocompatibilità)
-  if (q.context)     html += q.context_html  || "";  // blocco testo ricco opzionale
-  if (q.acmg)        html += q.acmg_html     || "";
-  if (q.acmg_combo)  html += q.acmg_combo_html || "";
-  if (q.blast)       html += "<div class='blast-block'>" + (q.blast_html || "") + "</div>";
 
   // Il testo domanda viene reso come innerHTML (per cloze è incluso nel rendering dei dropdown)
   if (q.type !== "cloze") html += "<div class='q-text'>" + q.text + "</div>";
