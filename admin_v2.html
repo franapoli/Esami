@@ -152,6 +152,12 @@
   .q-row-body { flex: 1; font-size: 0.84em; line-height: 1.45; }
   .q-row-meta { font-size: 0.75em; color: #888; margin-top: 3px; }
   .q-row-pts  { font-size: 0.78em; color: #555; flex-shrink: 0; white-space: nowrap; }
+  .stato-badge { display:inline-block; font-size:0.72em; padding:1px 7px; border-radius:2px;
+                 flex-shrink:0; white-space:nowrap; cursor:pointer; user-select:none; }
+  .stato-bozza      { background:#fff3cd; color:#856404; border:1px solid #ffe08a; }
+  .stato-verificato { background:#d4edda; color:#155724; border:1px solid #b8dfc4; }
+  .stato-bozza:hover      { background:#ffe8a1; }
+  .stato-verificato:hover { background:#b8dfc4; }
 
   .sel-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
              border-bottom: 1px solid #eee; font-size: 0.83em; }
@@ -424,6 +430,14 @@
                   <label for="f-pts">Punteggio</label>
                   <select id="f-pts" onchange="filterQuestions()">
                     <option value="">— tutti —</option>
+                  </select>
+                </div>
+                <div class="field" style="min-width:0;flex:1;">
+                  <label for="f-stato">Stato</label>
+                  <select id="f-stato" onchange="filterQuestions()">
+                    <option value="">— tutti —</option>
+                    <option value="verificato">✓ Verificato</option>
+                    <option value="bozza">✎ Bozza</option>
                   </select>
                 </div>
               </div>
@@ -1021,10 +1035,12 @@ function previewQuestion(id, event) {
   }
 
   document.getElementById("preview-body").innerHTML = body;
+  const qs = q.stato || "verificato";
   document.getElementById("preview-meta").innerHTML =
     `ID: <code>${escHtml(q.id)}</code>` +
     (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
-    (q.flags ? ` &nbsp;·&nbsp; Flags: ${escHtml(q.flags)}` : "");
+    (q.flags ? ` &nbsp;·&nbsp; Flags: ${escHtml(q.flags)}` : "") +
+    ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span>`;
 
   document.getElementById("preview-overlay").classList.add("open");
 }
@@ -1164,6 +1180,26 @@ function updateSubcatFilter() {
 function onCatChange()     { updateSubcatFilter(); renderQBrowser(); }
 function filterQuestions() { renderQBrowser(); }
 
+async function toggleStato(id) {
+  const q = allQuestions && allQuestions.find(x => x.id === id);
+  if (!q) return;
+  const nuovoStato = (q.stato || "verificato") === "bozza" ? "verificato" : "bozza";
+  try {
+    const res = await callScript({ action: "setQuestionStato", password: adminPassword, id, stato: nuovoStato });
+    if (res.status === "ok") {
+      q.stato = nuovoStato;
+      renderQBrowser();
+      // aggiorna anche il badge nel preview se aperto
+      const overlay = document.getElementById("preview-overlay");
+      if (overlay.classList.contains("open")) previewQuestion(id, null);
+    } else {
+      alert("Errore: " + res.message);
+    }
+  } catch(e) {
+    alert("Errore di rete: " + e.message);
+  }
+}
+
 function setFiltersFromItem(item) {
   if (!allQuestions) return;
   let cat = "", subcat = "", tag = "";
@@ -1194,6 +1230,7 @@ function renderQBrowser() {
   const subcat = document.getElementById("f-subcat").value;
   const tag    = document.getElementById("f-tag").value;
   const pts    = document.getElementById("f-pts").value;
+  const stato  = document.getElementById("f-stato").value;
   const filtered = allQuestions.filter(q => {
     if (cat    && q.categoria  !== cat)    return false;
     if (subcat && q.sottocateg !== subcat) return false;
@@ -1202,6 +1239,7 @@ function renderQBrowser() {
       if (!qTags.includes(tag)) return false;
     }
     if (pts !== "" && String(q.punti) !== pts) return false;
+    if (stato && (q.stato || "verificato") !== stato) return false;
     return true;
   });
 
@@ -1217,6 +1255,8 @@ function renderQBrowser() {
 
   browser.innerHTML = filtered.map(q => {
     const shortText = q.testo.length > 110 ? q.testo.substring(0, 110) + "…" : q.testo;
+    const qs = q.stato || "verificato";
+    const statoLabel = qs === "bozza" ? "✎ bozza" : "✓";
     return `<div class="q-row" onclick="previewQuestion('${q.id}',event)">
       <button class="add-btn" onclick="event.stopPropagation();addFixedItem('${q.id}')" title="Aggiungi alla traccia">←</button>
       <div class="q-row-body">
@@ -1227,6 +1267,7 @@ function renderQBrowser() {
         </div>
       </div>
       <div class="q-row-pts">${q.punti} pt</div>
+      <span class="stato-badge stato-${qs}" onclick="event.stopPropagation();toggleStato('${q.id}')" title="Clicca per cambiare stato">${statoLabel}</span>
     </div>`;
   }).join("");
 }

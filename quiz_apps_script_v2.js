@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.3"; // aggiornare ad ogni deploy
+const VERSION = "2.8.4"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -42,6 +42,7 @@ const Q_FLAGS         = 12; // M  es. "blast,context" (non più usato per conten
 const Q_PLACEHOLDER   = 13; // N  solo per fitb
 const Q_TAGS          = 14; // O  tag separati da virgola (es. "blast,phylogeny")
 const Q_DATA          = 15; // P  JSON per tipi complessi (multi-fitb, ecc.)
+const Q_STATO         = 16; // Q  "bozza" | "verificato"
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -152,7 +153,8 @@ function loadAllQuestions() {
       flags:        String(row[Q_FLAGS]).trim(),
       placeholder:  String(row[Q_PLACEHOLDER]).trim(),
       tags:         String(row[Q_TAGS] || "").trim(),
-      data:         String(row[Q_DATA] || "").trim()
+      data:         String(row[Q_DATA] || "").trim(),
+      stato:        String(row[Q_STATO] || "verificato").trim() || "verificato"
     };
   }
   return map;
@@ -655,9 +657,30 @@ function doPost(e) {
         data.flags       || "",
         data.placeholder || "",
         data.tags        || "",
-        data.data        || ""
+        data.data        || "",
+        data.stato       || "bozza"
       ]);
       return corsResponse({ status: "ok", id: newId });
+    }
+
+    // ----------------------------------------------------------------
+    // setQuestionStato — aggiorna solo lo stato bozza/verificato
+    // ----------------------------------------------------------------
+    if (data.action === "setQuestionStato") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const qId    = data.id;
+      const stato  = data.stato === "bozza" ? "bozza" : "verificato";
+      const sheet  = getQuestionsSheet();
+      const values = sheet.getDataRange().getValues();
+      for (let i = 1; i < values.length; i++) {
+        if (String(values[i][Q_ID]).trim() === qId) {
+          sheet.getRange(i + 1, Q_STATO + 1).setValue(stato);
+          return corsResponse({ status: "ok", id: qId, stato });
+        }
+      }
+      return corsResponse({ status: "error", message: "Domanda non trovata: " + qId });
     }
 
     // ----------------------------------------------------------------
