@@ -208,20 +208,20 @@
 
   <div class="panel-header">
     <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:5px;">
-        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Repo domande:</span>
-        <input type="text" id="cfg-qs-url" style="width:200px;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio">
-        <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;" title="Apri">↗</a>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin-left:24px;">
+      <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande:</span>
+        <input type="text" id="cfg-qs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio domande">
+        <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
       </div>
-      <div style="display:flex;align-items:center;gap:5px;">
+      <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
         <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati:</span>
-        <input type="text" id="cfg-rs-url" style="width:200px;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio">
-        <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;" title="Apri">↗</a>
+        <input type="text" id="cfg-rs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio risultati">
+        <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
       </div>
-      <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;">Salva</button>
-      <span id="cfg-msg" style="font-size:0.78em;min-width:80px;"></span>
-      <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+      <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
+      <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;flex-shrink:0;">Salva</button>
+      <button class="btn btn-sm btn-outline" onclick="logout()" style="flex-shrink:0;">Esci</button>
     </div>
   </div>
 
