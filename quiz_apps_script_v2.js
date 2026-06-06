@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.2"; // aggiornare ad ogni deploy
+const VERSION = "2.8.3"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -271,6 +271,7 @@ function resolveTraccia(tracciaId) {
           const qTags = String(q.tags || "").split(",").map(t => t.trim());
           if (!qTags.includes(item.tag)) return false;
         }
+        if (item.punti !== undefined && q.punti !== item.punti) return false;
         return true;
       });
       const picked = shuffleArray(candidates)[0];

@@ -398,26 +398,26 @@
           <div class="card" style="padding:0;overflow:hidden;">
             <div style="padding:16px 20px;border-bottom:1px solid #eee;">
               <h2 style="margin:0;padding:0;border:none;">Aggiungi domande</h2>
-              <div class="row2" style="margin-top:12px;">
-                <div class="field">
+              <div class="row2" style="margin-top:12px;flex-wrap:nowrap;">
+                <div class="field" style="min-width:0;flex:2;">
                   <label for="f-cat">Categoria</label>
                   <select id="f-cat" onchange="onCatChange()">
                     <option value="">— tutte —</option>
                   </select>
                 </div>
-                <div class="field">
+                <div class="field" style="min-width:0;flex:2;">
                   <label for="f-subcat">Sottocategoria</label>
                   <select id="f-subcat" onchange="filterQuestions()">
                     <option value="">— tutte —</option>
                   </select>
                 </div>
-                <div class="field">
+                <div class="field" style="min-width:0;flex:1;">
                   <label for="f-tag">Tag</label>
                   <select id="f-tag" onchange="filterQuestions()">
                     <option value="">— tutti —</option>
                   </select>
                 </div>
-                <div class="field">
+                <div class="field" style="min-width:0;flex:1;">
                   <label for="f-pts">Punteggio</label>
                   <select id="f-pts" onchange="filterQuestions()">
                     <option value="">— tutti —</option>
@@ -1240,6 +1240,8 @@ function addRandomItem() {
   const categoria  = document.getElementById("f-cat").value;
   const sottocateg = document.getElementById("f-subcat").value;
   const tag        = document.getElementById("f-tag").value;
+  const ptsVal     = document.getElementById("f-pts").value;
+  const punti      = ptsVal !== "" ? Number(ptsVal) : undefined;
   const count = (allQuestions || []).filter(q => {
     if (categoria  && q.categoria  !== categoria)  return false;
     if (sottocateg && q.sottocateg !== sottocateg) return false;
@@ -1247,9 +1249,12 @@ function addRandomItem() {
       const qTags = (q.tags || "").split(",").map(t => t.trim());
       if (!qTags.includes(tag)) return false;
     }
+    if (punti !== undefined && q.punti !== punti) return false;
     return true;
   }).length;
-  trackItems.push({ type: "random", categoria, sottocateg, tag, _count: count });
+  const item = { type: "random", categoria, sottocateg, tag, _count: count };
+  if (punti !== undefined) item.punti = punti;
+  trackItems.push(item);
   renderItemsList();
 }
 
@@ -1266,8 +1271,8 @@ function moveItem(idx, dir) {
 }
 
 
-function getRandomMatchCount(item) {
-  if (!allQuestions) return 0;
+function getRandomMatches(item) {
+  if (!allQuestions) return [];
   return allQuestions.filter(q => {
     if (item.categoria && q.categoria !== item.categoria) return false;
     if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
@@ -1275,8 +1280,9 @@ function getRandomMatchCount(item) {
       const qTags = (q.tags || "").split(",").map(t => t.trim());
       if (!qTags.includes(item.tag)) return false;
     }
+    if (item.punti !== undefined && q.punti !== item.punti) return false;
     return true;
-  }).length;
+  });
 }
 
 function renderItemsList() {
@@ -1317,20 +1323,35 @@ function renderItemsList() {
       if (item.categoria)  parts.push("cat: " + item.categoria);
       if (item.sottocateg) parts.push("subcat: " + item.sottocateg);
       if (item.tag)        parts.push("tag: " + item.tag);
-      const desc   = parts.length ? parts.join(" · ") : "qualsiasi";
-      const count  = item._count !== undefined ? item._count : getRandomMatchCount(item);
+      if (item.punti !== undefined) parts.push("pt: " + item.punti);
+      const desc    = parts.length ? parts.join(" · ") : "qualsiasi";
+      const matches = getRandomMatches(item);
+      const count   = matches.length;
       const countStr = count + " disponibili";
+      const uniquePts = [...new Set(matches.map(q => q.punti))];
+      let ptsDisplay;
+      if (count === 0) {
+        ptsDisplay = "— pt";
+        totalPt += 0;
+      } else if (uniquePts.length === 1) {
+        ptsDisplay = uniquePts[0] + " pt";
+        totalPt += uniquePts[0];
+      } else {
+        ptsDisplay = "⚠️ pt variabile";
+        totalPt += Math.round(matches.reduce((s,q) => s + q.punti, 0) / count);
+      }
       return `<div class="sel-row" style="background:#fffbf0;cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Filtra nel database">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text" style="font-style:italic;color:#7b5e00;">🎲 ${escHtml(desc)}</span>
         <span class="sel-pts rule-count${count===0?" zero":""}">${countStr}</span>
+        <span class="sel-pts">${ptsDisplay}</span>
         ${arrows}
       </div>`;
     }
   }).join("");
 
   container.innerHTML = rows;
-  countEl.textContent = trackItems.length + " slot — " + totalPt + " pt fissi";
+  countEl.textContent = trackItems.length + " slot — " + totalPt + " pt";
 }
 
 function clearItems() {
