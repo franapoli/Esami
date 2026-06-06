@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.5"; // aggiornare ad ogni deploy
+const VERSION = "2.8.6"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -30,19 +30,19 @@ const Q_ID            = 0;  // A
 const Q_CORSO         = 1;  // B
 const Q_CATEGORIA     = 2;  // C
 const Q_SOTTOCATEG    = 3;  // D
-const Q_TIPO          = 4;  // E  "mc" | "fitb"
-const Q_TESTO         = 5;  // F
-const Q_A             = 6;  // G
-const Q_B             = 7;  // H
-const Q_C             = 8;  // I
-const Q_D             = 9;  // J
-const Q_CORRETTA      = 10; // K  lettera (A/B/C/D) o testo esatto per fitb
-const Q_PUNTI         = 11; // L
-const Q_FLAGS         = 12; // M  es. "blast,context" (non più usato per contenuto ricco — il testo è nella cella)
-const Q_PLACEHOLDER   = 13; // N  solo per fitb
-const Q_TAGS          = 14; // O  tag separati da virgola (es. "blast,phylogeny")
-const Q_DATA          = 15; // P  JSON per tipi complessi (multi-fitb, ecc.)
-const Q_STATO         = 16; // Q  "bozza" | "verificato"
+const Q_TAGS          = 4;  // E  tag separati da virgola (es. "blast,phylogeny")
+const Q_TIPO          = 5;  // F  "mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
+const Q_STATO         = 6;  // G  "bozza" | "verificato"
+const Q_TESTO         = 7;  // H
+const Q_A             = 8;  // I
+const Q_B             = 9;  // J
+const Q_C             = 10; // K
+const Q_D             = 11; // L
+const Q_CORRETTA      = 12; // M  lettera (A/B/C/D) o testo esatto per fitb
+const Q_PUNTI         = 13; // N
+const Q_FLAGS         = 14; // O  es. "blast,context"
+const Q_PLACEHOLDER   = 15; // P  solo per fitb
+const Q_DATA          = 16; // Q  JSON per tipi complessi (multi-fitb, cloze)
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -109,8 +109,8 @@ function getQuestionsSheet() {
   let sheet = ss.getSheetByName("questions");
   if (!sheet) {
     sheet = ss.insertSheet("questions");
-    const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tipo",
-                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags", "Data", "Stato"];
+    const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tags",
+                     "Tipo", "Stato", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Data"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -643,23 +643,23 @@ function doPost(e) {
       do { newId = generateQuestionId(); } while (allQ[newId]);
 
       sheet.appendRow([
-        newId,
-        data.corso       || "",
-        data.categoria   || "",
-        data.sottocateg  || "",
-        data.tipo        || "mc",
-        data.testo       || "",
-        data.A           || "",
-        data.B           || "",
-        data.C           || "",
-        data.D           || "",
-        data.corretta    || "A",
-        data.punti       || 1,
-        data.flags       || "",
-        data.placeholder || "",
-        data.tags        || "",
-        data.data        || "",
-        data.stato       || "bozza"
+        newId,                   // A  ID
+        data.corso       || "",  // B  Corso
+        data.categoria   || "",  // C  Categoria
+        data.sottocateg  || "",  // D  Sottocategoria
+        data.tags        || "",  // E  Tags
+        data.tipo        || "mc",// F  Tipo
+        data.stato       || "bozza", // G  Stato
+        data.testo       || "",  // H  Testo
+        data.A           || "",  // I  A
+        data.B           || "",  // J  B
+        data.C           || "",  // K  C
+        data.D           || "",  // L  D
+        data.corretta    || "A", // M  Corretta
+        data.punti       || 1,   // N  Punti
+        data.flags       || "",  // O  Flags
+        data.placeholder || "",  // P  Placeholder
+        data.data        || ""   // Q  Data JSON
       ]);
       return corsResponse({ status: "ok", id: newId });
     }
