@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.8"; // aggiornare ad ogni deploy
+const VERSION = "2.8.9"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -34,14 +34,11 @@ const Q_TAGS          = 4;  // E  tag separati da virgola (es. "blast,phylogeny"
 const Q_STATO         = 5;  // F  "bozza" | "verificato"
 const Q_TIPO          = 6;  // G  "mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
 const Q_TESTO         = 7;  // H
-const Q_A             = 8;  // I
-const Q_B             = 9;  // J
-const Q_C             = 10; // K
-const Q_D             = 11; // L
-const Q_CORRETTA      = 12; // M  lettera (A/B/C/D) o testo esatto per fitb
-const Q_PUNTI         = 13; // N
-const Q_PLACEHOLDER   = 14; // O  solo per fitb
-const Q_DATA          = 15; // P  JSON per tipi complessi (multi-fitb, cloze)
+const Q_OPTIONS       = 8;  // I  JSON array di opzioni (mc/match); vuoto per fitb/free/cloze/multi-fitb
+const Q_CORRETTA      = 9;  // J  lettera A-Z (mc), testo esatto (fitb), JSON array destra (match)
+const Q_PUNTI         = 10; // K
+const Q_PLACEHOLDER   = 11; // L  solo per fitb
+const Q_DATA          = 12; // M  JSON per tipi complessi (multi-fitb, cloze)
 
 // Indici colonne foglio "tracce" (0-based)
 const T_ID            = 0;  // A  track_id
@@ -95,9 +92,11 @@ function generateQuestionId() {
   return id;
 }
 
-// Converte lettera corretta (A/B/C/D) in indice 0-based
+// Converte lettera corretta (A, B, C, … Z) in indice 0-based
 function letterToIndex(letter) {
-  return { A: 0, B: 1, C: 2, D: 3 }[String(letter).toUpperCase().trim()] ?? 0;
+  const l = String(letter).toUpperCase().trim();
+  const idx = l.charCodeAt(0) - 65; // A=0, B=1, …
+  return idx >= 0 && idx < 26 ? idx : 0;
 }
 
 // ------------------------------------------------------------
@@ -109,7 +108,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tags",
-                     "Stato", "Tipo", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Placeholder", "Data"];
+                     "Stato", "Tipo", "Testo", "Opzioni", "Corretta", "Punti", "Placeholder", "Data"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -146,7 +145,7 @@ function loadAllQuestions() {
       sottocateg:   String(row[Q_SOTTOCATEG]),
       tipo:         String(row[Q_TIPO]).trim() || "mc",
       testo:        String(row[Q_TESTO]),
-      options:      [row[Q_A], row[Q_B], row[Q_C], row[Q_D]].map(String).filter(s => s.trim() !== ""),
+      options:      (() => { try { const v = String(row[Q_OPTIONS] || ""); return v.trim() ? JSON.parse(v) : []; } catch(e) { return []; } })(),
       corretta:     String(row[Q_CORRETTA]).trim(),
       punti:        Number(row[Q_PUNTI]) || 1,
       placeholder:  String(row[Q_PLACEHOLDER]).trim(),
@@ -646,14 +645,11 @@ function doPost(e) {
         data.stato       || "bozza", // F  Stato
         data.tipo        || "mc",    // G  Tipo
         data.testo       || "",  // H  Testo
-        data.A           || "",  // I  A
-        data.B           || "",  // J  B
-        data.C           || "",  // K  C
-        data.D           || "",  // L  D
-        data.corretta    || "A", // M  Corretta
-        data.punti       || 1,   // N  Punti
-        data.placeholder || "",  // O  Placeholder
-        data.data        || ""   // P  Data JSON
+        JSON.stringify(data.options || []), // I  Opzioni (JSON array)
+        data.corretta    || "A",            // J  Corretta
+        data.punti       || 1,              // K  Punti
+        data.placeholder || "",            // L  Placeholder
+        data.data        || ""             // M  Data JSON
       ]);
       return corsResponse({ status: "ok", id: newId });
     }
