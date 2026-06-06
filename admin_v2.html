@@ -417,6 +417,12 @@
                     <option value="">— tutti —</option>
                   </select>
                 </div>
+                <div class="field">
+                  <label for="f-pts">Punteggio</label>
+                  <select id="f-pts" onchange="filterQuestions()">
+                    <option value="">— tutti —</option>
+                  </select>
+                </div>
               </div>
               <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <span style="font-size:0.82em;color:#888;" id="q-count"></span>
@@ -1135,6 +1141,11 @@ function buildCategoryFilters() {
   const tagSel = document.getElementById("f-tag");
   tagSel.innerHTML = '<option value="">— tutti —</option>';
   tags.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tagSel.appendChild(o); });
+
+  const pts = [...new Set(allQuestions.map(q => q.punti).filter(v => v != null))].sort((a,b) => a-b);
+  const ptsSel = document.getElementById("f-pts");
+  ptsSel.innerHTML = '<option value="">— tutti —</option>';
+  pts.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p + " pt"; ptsSel.appendChild(o); });
 }
 
 function updateSubcatFilter() {
@@ -1169,6 +1180,7 @@ function setFiltersFromItem(item) {
   updateSubcatFilter();
   document.getElementById("f-subcat").value = subcat;
   document.getElementById("f-tag").value = tag;
+  document.getElementById("f-pts").value = "";
   renderQBrowser();
   document.getElementById("browser-col").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -1178,6 +1190,7 @@ function renderQBrowser() {
   const cat    = document.getElementById("f-cat").value;
   const subcat = document.getElementById("f-subcat").value;
   const tag    = document.getElementById("f-tag").value;
+  const pts    = document.getElementById("f-pts").value;
   const filtered = allQuestions.filter(q => {
     if (cat    && q.categoria  !== cat)    return false;
     if (subcat && q.sottocateg !== subcat) return false;
@@ -1185,6 +1198,7 @@ function renderQBrowser() {
       const qTags = (q.tags || "").split(",").map(t => t.trim());
       if (!qTags.includes(tag)) return false;
     }
+    if (pts !== "" && String(q.punti) !== pts) return false;
     return true;
   });
 
