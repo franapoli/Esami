@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.4"; // aggiornare ad ogni deploy
+const VERSION = "2.8.5"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -110,7 +110,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tipo",
-                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags", "Data"];
+                     "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Tags", "Data", "Stato"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -494,7 +494,7 @@ function doPost(e) {
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         const id  = String(row[T_ID]).trim();
-        if (!id) continue;
+        if (!id || id === "TracciaID") continue;  // salta header e righe vuote
         const rawDate = row[T_DATA];
         let dataStr = rawDate instanceof Date && !isNaN(rawDate)
           ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
@@ -503,6 +503,7 @@ function doPost(e) {
         tracks.push({
           exam_id:   id,
           exam_name: String(row[T_NOME]),
+          corso:     String(row[T_CORSO]),
           exam_date: dataStr,
           duration:  String(row[T_DURATA]),
           mode:      String(row[T_MODALITA]) || "exam",
