@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.6"; // aggiornare ad ogni deploy
+const VERSION = "2.8.7"; // aggiornare ad ogni deploy
 
 // ID dei due Google Sheets
 const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
@@ -31,8 +31,8 @@ const Q_CORSO         = 1;  // B
 const Q_CATEGORIA     = 2;  // C
 const Q_SOTTOCATEG    = 3;  // D
 const Q_TAGS          = 4;  // E  tag separati da virgola (es. "blast,phylogeny")
-const Q_TIPO          = 5;  // F  "mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
-const Q_STATO         = 6;  // G  "bozza" | "verificato"
+const Q_STATO         = 5;  // F  "bozza" | "verificato"
+const Q_TIPO          = 6;  // G  "mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
 const Q_TESTO         = 7;  // H
 const Q_A             = 8;  // I
 const Q_B             = 9;  // J
@@ -110,7 +110,7 @@ function getQuestionsSheet() {
   if (!sheet) {
     sheet = ss.insertSheet("questions");
     const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tags",
-                     "Tipo", "Stato", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Data"];
+                     "Stato", "Tipo", "Testo", "A", "B", "C", "D", "Corretta", "Punti", "Flags", "Placeholder", "Data"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -647,9 +647,9 @@ function doPost(e) {
         data.corso       || "",  // B  Corso
         data.categoria   || "",  // C  Categoria
         data.sottocateg  || "",  // D  Sottocategoria
-        data.tags        || "",  // E  Tags
-        data.tipo        || "mc",// F  Tipo
-        data.stato       || "bozza", // G  Stato
+        data.tags        || "",       // E  Tags
+        data.stato       || "bozza", // F  Stato
+        data.tipo        || "mc",    // G  Tipo
         data.testo       || "",  // H  Testo
         data.A           || "",  // I  A
         data.B           || "",  // J  B
