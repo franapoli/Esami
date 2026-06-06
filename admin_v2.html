@@ -1000,7 +1000,6 @@ function previewQuestion(id, event) {
   const q = allQuestions && allQuestions.find(x => x.id === id);
   if (!q) return;
 
-  const letters = ["A","B","C","D"];
   document.getElementById("preview-meta-top").textContent =
     escHtml(q.categoria) + (q.sottocateg ? " › " + escHtml(q.sottocateg) : "") +
     " · " + (({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)) +
@@ -1009,14 +1008,15 @@ function previewQuestion(id, event) {
   let body = `<div class="prev-text">${q.testo}</div>`;
 
   if (q.tipo === "mc") {
-    const correct = { A:0, B:1, C:2, D:3 }[String(q.corretta).toUpperCase().trim()] ?? 0;
-    body += q.options.map((opt, i) =>
-      `<div class="prev-opt${i === correct ? " correct" : ""}">
-        <span class="prev-opt-label">${letters[i]}</span>
+    const correct = String(q.corretta).toUpperCase().charCodeAt(0) - 65; // A=0, B=1, …
+    body += q.options.map((opt, i) => {
+      const letter = String.fromCharCode(65 + i); // A, B, C, D, E, …
+      return `<div class="prev-opt${i === correct ? " correct" : ""}">
+        <span class="prev-opt-label">${letter}</span>
         <span>${escHtml(opt)}</span>
         ${i === correct ? '<span style="margin-left:auto;color:#2e7d32;font-size:0.85em;">✓ corretta</span>' : ""}
-      </div>`
-    ).join("");
+      </div>`;
+    }).join("");
   } else if (q.tipo === "cloze") {
     try {
       const d = JSON.parse(q.data || "{}");
@@ -1039,7 +1039,6 @@ function previewQuestion(id, event) {
   document.getElementById("preview-meta").innerHTML =
     `ID: <code>${escHtml(q.id)}</code>` +
     (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
-    (q.flags ? ` &nbsp;·&nbsp; Flags: ${escHtml(q.flags)}` : "") +
     ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span>`;
 
   document.getElementById("preview-overlay").classList.add("open");
@@ -1130,13 +1129,21 @@ function duplicateTrack() {
   switchTab("domande");
 }
 
+// Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
+function cleanItemsForSave(items) {
+  return items.map(item => {
+    const { _count, ...clean } = item;
+    return clean;
+  });
+}
+
 async function saveTrackItems() {
   const msg = document.getElementById("save-items-msg");
   msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setTrack", password: adminPassword,
-      examId: currentTrack.exam_id, items: trackItems
+      examId: currentTrack.exam_id, items: cleanItemsForSave(trackItems)
     });
     if (res.status !== "ok") throw new Error(res.message);
     currentTrack.items = JSON.parse(JSON.stringify(trackItems));
@@ -1296,8 +1303,12 @@ function addRandomItem() {
     if (punti !== undefined && q.punti !== punti) return false;
     return true;
   }).length;
-  const item = { type: "random", categoria, sottocateg, tag, _count: count };
-  if (punti !== undefined) item.punti = punti;
+  const item = { type: "random" };
+  if (categoria)          item.categoria  = categoria;
+  if (sottocateg)         item.sottocateg = sottocateg;
+  if (tag)                item.tag        = tag;
+  if (punti !== undefined) item.punti     = punti;
+  item._count = count; // solo per display locale, mai salvato
   trackItems.push(item);
   renderItemsList();
 }
@@ -1421,7 +1432,8 @@ async function doCreateTrack() {
     const res = await callScript({
       action: "createTrack", password: adminPassword,
       corso: document.getElementById("new-corso").value.trim(),
-      exam_name: name, exam_date: date, duration: dur, mode, items: trackItems
+      exam_name: name, exam_date: date, duration: dur, mode,
+      items: cleanItemsForSave(trackItems)
     });
     if (res.status !== "ok") throw new Error(res.message);
 
@@ -1432,7 +1444,12 @@ async function doCreateTrack() {
     msg.style.color = "#2e7d32";
     msg.textContent = "✓ Traccia creata: " + res.track_id;
 
-    resetNewTrackForm();
+    // Svuota form nuova traccia
+    document.getElementById("new-corso").value = "";
+    document.getElementById("new-name").value  = "";
+    document.getElementById("new-date").value  = "";
+    document.getElementById("new-dur").value   = "90";
+    document.getElementById("new-mode").value  = "exam";
     trackItems = [];
     if (activeTab === "domande" && allQuestions) setDomandeMode("new", false);
   } catch(e) {

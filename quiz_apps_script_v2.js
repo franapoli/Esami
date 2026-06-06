@@ -207,7 +207,7 @@ function buildQuestionObj(q, pos) {
   } else if (q.tipo === "fitb") {
     if (q.placeholder) obj.placeholder = q.placeholder;
   } else if (q.tipo === "match") {
-    obj.left  = q.options; // A-D = termini sinistri
+    obj.left  = q.options; // termini sinistra (JSON array da Q_OPTIONS)
     try { obj.right = JSON.parse(q.corretta); } catch(e) { obj.right = []; }
     obj.correct = obj.right.slice(); // right[i] è la risposta corretta per left[i]
   } else if (q.tipo === "free") {
