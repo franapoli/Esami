@@ -7,11 +7,20 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.8.9"; // aggiornare ad ogni deploy
+const VERSION = "2.9.0"; // aggiornare ad ogni deploy
 
-// ID dei due Google Sheets
-const SHEET_QUESTIONS_ID = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ"; // repository domande
-const SHEET_RESULTS_ID   = "1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA";  // risultati esami
+// ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
+const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
+const SHEET_RESULTS_ID_DEFAULT   = "1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA";
+
+// Legge gli ID attivi: prima da ScriptProperties, poi dal default hardcoded.
+// ScriptProperties è indipendente da entrambi i fogli → nessuna circolarità.
+function getSheetQuestionsId() {
+  return PropertiesService.getScriptProperties().getProperty("SHEET_QUESTIONS_ID") || SHEET_QUESTIONS_ID_DEFAULT;
+}
+function getSheetResultsId() {
+  return PropertiesService.getScriptProperties().getProperty("SHEET_RESULTS_ID") || SHEET_RESULTS_ID_DEFAULT;
+}
 
 // Indici colonne foglio risultati (1-based, identici a v1)
 const COL_MATRICOLA  = 1;
@@ -103,7 +112,7 @@ function letterToIndex(letter) {
 // Repository domande
 // ------------------------------------------------------------
 function getQuestionsSheet() {
-  const ss = SpreadsheetApp.openById(SHEET_QUESTIONS_ID);
+  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
   let sheet = ss.getSheetByName("questions");
   if (!sheet) {
     sheet = ss.insertSheet("questions");
@@ -117,7 +126,7 @@ function getQuestionsSheet() {
 }
 
 function getTracceSheet() {
-  const ss = SpreadsheetApp.openById(SHEET_QUESTIONS_ID);
+  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
   let sheet = ss.getSheetByName("tracce");
   if (!sheet) {
     sheet = ss.insertSheet("tracce");
@@ -299,7 +308,7 @@ function resolveTraccia(tracciaId) {
 // Foglio risultati (identico a v1, ma usa SHEET_RESULTS_ID)
 // ------------------------------------------------------------
 function getAdminPassword() {
-  const ss = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+  const ss = SpreadsheetApp.openById(getSheetResultsId());
   let sheet = ss.getSheetByName("_config");
   if (!sheet) {
     sheet = ss.insertSheet("_config");
@@ -316,7 +325,7 @@ function getAdminPassword() {
 }
 
 function getMetaSheet() {
-  const ss = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+  const ss = SpreadsheetApp.openById(getSheetResultsId());
   let meta = ss.getSheetByName("_meta");
   if (!meta) {
     meta = ss.insertSheet("_meta");
@@ -366,7 +375,7 @@ function ensureMetaTrack(track) {
 }
 
 function getResultSheet(examId, nQuestions) {
-  const ss = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+  const ss = SpreadsheetApp.openById(getSheetResultsId());
   let sheet = ss.getSheetByName(examId);
   if (!sheet) {
     sheet = ss.insertSheet(examId);
@@ -402,6 +411,44 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+
+    // ----------------------------------------------------------------
+    // getConfig — legge gli ID dei fogli attivi (admin)
+    // ----------------------------------------------------------------
+    if (data.action === "getConfig") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const qId = getSheetQuestionsId();
+      const rId = getSheetResultsId();
+      return corsResponse({
+        status: "ok",
+        questions_id:  qId,
+        results_id:    rId,
+        questions_url: "https://docs.google.com/spreadsheets/d/" + qId + "/edit",
+        results_url:   "https://docs.google.com/spreadsheets/d/" + rId + "/edit"
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // setConfig — aggiorna gli ID dei fogli in ScriptProperties (admin)
+    // ----------------------------------------------------------------
+    if (data.action === "setConfig") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const props = PropertiesService.getScriptProperties();
+      // Stringa vuota = ripristina il default hardcoded
+      if (data.questions_id !== undefined) {
+        data.questions_id ? props.setProperty("SHEET_QUESTIONS_ID", data.questions_id)
+                          : props.deleteProperty("SHEET_QUESTIONS_ID");
+      }
+      if (data.results_id !== undefined) {
+        data.results_id ? props.setProperty("SHEET_RESULTS_ID", data.results_id)
+                        : props.deleteProperty("SHEET_RESULTS_ID");
+      }
+      return corsResponse({ status: "ok" });
+    }
 
     // ----------------------------------------------------------------
     // getTrack — carica traccia + domande risolte
@@ -558,7 +605,7 @@ function doPost(e) {
       const examId  = data.examId;
       const traccia = readTraccia(examId);
       const nQ      = traccia ? traccia.items.length : 20;
-      const ss      = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+      const ss      = SpreadsheetApp.openById(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
 
@@ -597,7 +644,7 @@ function doPost(e) {
       const examId  = data.examId;
       const traccia = readTraccia(examId);
       const nQ      = traccia ? traccia.items.length : 20;
-      const ss      = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+      const ss      = SpreadsheetApp.openById(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
 
@@ -680,7 +727,7 @@ function doPost(e) {
     if (data.action === "abandon") {
       const examId = data.examId;
       if (!examId || !data.matricola) return corsResponse({ status: "error", message: "Parametri mancanti" });
-      const ss    = SpreadsheetApp.openById(SHEET_RESULTS_ID);
+      const ss    = SpreadsheetApp.openById(getSheetResultsId());
       const sheet = ss.getSheetByName(examId);
       if (sheet) {
         const rowIndex = findRow(sheet, data.matricola);

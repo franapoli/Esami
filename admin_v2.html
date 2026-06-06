@@ -208,15 +208,19 @@
 
   <div class="panel-header">
     <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-      <a id="link-questions" href="https://docs.google.com/spreadsheets/d/1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ/edit" target="_blank"
-         style="font-size:0.82em;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #bbb;">
-        ↗ Repo domande
-      </a>
-      <a id="link-results" href="https://docs.google.com/spreadsheets/d/1WQ1fnjN-j3o5yxjtH66qkmPIO532Y5t-DTSSK0MhOgA/edit" target="_blank"
-         style="font-size:0.82em;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #bbb;">
-        ↗ Foglio risultati
-      </a>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Repo domande:</span>
+        <input type="text" id="cfg-qs-url" style="width:200px;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio">
+        <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;" title="Apri">↗</a>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati:</span>
+        <input type="text" id="cfg-rs-url" style="width:200px;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio">
+        <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;" title="Apri">↗</a>
+      </div>
+      <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;">Salva</button>
+      <span id="cfg-msg" style="font-size:0.78em;min-width:80px;"></span>
       <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
     </div>
   </div>
@@ -568,9 +572,51 @@ async function doLogin() {
         "build " + BUILD + " · script v" + res.version;
     }
     populateTrackSelect(allTracks);
+    loadSheetConfig();
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
   }
+}
+
+// ---- CONFIGURAZIONE FOGLI ----
+async function loadSheetConfig() {
+  try {
+    const res = await callScript({ action: "getConfig", password: adminPassword });
+    if (res.status !== "ok") return;
+    document.getElementById("cfg-qs-url").value = res.questions_url || "";
+    document.getElementById("cfg-rs-url").value = res.results_url  || "";
+    if (res.questions_url) document.getElementById("link-questions").href = res.questions_url;
+    if (res.results_url)   document.getElementById("link-results").href   = res.results_url;
+  } catch(e) { /* silenzioso — non blocca il login */ }
+}
+
+function extractSheetId(urlOrId) {
+  const m = String(urlOrId).match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : String(urlOrId).trim();
+}
+
+async function saveSheetConfig() {
+  const msg = document.getElementById("cfg-msg");
+  const qsId = extractSheetId(document.getElementById("cfg-qs-url").value.trim());
+  const rsId = extractSheetId(document.getElementById("cfg-rs-url").value.trim());
+  msg.style.color = "#555"; msg.textContent = "Salvataggio…";
+  try {
+    const res = await callScript({
+      action: "setConfig", password: adminPassword,
+      questions_id: qsId,
+      results_id:   rsId
+    });
+    if (res.status === "ok") {
+      msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
+      // Aggiorna link ↗
+      if (qsId) document.getElementById("link-questions").href =
+        "https://docs.google.com/spreadsheets/d/" + qsId + "/edit";
+      if (rsId) document.getElementById("link-results").href =
+        "https://docs.google.com/spreadsheets/d/" + rsId + "/edit";
+    } else {
+      msg.style.color = "#b00"; msg.textContent = res.message || "Errore.";
+    }
+  } catch(e) { msg.style.color = "#b00"; msg.textContent = "Errore di rete."; }
 }
 
 function logout() {
