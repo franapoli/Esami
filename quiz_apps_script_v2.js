@@ -523,7 +523,8 @@ function doPost(e) {
         } else if (type === "results") {
           const cfg = ss.getSheets()[0];
           cfg.setName("_config");
-          cfg.appendRow(["admin_password", "cambiami"]);
+          // Eredita la password admin corrente così le chiamate successive continuano a funzionare
+          cfg.appendRow(["admin_password", getAdminPassword()]);
           ss.insertSheet("_meta");
         }
 
