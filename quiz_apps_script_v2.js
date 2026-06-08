@@ -523,8 +523,10 @@ function doPost(e) {
         } else if (type === "results") {
           const cfg = ss.getSheets()[0];
           cfg.setName("_config");
-          // Eredita la password admin corrente così le chiamate successive continuano a funzionare
+          cfg.appendRow(["Chiave", "Valore"]);               // riga header (getAdminPassword parte da i=1)
           cfg.appendRow(["admin_password", getAdminPassword()]);
+          cfg.getRange(1, 1, 1, 2).setFontWeight("bold");
+          cfg.setFrozenRows(1);
           ss.insertSheet("_meta");
         }
 
