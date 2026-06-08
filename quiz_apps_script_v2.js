@@ -427,14 +427,16 @@ function doPost(e) {
       const qId  = getSheetQuestionsId();
       const rId  = getSheetResultsId();
       const fId  = getDriveFolderId();
+      const scriptEditorUrl = PropertiesService.getScriptProperties().getProperty("SCRIPT_EDITOR_URL") || "";
       return corsResponse({
         status: "ok",
-        questions_id:  qId,
-        results_id:    rId,
-        folder_id:     fId,
-        questions_url: "https://docs.google.com/spreadsheets/d/" + qId + "/edit",
-        results_url:   "https://docs.google.com/spreadsheets/d/" + rId + "/edit",
-        folder_url:    "https://drive.google.com/drive/folders/" + fId
+        questions_id:      qId,
+        results_id:        rId,
+        folder_id:         fId,
+        questions_url:     "https://docs.google.com/spreadsheets/d/" + qId + "/edit",
+        results_url:       "https://docs.google.com/spreadsheets/d/" + rId + "/edit",
+        folder_url:        "https://drive.google.com/drive/folders/" + fId,
+        script_editor_url: scriptEditorUrl
       });
     }
 
@@ -458,6 +460,10 @@ function doPost(e) {
       if (data.folder_id !== undefined) {
         data.folder_id ? props.setProperty("DRIVE_FOLDER_ID", data.folder_id)
                        : props.deleteProperty("DRIVE_FOLDER_ID");
+      }
+      if (data.script_editor_url !== undefined) {
+        data.script_editor_url ? props.setProperty("SCRIPT_EDITOR_URL", data.script_editor_url)
+                               : props.deleteProperty("SCRIPT_EDITOR_URL");
       }
       return corsResponse({ status: "ok" });
     }

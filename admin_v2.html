@@ -254,6 +254,10 @@
         <option value="">— carica lista —</option>
       </select>
       <button class="btn btn-outline btn-ph" onclick="createNewSheet('results')" title="Crea nuovo foglio risultati">+ Nuovo</button>
+      <span class="ph-sep">|</span>
+      <span class="ph-label">Apps Script:</span>
+      <input type="text" id="cfg-script-url" placeholder="URL editor Apps Script" style="max-width:220px;">
+      <a id="link-script" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri editor Apps Script">↗</a>
       <span id="drive-msg" style="color:#888;flex-shrink:0;white-space:nowrap;"></span>
     </div>
   </div>
@@ -624,6 +628,10 @@ async function loadSheetConfig() {
       document.getElementById("cfg-folder-url").value = res.folder_url;
       document.getElementById("link-folder").href = res.folder_url;
     }
+    if (res.script_editor_url) {
+      document.getElementById("cfg-script-url").value = res.script_editor_url;
+      document.getElementById("link-script").href = res.script_editor_url;
+    }
   } catch(e) { /* silenzioso — non blocca il login */ }
 }
 
@@ -641,12 +649,14 @@ async function saveSheetConfig() {
   const msg = document.getElementById("cfg-msg");
   const qsId = extractSheetId(document.getElementById("cfg-qs-url").value.trim());
   const rsId = extractSheetId(document.getElementById("cfg-rs-url").value.trim());
-  const fId  = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
+  const fId        = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
+  const scriptUrl  = document.getElementById("cfg-script-url").value.trim();
   msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setConfig", password: adminPassword,
-      questions_id: qsId, results_id: rsId, folder_id: fId
+      questions_id: qsId, results_id: rsId, folder_id: fId,
+      script_editor_url: scriptUrl
     });
     if (res.status === "ok") {
       msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
@@ -656,6 +666,7 @@ async function saveSheetConfig() {
         "https://docs.google.com/spreadsheets/d/" + rsId + "/edit";
       if (fId) document.getElementById("link-folder").href =
         "https://drive.google.com/drive/folders/" + fId;
+      if (scriptUrl) document.getElementById("link-script").href = scriptUrl;
     } else {
       msg.style.color = "#b00"; msg.textContent = res.message || "Errore.";
     }
