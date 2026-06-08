@@ -263,27 +263,30 @@
   </div>
 
   <div class="track-selector-bar">
-    <label for="track-select">Traccia:</label>
-    <select id="track-select" onchange="onTrackChange()">
+    <label for="esame-select">Esame:</label>
+    <select id="esame-select" onchange="onEsameChange()">
       <option value="">— caricamento… —</option>
     </select>
-    <span id="no-tracks" style="display:none;">Nessuna traccia trovata. Aggiungila nel foglio <em>tracce</em> del repository domande.</span>
+    <button class="btn btn-sm btn-outline" onclick="selectNewEsame()" style="margin-top:0;flex-shrink:0;">+ Nuovo esame</button>
+    <span id="no-tracks" style="display:none;font-size:0.85em;color:#888;font-style:italic;">Nessun esame trovato.</span>
   </div>
 
   <div class="tab-bar">
-    <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Gestione traccia</button>
+    <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Esame</button>
     <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
     <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
-    <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Modifica traccia</button>
+    <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Tracce</button>
   </div>
 
-  <!-- TAB: GESTIONE TRACCIA -->
+  <!-- TAB: ESAME -->
   <div class="tab-panel active" id="panel-admin">
     <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
-      Seleziona una traccia per gestirla.
+      Seleziona un esame dal menu o creane uno nuovo.
     </div>
     <div id="track-card" style="display:none;">
-      <div class="card">
+
+      <!-- Stato e controllo (solo esame esistente) -->
+      <div class="card" id="esame-status-card">
         <h2>Stato e controllo</h2>
         <div class="status-bar">
           <div class="dot" id="status-dot"></div>
@@ -292,12 +295,102 @@
         <div class="action-row">
           <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
           <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
-          <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova traccia</a>
-          <button class="btn btn-sm btn-outline" onclick="duplicateTrack()">Duplica traccia</button>
+          <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova esame</a>
+          <button class="btn btn-sm btn-outline" onclick="duplicateEsame()">Duplica esame</button>
         </div>
         <div id="status-msg" class="ok-msg"></div>
       </div>
-      <div class="card" id="track-info-readonly"></div>
+
+      <!-- Form: nuovo esame -->
+      <div id="new-track-form" class="card" style="display:none;margin-bottom:16px;">
+        <h2>Nuovo esame</h2>
+        <div class="row2">
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="new-traccia-ref">Traccia (set domande)</label>
+            <select id="new-traccia-ref">
+              <option value="">— seleziona traccia —</option>
+            </select>
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="new-corso">Corso</label>
+            <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="new-name">Nome esame <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
+            <input type="text" id="new-name" autocomplete="new-password" placeholder="Default: nome traccia">
+          </div>
+          <div class="field" style="min-width:140px;">
+            <label for="new-date">Data</label>
+            <input type="date" id="new-date" autocomplete="new-password">
+          </div>
+          <div class="field" style="min-width:110px;">
+            <label for="new-dur">Durata (min)</label>
+            <input type="number" id="new-dur" autocomplete="new-password" value="90" min="0" max="240" step="5">
+          </div>
+          <div class="field" style="min-width:140px;">
+            <label for="new-mode">Modalità</label>
+            <select id="new-mode">
+              <option value="exam">Esame</option>
+              <option value="practice">Esercitazione</option>
+            </select>
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="new-pwd">Password <span style="font-weight:normal;color:#aaa;">(vuoto = nessuna)</span></label>
+            <input type="text" id="new-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-green" style="margin-top:0;" onclick="doCreateEsame()">Crea esame</button>
+          <span id="create-msg" style="font-size:0.85em;"></span>
+        </div>
+      </div>
+
+      <!-- Form: modifica esame esistente -->
+      <div id="cfg-card" class="card" style="display:none;margin-bottom:16px;">
+        <h2>Attributi esame</h2>
+        <div class="row2">
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="cfg-traccia-ref">Traccia (set domande)</label>
+            <select id="cfg-traccia-ref" onchange="onEsameTracciaChange()">
+              <option value="">— seleziona traccia —</option>
+            </select>
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="cfg-corso">Corso</label>
+            <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="cfg-name">Nome esame <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
+            <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Default: nome traccia">
+          </div>
+          <div class="field" style="min-width:140px;">
+            <label for="cfg-date">Data</label>
+            <input type="date" id="cfg-date" autocomplete="new-password">
+          </div>
+          <div class="field" style="min-width:110px;">
+            <label for="cfg-dur">Durata (min)</label>
+            <input type="number" id="cfg-dur" autocomplete="new-password" min="0" max="240" step="5">
+            <p class="hint">0 = illimitata</p>
+          </div>
+          <div class="field" style="min-width:140px;">
+            <label for="cfg-mode">Modalità</label>
+            <select id="cfg-mode">
+              <option value="exam">Esame</option>
+              <option value="practice">Esercitazione</option>
+            </select>
+          </div>
+          <div class="field" style="flex:2;min-width:180px;">
+            <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
+            <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <button class="btn btn-sm" style="margin-top:0;" onclick="saveTrack()">Salva attributi</button>
+          <p class="note" style="margin:0;">Le modifiche sono visibili agli studenti al prossimo caricamento.</p>
+          <div id="edit-msg" class="ok-msg" style="margin:0;"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -337,82 +430,48 @@
     </div>
   </div>
 
-  <!-- TAB: MODIFICA TRACCIA -->
+  <!-- TAB: TRACCE -->
   <div class="tab-panel" id="panel-domande">
     <div id="domande-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
       Caricamento in corso…
     </div>
     <div id="domande-content" style="display:block;">
 
-      <!-- Riga superiore: form/attributi a tutta larghezza -->
-      <!-- Nuova traccia -->
-      <div id="new-track-form" class="card" style="margin-bottom:16px;">
-        <h2>Nuova traccia</h2>
-        <div class="row2">
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-corso">Corso</label>
-            <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+      <!-- Selettore traccia + nome -->
+      <div class="card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <label style="font-size:0.88em;color:#555;white-space:nowrap;margin:0;">Traccia:</label>
+          <select id="traccia-select" onchange="onTracciaChange()" style="flex:1;min-width:220px;padding:7px 10px;border:1px solid #bbb;font-size:0.95em;font-family:inherit;background:#fff;">
+            <option value="">— seleziona —</option>
+            <option value="__new__">+ Crea nuova traccia</option>
+          </select>
+          <span id="traccia-esami-info" style="font-size:0.8em;color:#888;"></span>
+        </div>
+        <!-- Form nuova traccia -->
+        <div id="new-traccia-form" style="display:none;margin-top:14px;">
+          <div class="row2">
+            <div class="field" style="flex:3;min-width:220px;">
+              <label for="new-traccia-nome">Nome traccia</label>
+              <input type="text" id="new-traccia-nome" placeholder="Es. Set domande mutazioni puntiformi">
+            </div>
           </div>
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-name">Nome</label>
-            <input type="text" id="new-name" autocomplete="new-password" placeholder="Es. Esercitazione BLAST">
-          </div>
-          <div class="field" style="min-width:140px;">
-            <label for="new-date">Data</label>
-            <input type="date" id="new-date" autocomplete="new-password">
-          </div>
-          <div class="field" style="min-width:110px;">
-            <label for="new-dur">Durata (min)</label>
-            <input type="number" id="new-dur" autocomplete="new-password" value="90" min="0" max="240" step="5">
-          </div>
-          <div class="field" style="min-width:140px;">
-            <label for="new-mode">Modalità</label>
-            <select id="new-mode">
-              <option value="exam">Esame</option>
-              <option value="practice">Esercitazione</option>
-            </select>
+          <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-sm btn-green" style="margin-top:0;" onclick="doCreateTraccia()">Crea traccia</button>
+            <span id="create-traccia-msg" style="font-size:0.85em;"></span>
           </div>
         </div>
-      </div>
-
-      <!-- Traccia esistente: modifica attributi (solo edit mode) -->
-      <div id="cfg-card" class="card" style="display:none;margin-bottom:16px;">
-        <h2>Attributi traccia</h2>
-        <div class="row2">
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-corso">Corso</label>
-            <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
+        <!-- Modifica nome traccia esistente -->
+        <div id="edit-traccia-form" style="display:none;margin-top:14px;">
+          <div class="row2">
+            <div class="field" style="flex:3;min-width:220px;">
+              <label for="cfg-traccia-nome">Nome traccia</label>
+              <input type="text" id="cfg-traccia-nome" placeholder="Nome traccia">
+            </div>
           </div>
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-name">Nome visualizzato</label>
-            <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Es. Prova in itinere 1 — VHL">
+          <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-sm" style="margin-top:0;" onclick="saveTracciaNome()">Salva nome</button>
+            <span id="save-traccia-nome-msg" style="font-size:0.85em;"></span>
           </div>
-          <div class="field" style="min-width:140px;">
-            <label for="cfg-date">Data</label>
-            <input type="date" id="cfg-date" autocomplete="new-password">
-          </div>
-          <div class="field" style="min-width:110px;">
-            <label for="cfg-dur">Durata (min)</label>
-            <input type="number" id="cfg-dur" autocomplete="new-password" min="0" max="240" step="5">
-            <p class="hint">0 = illimitata</p>
-          </div>
-          <div class="field" style="min-width:140px;">
-            <label for="cfg-mode">Modalità</label>
-            <select id="cfg-mode">
-              <option value="exam">Esame</option>
-              <option value="practice">Esercitazione</option>
-            </select>
-            <p class="hint">Esercitazione: risposte mostrate alla fine.</p>
-          </div>
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
-            <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
-          </div>
-        </div>
-        <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-          <button class="btn btn-sm" style="margin-top:0;" onclick="saveTrack()">Salva attributi</button>
-          <p class="note" style="margin:0;">Le modifiche sono visibili agli studenti al prossimo caricamento.</p>
-          <div id="edit-msg" class="ok-msg" style="margin:0;"></div>
         </div>
       </div>
 
@@ -431,14 +490,9 @@
             </div>
             <div id="items-list" style="max-height:520px;overflow-y:auto;min-height:60px;"></div>
           </div>
-          <!-- Azioni nuova traccia -->
-          <div id="actions-new" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-green" onclick="doCreateTrack()">Crea traccia</button>
-            <span id="create-msg" style="font-size:0.85em;"></span>
-          </div>
-          <!-- Azioni traccia esistente aperta -->
-          <div id="actions-edit" style="display:none;margin-top:14px;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-sm" onclick="saveTrackItems()">Salva domande</button>
+          <!-- Azioni salva items traccia -->
+          <div id="actions-edit" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="saveTrackItems()">Salva domande traccia</button>
             <span id="save-items-msg" style="font-size:0.85em;"></span>
           </div>
         </div>
@@ -560,12 +614,14 @@ const BUILD = "d2bc646";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
-let adminPassword = "";
-let allTracks     = [];
-let currentTrack  = null;
-let refreshTimer  = null;
-let activeTab     = "admin";
-let currentNQ     = 20;
+let adminPassword  = "";
+let allEsami       = [];   // sessioni d'esame
+let allTracks      = [];   // tracce (template domande)
+let currentEsame   = null; // esame selezionato nel selector bar
+let currentTraccia = null; // traccia selezionata nel tab Tracce
+let refreshTimer   = null;
+let activeTab      = "admin";
+let currentNQ      = 20;
 
 async function callScript(payload) {
   const resp = await fetch(SCRIPT_URL, {
@@ -595,20 +651,26 @@ async function doLogin() {
   if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
   document.getElementById("login-error").textContent = "Verifica…";
   try {
-    const res = await callScript({ action: "getAllTracks", password: pwd });
+    // Login con getAllEsami (verifica password + carica lista esami)
+    const res = await callScript({ action: "getAllEsami", password: pwd });
     if (res.status === "error") {
       document.getElementById("login-error").textContent = res.message || "Errore.";
       return;
     }
     adminPassword = pwd;
-    allTracks = res.tracks || [];
+    allEsami = res.esami || [];
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
     if (res.version) {
       document.getElementById("build-label").textContent =
         "build " + BUILD + " · script v" + res.version;
     }
-    populateTrackSelect(allTracks);
+    // Carica anche le tracce (template domande)
+    try {
+      const rt = await callScript({ action: "getAllTracks", password: pwd });
+      allTracks = rt.tracks || [];
+    } catch(e) { allTracks = []; }
+    populateEsameSelect(allEsami);
     loadSheetConfig();
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
@@ -741,7 +803,7 @@ async function createNewSheet(type) {
 
 function logout() {
   if (refreshTimer) clearInterval(refreshTimer);
-  adminPassword = ""; currentTrack = null; refreshTimer = null; trackItems = [];
+  adminPassword = ""; currentEsame = null; currentTraccia = null; refreshTimer = null; trackItems = []; allEsami = []; allTracks = [];
   document.getElementById("main-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
   document.getElementById("pwd").value = "";
@@ -753,77 +815,75 @@ function logout() {
   document.getElementById("panel-admin").classList.add("active");
 }
 
-// ---- TRACK SELECT ----
-function populateTrackSelect(tracks) {
-  const sel = document.getElementById("track-select");
-  sel.innerHTML = "";
-  if (tracks.length === 0) {
-    sel.innerHTML = '<option value="">— nessuna traccia —</option>';
+// ---- ESAME SELECT ----
+function populateEsameSelect(esami) {
+  const sel = document.getElementById("esame-select");
+  if (esami.length === 0) {
+    sel.innerHTML = '<option value="">— nessun esame —</option>';
     document.getElementById("no-tracks").style.display = "inline";
     return;
   }
-  const sorted = [...tracks].sort((a,b) => a.status === b.status ? 0 : a.status === "open" ? -1 : 1);
-  sel.innerHTML = '<option value="">— seleziona una traccia —</option>' +
-                  '<option value="__new__">+ Crea nuova traccia</option>';
-  sorted.forEach(t => {
-    const opt = document.createElement("option");
-    opt.value = t.exam_id;
-    const icon    = t.status === "open" ? "▶ " : "■ ";
-    const mode    = t.mode === "practice" ? " [esercitazione]" : " [esame]";
-    const name    = t.exam_name && t.exam_name.trim() ? t.exam_name : "⚠ " + t.exam_id + " (non configurata)";
-    opt.textContent = icon + name + " — " + formatDateIt(t.exam_date) + mode;
+  document.getElementById("no-tracks").style.display = "none";
+  const sorted = [...esami].sort((a,b) => a.stato === b.stato ? 0 : a.stato === "open" ? -1 : 1);
+  sel.innerHTML = '<option value="">— seleziona un esame —</option>';
+  sorted.forEach(e => {
+    const opt  = document.createElement("option");
+    opt.value  = e.exam_id;
+    const icon = e.stato === "open" ? "▶ " : "■ ";
+    const mode = e.modalita === "practice" ? " [esercitazione]" : " [esame]";
+    const t    = allTracks.find(t => t.track_id === e.traccia_id);
+    const name = e.nome && e.nome.trim() ? e.nome : (t ? t.nome : e.traccia_id);
+    opt.textContent = icon + (e.corso ? e.corso + " — " : "") + name + (e.data ? " · " + formatDateIt(e.data) : "") + mode;
     sel.appendChild(opt);
   });
 }
 
-function onTrackChange() {
-  const examId = document.getElementById("track-select").value;
-
-  if (activeTab === "domande" && hasUnsavedNewTrack()) {
-    if (!confirm("Hai una nuova traccia non salvata.\nSelezionando un'altra traccia perderai le modifiche.\n\nVuoi continuare?")) {
-      document.getElementById("track-select").value = "__new__";
-      return;
+function populateTracciaSelects() {
+  // Popola tutti i <select> che elencano le tracce (nel tab Tracce e nei form esame)
+  const opts = '<option value="">— seleziona traccia —</option>' +
+    allTracks.map(t => `<option value="${t.track_id}">${escHtml(t.nome)} <span style="color:#aaa">(${t.track_id})</span></option>`).join("");
+  ["new-traccia-ref","cfg-traccia-ref","traccia-select"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const prev = el.value;
+    if (id === "traccia-select") {
+      el.innerHTML = '<option value="">— seleziona —</option><option value="__new__">+ Crea nuova traccia</option>' +
+        allTracks.map(t => `<option value="${t.track_id}">${escHtml(t.nome)}</option>`).join("");
+    } else {
+      el.innerHTML = opts;
     }
-    trackItems = [];
-    document.getElementById("new-name").value = "";
-    document.getElementById("new-date").value = "";
-  }
+    el.value = prev;
+  });
+}
 
-  if (examId === "__new__") {
-    currentTrack = null;
-    switchTab("domande");
-    return;
-  }
+function selectNewEsame() {
+  currentEsame = null;
+  document.getElementById("esame-select").value = "";
+  updateAdminTab();
+  switchTab("admin");
+}
 
-  currentTrack = examId ? (allTracks.find(t => t.exam_id === examId) || null) : null;
-  trackItems    = currentTrack ? JSON.parse(JSON.stringify(currentTrack.items || [])) : [];
+function onEsameChange() {
+  const examId = document.getElementById("esame-select").value;
+  currentEsame = examId ? (allEsami.find(e => e.exam_id === examId) || null) : null;
   updateAdminTab();
   if (activeTab === "monitor")   updateMonitorTab();
   if (activeTab === "risultati") updateRisultatiTab();
-  if (activeTab === "domande")   updateDomandeTab();
 }
 
-function updateTrackInList(t) {
-  const idx = allTracks.findIndex(x => x.exam_id === t.exam_id);
-  if (idx >= 0) allTracks[idx] = { ...allTracks[idx], ...t };
-  const prev = t.exam_id;
-  populateTrackSelect(allTracks);
-  document.getElementById("track-select").value = prev;
+function updateEsameInList(e) {
+  const idx = allEsami.findIndex(x => x.exam_id === e.exam_id);
+  if (idx >= 0) allEsami[idx] = { ...allEsami[idx], ...e };
+  const prev = e.exam_id;
+  populateEsameSelect(allEsami);
+  document.getElementById("esame-select").value = prev;
 }
+
+// alias per compatibilità con vecchie chiamate residue
+function updateTrackInList(t) { updateEsameInList(t); }
 
 // ---- TABS ----
-function hasUnsavedNewTrack() {
-  if (currentTrack) return false;
-  return trackItems.length > 0 || !!(document.getElementById("new-name")?.value.trim());
-}
-
 function switchTab(name) {
-  if (activeTab === "domande" && name !== "domande" && hasUnsavedNewTrack()) {
-    if (!confirm("Hai una nuova traccia non salvata.\nCambiando tab perderai le modifiche.\n\nVuoi continuare?")) return;
-    trackItems = [];
-    document.getElementById("new-name").value = "";
-    document.getElementById("new-date").value = "";
-  }
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   activeTab = name;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -831,44 +891,30 @@ function switchTab(name) {
   document.getElementById("tab-" + name).classList.add("active");
   document.getElementById("panel-" + name).classList.add("active");
 
-  if (name === "monitor") {
-    updateMonitorTab();
-    startAutoRefresh();
-  } else if (name === "risultati") {
-    updateRisultatiTab();
-  } else if (name === "domande") {
-    initDomandeTab();
-  } else {
-    updateAdminTab();
-  }
+  if (name === "monitor")   { updateMonitorTab(); startAutoRefresh(); }
+  else if (name === "risultati") { updateRisultatiTab(); }
+  else if (name === "domande")   { initDomandeTab(); }
+  else { updateAdminTab(); }
 }
 
-// ---- TAB GESTIONE TRACCIA ----
+// ---- TAB ESAME ----
 function updateAdminTab() {
-  const has = !!currentTrack;
-  document.getElementById("admin-placeholder").style.display = has ? "none" : "block";
-  document.getElementById("track-card").style.display        = has ? "block" : "none";
-  if (!has) return;
-  renderTrackStatus(currentTrack);
-  renderTrackInfoReadonly(currentTrack);
-  updateProvaLink(currentTrack.exam_id);
+  const isNew = (currentEsame === null);
+  const has   = !!currentEsame;
+  document.getElementById("admin-placeholder").style.display  = (!has && !isNew) ? "block" : "none";
+  document.getElementById("track-card").style.display         = "block";
+  document.getElementById("esame-status-card").style.display  = has ? "block" : "none";
+  document.getElementById("new-track-form").style.display     = isNew ? "block" : "none";
+  document.getElementById("cfg-card").style.display           = has ? "block" : "none";
+  populateTracciaSelects();
+  if (!has) {
+    document.getElementById("admin-placeholder").style.display = "none";
+    return;
+  }
+  renderTrackStatus(currentEsame);
+  populateEsameEditForm(currentEsame);
+  updateProvaLink(currentEsame.exam_id);
   document.getElementById("status-msg").textContent = "";
-}
-
-function renderTrackInfoReadonly(t) {
-  const dur  = t.duration === "0" || t.duration === 0 ? "senza limite" : (t.duration || "—") + " min";
-  const mode = t.mode === "practice" ? "Esercitazione" : "Esame";
-  const card = document.getElementById("track-info-readonly");
-  card.innerHTML =
-    "<h2>Informazioni traccia</h2>" +
-    "<div style='display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;font-size:0.88em;line-height:1.8;'>" +
-    (t.corso     ? "<span style='color:#888;'>Corso</span><span>"     + escHtml(t.corso)     + "</span>" : "") +
-    "<span style='color:#888;'>Nome</span><span>"       + escHtml(t.exam_name || t.exam_id) + "</span>" +
-    "<span style='color:#888;'>Data</span><span>"       + formatDateIt(t.exam_date)         + "</span>" +
-    "<span style='color:#888;'>Durata</span><span>"     + escHtml(dur)                      + "</span>" +
-    "<span style='color:#888;'>Modalità</span><span>"   + mode                              + "</span>" +
-    "<span style='color:#888;'>ID</span><span style='font-family:monospace;font-size:0.92em;'>" + escHtml(t.exam_id) + "</span>" +
-    "</div>";
 }
 
 function updateProvaLink(examId) {
@@ -876,77 +922,85 @@ function updateProvaLink(examId) {
   if (a) a.href = "quiz_v2.html?id=" + encodeURIComponent(examId);
 }
 
-function renderTrackStatus(t) {
-  const isOpen = t.status === "open";
+function renderTrackStatus(e) {
+  const isOpen = e.stato === "open";
   document.getElementById("status-dot").className = "dot " + (isOpen ? "open" : "closed");
-  const modeBadge = t.mode === "practice"
+  const modeBadge = e.modalita === "practice"
     ? '<span class="badge badge-practice">Esercitazione</span>'
     : '<span class="badge badge-exam">Esame</span>';
-  const dur = t.duration === "0" || t.duration === 0 ? "senza limite" : (t.duration || "—") + " min";
+  const dur = e.durata === "0" || e.durata === 0 ? "senza limite" : (e.durata || "—") + " min";
+  const t   = allTracks.find(t => t.track_id === e.traccia_id);
+  const nome = e.nome && e.nome.trim() ? e.nome : (t ? t.nome : e.traccia_id);
   document.getElementById("status-text").innerHTML =
     "<strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong>" + modeBadge +
-    " &nbsp;|&nbsp; " + escHtml(t.exam_name || t.exam_id) +
-    " &nbsp;|&nbsp; " + formatDateIt(t.exam_date) +
+    " &nbsp;|&nbsp; " + escHtml(e.corso || "—") +
+    " &nbsp;|&nbsp; " + escHtml(nome) +
+    (e.data ? " &nbsp;|&nbsp; " + formatDateIt(e.data) : "") +
     " &nbsp;|&nbsp; " + dur;
-
 }
 
-function populateEditForm(t) {
-  document.getElementById("cfg-corso").value = t.corso     || "";
-  document.getElementById("cfg-name").value  = t.exam_name || "";
-  document.getElementById("cfg-date").value  = t.exam_date || "";
-  document.getElementById("cfg-dur").value   = t.duration  || "90";
-  document.getElementById("cfg-mode").value  = t.mode      || "exam";
-  document.getElementById("cfg-pwd").value   = t.password  || "";
+function populateEsameEditForm(e) {
+  document.getElementById("cfg-traccia-ref").value = e.traccia_id || "";
+  document.getElementById("cfg-corso").value = e.corso    || "";
+  document.getElementById("cfg-name").value  = e.nome     || "";
+  document.getElementById("cfg-date").value  = e.data     || "";
+  document.getElementById("cfg-dur").value   = e.durata   || "90";
+  document.getElementById("cfg-mode").value  = e.modalita || "exam";
+  document.getElementById("cfg-pwd").value   = e.password || "";
 }
 
 async function setStatus(newStatus) {
-  if (!currentTrack) return;
+  if (!currentEsame) return;
   const msg = document.getElementById("status-msg");
   msg.className = "ok-msg"; msg.textContent = "Aggiornamento…";
   try {
-    const res = await callScript({ action:"setTrack", password:adminPassword, examId:currentTrack.exam_id, status:newStatus });
+    const res = await callScript({ action:"setEsame", password:adminPassword, exam_id:currentEsame.exam_id, status:newStatus });
     if (res.status === "ok") {
-      currentTrack.status = newStatus;
-      updateTrackInList(currentTrack);
-      renderTrackStatus(currentTrack);
-      msg.textContent = newStatus === "open" ? "✓ Traccia aperta." : "✓ Traccia chiusa.";
+      currentEsame.stato = newStatus;
+      updateEsameInList(currentEsame);
+      renderTrackStatus(currentEsame);
+      msg.textContent = newStatus === "open" ? "✓ Esame aperto." : "✓ Esame chiuso.";
     } else { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; }
   } catch(e) { msg.className = "error-msg"; msg.textContent = "Errore di rete: " + e.message; }
 }
 
 async function saveTrack() {
-  if (!currentTrack) return;
+  if (!currentEsame) return;
   const msg = document.getElementById("edit-msg");
   msg.className = "ok-msg"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
-      action:"setTrack", password:adminPassword, examId:currentTrack.exam_id,
-      corso:     document.getElementById("cfg-corso").value.trim(),
-      exam_name: document.getElementById("cfg-name").value.trim(),
-      exam_date: document.getElementById("cfg-date").value.trim(),
-      duration:  document.getElementById("cfg-dur").value.trim(),
+      action:"setEsame", password:adminPassword, exam_id:currentEsame.exam_id,
+      traccia_id:     document.getElementById("cfg-traccia-ref").value,
+      corso:          document.getElementById("cfg-corso").value.trim(),
+      exam_name:      document.getElementById("cfg-name").value.trim(),
+      exam_date:      document.getElementById("cfg-date").value.trim(),
+      duration:       document.getElementById("cfg-dur").value.trim(),
       mode:           document.getElementById("cfg-mode").value,
       track_password: document.getElementById("cfg-pwd").value.trim()
     });
     if (res.status === "ok") {
-      currentTrack.corso     = document.getElementById("cfg-corso").value.trim();
-      currentTrack.exam_name = document.getElementById("cfg-name").value.trim();
-      currentTrack.exam_date = document.getElementById("cfg-date").value.trim();
-      currentTrack.duration  = document.getElementById("cfg-dur").value.trim();
-      currentTrack.mode      = document.getElementById("cfg-mode").value;
-      currentTrack.password  = document.getElementById("cfg-pwd").value.trim();
-      updateTrackInList(currentTrack);
-      renderTrackStatus(currentTrack);
-      renderTrackInfoReadonly(currentTrack);
+      currentEsame.traccia_id = document.getElementById("cfg-traccia-ref").value;
+      currentEsame.corso      = document.getElementById("cfg-corso").value.trim();
+      currentEsame.nome       = document.getElementById("cfg-name").value.trim();
+      currentEsame.data       = document.getElementById("cfg-date").value.trim();
+      currentEsame.durata     = document.getElementById("cfg-dur").value.trim();
+      currentEsame.modalita   = document.getElementById("cfg-mode").value;
+      currentEsame.password   = document.getElementById("cfg-pwd").value.trim();
+      updateEsameInList(currentEsame);
+      renderTrackStatus(currentEsame);
       msg.textContent = "✓ Modifiche salvate.";
     } else { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; }
   } catch(e) { msg.className = "error-msg"; msg.textContent = "Errore di rete: " + e.message; }
 }
 
+function onEsameTracciaChange() {
+  // aggiorna in tempo reale il link "prova traccia" se si cambia la traccia associata
+}
+
 // ---- TAB MONITOR ----
 function updateMonitorTab() {
-  const has = !!currentTrack;
+  const has = !!currentEsame;
   document.getElementById("monitor-placeholder").style.display = !has ? "block" : "none";
   document.getElementById("monitor-loading").style.display     = has  ? "block" : "none";
   document.getElementById("monitor-content").style.display     = "none";
@@ -954,7 +1008,7 @@ function updateMonitorTab() {
 }
 
 async function loadMonitorData() {
-  if (!currentTrack) return;
+  if (!currentEsame) return;
   const isFirstLoad = document.getElementById("monitor-content").style.display === "none";
   if (isFirstLoad) {
     document.getElementById("monitor-loading").style.display = "block";
@@ -963,7 +1017,7 @@ async function loadMonitorData() {
     document.getElementById("monitor-updating").style.display = "inline";
   }
   try {
-    const res = await callScript({ action:"getMonitor", password:adminPassword, examId:currentTrack.exam_id });
+    const res = await callScript({ action:"getMonitor", password:adminPassword, examId:currentEsame.exam_id });
     if (res.status === "ok") renderMonitorData(res);
     document.getElementById("monitor-loading").style.display  = "none";
     document.getElementById("monitor-updating").style.display = "none";
@@ -1030,7 +1084,7 @@ function startAutoRefresh() {
 
 // ---- TAB RISULTATI ----
 function updateRisultatiTab() {
-  const has = !!currentTrack;
+  const has = !!currentEsame;
   document.getElementById("risultati-placeholder").style.display = !has ? "block" : "none";
   document.getElementById("risultati-loading").style.display     = has  ? "block" : "none";
   document.getElementById("risultati-content").style.display     = "none";
@@ -1038,7 +1092,7 @@ function updateRisultatiTab() {
 }
 
 async function loadRisultatiData() {
-  if (!currentTrack) return;
+  if (!currentEsame) return;
   const isFirstLoad = document.getElementById("risultati-content").style.display === "none";
   if (isFirstLoad) {
     document.getElementById("risultati-loading").style.display = "block";
@@ -1047,7 +1101,7 @@ async function loadRisultatiData() {
     document.getElementById("risultati-updating").style.display = "inline";
   }
   try {
-    const res = await callScript({ action:"getResults", password:adminPassword, examId:currentTrack.exam_id });
+    const res = await callScript({ action:"getResults", password:adminPassword, examId:currentEsame.exam_id });
     if (res.status === "ok") renderRisultati(res);
     document.getElementById("risultati-loading").style.display  = "none";
     document.getElementById("risultati-updating").style.display = "none";
@@ -1248,76 +1302,132 @@ async function initDomandeTab() {
 
 function updateDomandeTab() {
   if (!allQuestions) return;
-  if (!currentTrack) {
-    setDomandeMode("new");
-  } else if (currentTrack.status === "closed") {
-    setDomandeMode("readonly");
-  } else {
-    setDomandeMode("edit");
-  }
-}
-
-function setDomandeMode(mode, keepItems = false) {
-  isEditingItems = (mode !== "readonly");
-
-  document.getElementById("browser-col").style.display         = mode === "readonly" ? "none" : "";
-  document.getElementById("new-track-form").style.display      = mode === "new"  ? "" : "none";
-  document.getElementById("cfg-card").style.display            = mode === "edit" ? "" : "none";
-  document.getElementById("actions-new").style.display         = mode === "new"  ? "flex" : "none";
-  document.getElementById("actions-edit").style.display        = mode === "edit" ? "flex" : "none";
-  document.getElementById("btn-clear-items").style.display     = isEditingItems  ? "" : "none";
-
-  if (mode === "new") {
-    if (!keepItems) trackItems = [];
-    document.getElementById("create-msg").textContent = "";
-  } else {
-    trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
-    populateEditForm(currentTrack);
-    document.getElementById("edit-msg").textContent       = "";
+  const t = currentTraccia;
+  isEditingItems = true;
+  document.getElementById("browser-col").style.display     = "";
+  document.getElementById("actions-edit").style.display    = t ? "flex" : "none";
+  document.getElementById("btn-clear-items").style.display = t ? "" : "none";
+  // Mostra/nascondi form traccia
+  const selVal = document.getElementById("traccia-select").value;
+  document.getElementById("new-traccia-form").style.display  = selVal === "__new__" ? "block" : "none";
+  document.getElementById("edit-traccia-form").style.display = (t && selVal !== "__new__") ? "block" : "none";
+  if (t) {
+    document.getElementById("cfg-traccia-nome").value = t.nome || "";
+    // mostra quanti esami usano questa traccia
+    const usati = allEsami.filter(e => e.traccia_id === t.track_id).length;
+    document.getElementById("traccia-esami-info").textContent = usati ? "Usata in " + usati + " esame" + (usati > 1 ? "i" : "") : "Non ancora usata";
     document.getElementById("save-items-msg").textContent = "";
+    trackItems = JSON.parse(JSON.stringify(t.items || []));
+  } else if (selVal !== "__new__") {
+    trackItems = [];
   }
-
   renderQBrowser();
   renderItemsList();
 }
 
+// Alias per compatibilità (alcune chiamate usano setDomandeMode)
+function setDomandeMode(mode, keepItems = false) {
+  if (!keepItems) trackItems = [];
+  updateDomandeTab();
+}
 
-function duplicateTrack() {
-  if (!currentTrack) return;
-  trackItems = JSON.parse(JSON.stringify(currentTrack.items || []));
-  document.getElementById("new-corso").value = currentTrack.corso     || "";
-  document.getElementById("new-name").value  = "Copia di " + (currentTrack.exam_name || currentTrack.exam_id);
-  document.getElementById("new-date").value  = currentTrack.exam_date || "";
-  document.getElementById("new-dur").value   = currentTrack.duration  || "90";
-  document.getElementById("new-mode").value  = currentTrack.mode      || "exam";
-  currentTrack = null;
-  document.getElementById("track-select").value = "__new__";
-  switchTab("domande");
+function duplicateEsame() {
+  if (!currentEsame) return;
+  currentEsame = null;
+  document.getElementById("esame-select").value = "";
+  document.getElementById("new-corso").value     = "";
+  document.getElementById("new-name").value      = "";
+  document.getElementById("new-date").value      = "";
+  document.getElementById("new-dur").value       = "90";
+  document.getElementById("new-mode").value      = "exam";
+  document.getElementById("new-pwd").value       = "";
+  // pre-seleziona la stessa traccia
+  if (currentEsame) document.getElementById("new-traccia-ref").value = currentEsame.traccia_id || "";
+  updateAdminTab();
 }
 
 // Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
 function cleanItemsForSave(items) {
-  return items.map(item => {
-    const { _count, ...clean } = item;
-    return clean;
-  });
+  return items.map(item => { const { _count, ...clean } = item; return clean; });
 }
 
 async function saveTrackItems() {
+  if (!currentTraccia) { alert("Seleziona una traccia prima di salvare."); return; }
   const msg = document.getElementById("save-items-msg");
   msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setTrack", password: adminPassword,
-      examId: currentTrack.exam_id, items: cleanItemsForSave(trackItems)
+      track_id: currentTraccia.track_id, items: cleanItemsForSave(trackItems)
     });
     if (res.status !== "ok") throw new Error(res.message);
-    currentTrack.items = JSON.parse(JSON.stringify(trackItems));
-    updateTrackInList(currentTrack);
+    currentTraccia.items = JSON.parse(JSON.stringify(trackItems));
+    const idx = allTracks.findIndex(t => t.track_id === currentTraccia.track_id);
+    if (idx >= 0) allTracks[idx] = { ...allTracks[idx], items: currentTraccia.items };
     msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
   } catch(e) {
     msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
   }
+}
+
+function onTracciaChange() {
+  const val = document.getElementById("traccia-select").value;
+  if (val === "__new__") {
+    currentTraccia = null;
+    trackItems = [];
+    document.getElementById("new-traccia-form").style.display  = "block";
+    document.getElementById("edit-traccia-form").style.display = "none";
+    document.getElementById("traccia-esami-info").textContent  = "";
+    renderItemsList(); renderQBrowser();
+  } else if (val) {
+    currentTraccia = allTracks.find(t => t.track_id === val) || null;
+    document.getElementById("new-traccia-form").style.display  = "none";
+    updateDomandeTab();
+  } else {
+    currentTraccia = null;
+    trackItems = [];
+    document.getElementById("new-traccia-form").style.display  = "none";
+    document.getElementById("edit-traccia-form").style.display = "none";
+    document.getElementById("traccia-esami-info").textContent  = "";
+    renderItemsList(); renderQBrowser();
+  }
+}
+
+async function saveTracciaNome() {
+  if (!currentTraccia) return;
+  const msg = document.getElementById("save-traccia-nome-msg");
+  const nome = document.getElementById("cfg-traccia-nome").value.trim();
+  msg.style.color="#555"; msg.textContent="Salvataggio…";
+  try {
+    const res = await callScript({ action:"setTrack", password:adminPassword, track_id:currentTraccia.track_id, nome });
+    if (res.status !== "ok") throw new Error(res.message);
+    currentTraccia.nome = nome;
+    const idx = allTracks.findIndex(t => t.track_id === currentTraccia.track_id);
+    if (idx >= 0) allTracks[idx].nome = nome;
+    populateTracciaSelects();
+    document.getElementById("traccia-select").value = currentTraccia.track_id;
+    msg.style.color="#2e7d32"; msg.textContent="✓ Salvato";
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
+}
+
+async function doCreateTraccia() {
+  const nome = document.getElementById("new-traccia-nome").value.trim();
+  const msg  = document.getElementById("create-traccia-msg");
+  if (!nome) { msg.style.color="#b00"; msg.textContent="Inserisci un nome."; return; }
+  msg.style.color="#555"; msg.textContent="Creazione…";
+  try {
+    const res = await callScript({ action:"createTrack", password:adminPassword, nome, items:cleanItemsForSave(trackItems) });
+    if (res.status !== "ok") throw new Error(res.message);
+    const newT = { track_id: res.track_id, nome, items: cleanItemsForSave(trackItems) };
+    allTracks.push(newT);
+    currentTraccia = newT;
+    document.getElementById("new-traccia-nome").value = "";
+    populateTracciaSelects();
+    document.getElementById("traccia-select").value = res.track_id;
+    trackItems = JSON.parse(JSON.stringify(newT.items));
+    updateDomandeTab();
+    msg.style.color="#2e7d32"; msg.textContent="✓ Traccia creata: " + res.track_id;
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
 }
 
 // ---- FILTRI BROWSER ----
@@ -1581,46 +1691,38 @@ function clearItems() {
   renderItemsList();
 }
 
-// ---- CREA TRACCIA ----
-async function doCreateTrack() {
-  const name = document.getElementById("new-name").value.trim();
-  const date = document.getElementById("new-date").value;
-  const dur  = document.getElementById("new-dur").value;
-  const mode = document.getElementById("new-mode").value;
-  const msg  = document.getElementById("create-msg");
+// ---- CREA ESAME ----
+async function doCreateEsame() {
+  const tracciaId = document.getElementById("new-traccia-ref").value;
+  const corso = document.getElementById("new-corso").value.trim();
+  const name  = document.getElementById("new-name").value.trim();
+  const date  = document.getElementById("new-date").value;
+  const dur   = document.getElementById("new-dur").value;
+  const mode  = document.getElementById("new-mode").value;
+  const pwd   = document.getElementById("new-pwd").value.trim();
+  const msg   = document.getElementById("create-msg");
 
-  if (!name) { msg.style.color = "#b00"; msg.textContent = "Inserisci un nome."; return; }
-  if (!date) { msg.style.color = "#b00"; msg.textContent = "Seleziona una data."; return; }
-  if (trackItems.length === 0) { msg.style.color = "#b00"; msg.textContent = "Aggiungi almeno uno slot."; return; }
+  if (!tracciaId) { msg.style.color="#b00"; msg.textContent="Seleziona una traccia."; return; }
+  if (!date)      { msg.style.color="#b00"; msg.textContent="Seleziona una data."; return; }
 
-  msg.style.color = "#555"; msg.textContent = "Creazione in corso…";
+  msg.style.color="#555"; msg.textContent="Creazione in corso…";
   try {
     const res = await callScript({
-      action: "createTrack", password: adminPassword,
-      corso: document.getElementById("new-corso").value.trim(),
-      exam_name: name, exam_date: date, duration: dur, mode,
-      items: cleanItemsForSave(trackItems)
+      action:"createEsame", password:adminPassword,
+      traccia_id:tracciaId, corso, exam_name:name, exam_date:date,
+      duration:dur, mode, track_password:pwd
     });
     if (res.status !== "ok") throw new Error(res.message);
 
-    const corso = document.getElementById("new-corso").value.trim();
-    allTracks.push({ exam_id: res.track_id, corso, exam_name: name, exam_date: date,
-                     duration: dur, mode, status: "closed" });
-    populateTrackSelect(allTracks);
-    msg.style.color = "#2e7d32";
-    msg.textContent = "✓ Traccia creata: " + res.track_id;
-
-    // Svuota form nuova traccia
-    document.getElementById("new-corso").value = "";
-    document.getElementById("new-name").value  = "";
-    document.getElementById("new-date").value  = "";
-    document.getElementById("new-dur").value   = "90";
-    document.getElementById("new-mode").value  = "exam";
-    trackItems = [];
-    if (activeTab === "domande" && allQuestions) setDomandeMode("new", false);
-  } catch(e) {
-    msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
-  }
+    const newE = { exam_id:res.exam_id, traccia_id:tracciaId, corso, exam_name:name,
+                   exam_date:date, duration:dur, mode, status:"closed", password:pwd };
+    allEsami.push(newE);
+    populateEsameSelect(allEsami);
+    document.getElementById("esame-select").value = res.exam_id;
+    currentEsame = newE;
+    msg.style.color="#2e7d32"; msg.textContent="✓ Esame creato: " + res.exam_id;
+    updateAdminTab();
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
 }
 </script>
 </body>

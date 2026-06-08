@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.10.0"; // aggiornare ad ogni deploy
+const VERSION = "2.11.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -54,27 +54,33 @@ const Q_PUNTI         = 10; // K
 const Q_PLACEHOLDER   = 11; // L  solo per fitb
 const Q_DATA          = 12; // M  JSON per tipi complessi (multi-fitb, cloze)
 
-// Indici colonne foglio "tracce" (0-based)
-const T_ID            = 0;  // A  track_id
-const T_CORSO         = 1;  // B
-const T_NOME          = 2;  // C
-const T_DATA          = 3;  // D  YYYY-MM-DD
-const T_DURATA        = 4;  // E  minuti (0 = senza limite)
-const T_MODALITA      = 5;  // F  "exam" | "practice"
-const T_STATO         = 6;  // G  "open" | "closed"
-const T_ITEMS         = 7;  // H  JSON array: [{type:"fixed",id?} | {type:"random",categoria?,sottocateg?,tag?}]
-const T_PASSWORD      = 8;  // I  password d'accesso (solo exam; vuota = nessuna)
+// Tracce sheet — solo template domande, riutilizzabili (3 colonne)
+const T_ID    = 0;  // A  track_id (t-<6char>)
+const T_NOME  = 1;  // B  nome traccia
+const T_ITEMS = 2;  // C  JSON array items
 
-// Colonne foglio _meta risultati (0-based)
+// Esami sheet — sessioni d'esame contestualizzate (9 colonne)
+const E_ID       = 0;  // A  exam_id (YYYY-MM-DD-<6char>)
+const E_TRACCIA  = 1;  // B  traccia_id
+const E_NOME     = 2;  // C  nome esame (se vuoto usa nome traccia)
+const E_DATA     = 3;  // D  data YYYY-MM-DD
+const E_DURATA   = 4;  // E  durata minuti
+const E_CORSO    = 5;  // F  nome corso
+const E_MODALITA = 6;  // G  "exam" | "practice"
+const E_STATO    = 7;  // H  "open" | "closed"
+const E_PASSWORD = 8;  // I  password accesso (solo exam; vuota = nessuna)
+
+// Colonne foglio "Esami" nel foglio risultati (specchio di esami) — 0-based
 const META_COLS = {
-  exam_id:    0,
-  exam_name:  1,
-  exam_date:  2,
-  duration:   3,
-  mode:       4,
-  status:     5,
-  created:    6,
-  sheet_link: 7
+  exam_id:    0,  // A
+  traccia_id: 1,  // B
+  exam_name:  2,  // C
+  exam_date:  3,  // D
+  duration:   4,  // E
+  corso:      5,  // F
+  mode:       6,  // G
+  status:     7,  // H
+  created:    8   // I
 };
 
 // ------------------------------------------------------------
@@ -135,7 +141,20 @@ function getTracceSheet() {
   let sheet = ss.getSheetByName("tracce");
   if (!sheet) {
     sheet = ss.insertSheet("tracce");
-    const headers = ["TracciaID", "Corso", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "Items", "Password"];
+    const headers = ["TracciaID", "Nome", "Items"];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getEsamiSheet() {
+  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  let sheet = ss.getSheetByName("esami");
+  if (!sheet) {
+    sheet = ss.insertSheet("esami");
+    const headers = ["EsameID", "TracciaID", "Nome", "Data", "Durata (min)", "Corso", "Modalità", "Stato", "Password"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -171,36 +190,46 @@ function loadAllQuestions() {
   return map;
 }
 
-// Legge la traccia dal foglio tracce, restituisce oggetto o null
+// Legge la traccia (template domande) — solo id, nome, items
 function readTraccia(tracciaId) {
   const sheet = getTracceSheet();
-  const tz    = Session.getScriptTimeZone();
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     if (String(row[T_ID]).trim() !== tracciaId) continue;
-    const rawDate = row[T_DATA];
-    let dataStr = "";
-    if (rawDate instanceof Date && !isNaN(rawDate)) {
-      dataStr = Utilities.formatDate(rawDate, tz, "yyyy-MM-dd");
-    } else {
-      dataStr = String(rawDate);
-    }
     return {
-      id:          String(row[T_ID]).trim(),
-      corso:       String(row[T_CORSO]),
-      nome:        String(row[T_NOME]),
-      data:        dataStr,
-      durata:      String(row[T_DURATA]),
-      modalita:    String(row[T_MODALITA]) || "exam",
-      stato:       String(row[T_STATO])    || "closed",
+      id:    String(row[T_ID]).trim(),
+      nome:  String(row[T_NOME]),
       items: (function() {
-        try {
-          const raw = String(row[T_ITEMS] || "");
-          return JSON.parse(raw || "[]");
-        } catch(e) { return []; }
-      })(),
-      password: String(row[T_PASSWORD] || "").trim()
+        try { return JSON.parse(String(row[T_ITEMS] || "") || "[]"); } catch(e) { return []; }
+      })()
+    };
+  }
+  return null;
+}
+
+// Legge l'esame (sessione contestualizzata) dal foglio esami
+function readEsame(examId) {
+  const sheet  = getEsamiSheet();
+  const tz     = Session.getScriptTimeZone();
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (String(row[E_ID]).trim() !== examId) continue;
+    const rawDate = row[E_DATA];
+    const dataStr = rawDate instanceof Date && !isNaN(rawDate)
+      ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+    return {
+      exam_id:    String(row[E_ID]).trim(),
+      traccia_id: String(row[E_TRACCIA]).trim(),
+      nome:       String(row[E_NOME]),
+      data:       dataStr,
+      durata:     String(row[E_DURATA]),
+      corso:      String(row[E_CORSO]),
+      modalita:   String(row[E_MODALITA]) || "exam",
+      stato:      String(row[E_STATO])    || "closed",
+      password:   String(row[E_PASSWORD] || "").trim(),
+      rowIndex:   i + 1
     };
   }
   return null;
@@ -253,16 +282,12 @@ function shuffleArray(arr) {
   return arr;
 }
 
-// Risolve una traccia nelle domande complete, pronte per il client
-function resolveTraccia(tracciaId) {
-  const traccia = readTraccia(tracciaId);
-  if (!traccia) return null;
-
-  const allQ = loadAllQuestions();
+// Risolve le domande di una traccia — usato internamente da resolveEsame
+function _resolveItems(items) {
+  const allQ      = loadAllQuestions();
   const questions = [];
   const usedIds   = new Set();
-
-  (traccia.items || []).forEach(item => {
+  (items || []).forEach(item => {
     if (item.type === "fixed") {
       usedIds.add(item.id);
       const q = allQ[item.id];
@@ -271,7 +296,6 @@ function resolveTraccia(tracciaId) {
         return;
       }
       questions.push(buildQuestionObj(q, questions.length + 1));
-
     } else if (item.type === "random") {
       const candidates = Object.values(allQ).filter(q => {
         if (usedIds.has(q.id)) return false;
@@ -285,29 +309,40 @@ function resolveTraccia(tracciaId) {
         return true;
       });
       const picked = shuffleArray(candidates)[0];
-      if (picked) {
-        usedIds.add(picked.id);
-        questions.push(buildQuestionObj(picked, questions.length + 1));
-      }
+      if (picked) { usedIds.add(picked.id); questions.push(buildQuestionObj(picked, questions.length + 1)); }
     }
   });
+  return questions;
+}
 
+// Risolve un esame (legge esame → trova traccia → risolve domande)
+function resolveEsame(examId) {
+  const esame = readEsame(examId);
+  if (!esame) return null;
+  const traccia = readTraccia(esame.traccia_id);
+  if (!traccia) return null;
+  const questions = _resolveItems(traccia.items);
   return {
     track: {
-      exam_id:   traccia.id,
-      exam_name: traccia.nome,
-      exam_date: traccia.data,
-      duration:  traccia.durata,
-      mode:      traccia.modalita,
-      status:    traccia.stato,
-      corso:     traccia.corso,
-      _password: traccia.password   // rimosso dal doPost prima di inviare al client
+      exam_id:      esame.exam_id,
+      exam_name:    esame.nome || traccia.nome,
+      exam_date:    esame.data,
+      duration:     esame.durata,
+      mode:         esame.modalita,
+      status:       esame.stato,
+      corso:        esame.corso,
+      traccia_id:   esame.traccia_id,
+      traccia_nome: traccia.nome,
+      _password:    esame.password   // rimosso dal doPost prima di inviare al client
     },
     questions,
     n_questions: questions.length,
     total_pts:   questions.reduce((s, q) => s + (q.pts || 0), 0)
   };
 }
+
+// Alias per compatibilità interna — usa resolveEsame
+function resolveTraccia(examId) { return resolveEsame(examId); }
 
 // ------------------------------------------------------------
 // Foglio risultati (identico a v1, ma usa SHEET_RESULTS_ID)
@@ -331,9 +366,14 @@ function getAdminPassword() {
 
 function getMetaSheet() {
   const ss = SpreadsheetApp.openById(getSheetResultsId());
-  let meta = ss.getSheetByName("_meta");
+  let meta = ss.getSheetByName("Esami");
   if (!meta) {
-    meta = ss.insertSheet("_meta");
+    // retrocompatibilità: rinomina _meta se esiste ancora
+    const old = ss.getSheetByName("_meta");
+    if (old) { old.setName("Esami"); meta = old; }
+  }
+  if (!meta) {
+    meta = ss.insertSheet("Esami");
     meta.appendRow(["TracciaID", "Nome", "Data", "Durata (min)", "Modalità", "Stato", "Creata", "Foglio"]);
     meta.getRange(1, 1, 1, 8).setFontWeight("bold");
     meta.setFrozenRows(1);
@@ -342,40 +382,45 @@ function getMetaSheet() {
 }
 
 function readMetaTrack(examId) {
-  const meta = getMetaSheet();
-  const tz   = Session.getScriptTimeZone();
+  const meta   = getMetaSheet();
+  const tz     = Session.getScriptTimeZone();
   const values = meta.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][META_COLS.exam_id]) !== examId) continue;
     const rawDate = values[i][META_COLS.exam_date];
-    let examDate = "";
-    if (rawDate instanceof Date && !isNaN(rawDate)) {
-      examDate = Utilities.formatDate(rawDate, tz, "yyyy-MM-dd");
-    } else {
-      examDate = String(rawDate);
-    }
+    const examDate = rawDate instanceof Date && !isNaN(rawDate)
+      ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
     return {
-      exam_id:   examId,
-      exam_name: String(values[i][META_COLS.exam_name]),
-      exam_date: examDate,
-      duration:  String(values[i][META_COLS.duration]),
-      mode:      String(values[i][META_COLS.mode])   || "exam",
-      status:    String(values[i][META_COLS.status])  || "closed",
-      rowIndex:  i + 1
+      exam_id:    examId,
+      traccia_id: String(values[i][META_COLS.traccia_id] || ""),
+      exam_name:  String(values[i][META_COLS.exam_name]),
+      exam_date:  examDate,
+      duration:   String(values[i][META_COLS.duration]),
+      corso:      String(values[i][META_COLS.corso] || ""),
+      mode:       String(values[i][META_COLS.mode])   || "exam",
+      status:     String(values[i][META_COLS.status])  || "closed",
+      rowIndex:   i + 1
     };
   }
   return null;
 }
 
 function ensureMetaTrack(track) {
-  // Crea riga _meta nel foglio risultati se non esiste ancora
   const existing = readMetaTrack(track.exam_id);
   if (existing) return existing;
   const meta = getMetaSheet();
   const now  = formatTs(new Date().toISOString());
-  meta.appendRow([track.exam_id, track.exam_name, track.exam_date,
-                  track.duration, track.modalita || track.mode || "exam",
-                  track.status || "closed", now, ""]);
+  meta.appendRow([
+    track.exam_id,
+    track.traccia_id  || "",
+    track.exam_name,
+    track.exam_date,
+    track.duration,
+    track.corso       || "",
+    track.mode        || "exam",
+    track.status      || "closed",
+    now
+  ]);
   return readMetaTrack(track.exam_id);
 }
 
@@ -519,7 +564,9 @@ function doPost(e) {
           qs.setName("questions");
           qs.appendRow(["ID","Corso","Categoria","Sottocategoria","Tags","Stato","Tipo","Testo","Opzioni","Corretta","Punti","Placeholder","Data"]);
           const tr = ss.insertSheet("tracce");
-          tr.appendRow(["ID","Nome","Data","Durata","Corso","Modalità","Stato","Items","Password"]);
+          tr.appendRow(["TracciaID","Nome","Items"]);
+          const es = ss.insertSheet("esami");
+          es.appendRow(["EsameID","TracciaID","Nome","Data","Durata (min)","Corso","Modalità","Stato","Password"]);
         } else if (type === "results") {
           const cfg = ss.getSheets()[0];
           cfg.setName("_config");
@@ -527,7 +574,7 @@ function doPost(e) {
           cfg.appendRow(["admin_password", getAdminPassword()]);
           cfg.getRange(1, 1, 1, 2).setFontWeight("bold");
           cfg.setFrozenRows(1);
-          ss.insertSheet("_meta");
+          ss.insertSheet("Esami");
         }
 
         const id = ss.getId();
@@ -543,19 +590,14 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
-    // getTrack — carica traccia + domande risolte
+    // getTrack — carica esame + domande risolte
     // ----------------------------------------------------------------
     if (data.action === "getTrack") {
-      const tracciaId = data.examId;
-      if (!tracciaId) return corsResponse({ status: "error", message: "examId mancante" });
-
-      const resolved = resolveTraccia(tracciaId);
-      if (!resolved) return corsResponse({ status: "error", message: "Traccia non trovata: " + tracciaId });
-
-      // Assicura che la traccia esista anche nel foglio risultati
+      const examId = data.examId;
+      if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
+      const resolved = resolveEsame(examId);
+      if (!resolved) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
       ensureMetaTrack(resolved.track);
-
-      // password_required: bool (mai la password in chiaro al client)
       const pwdRequired = !!(resolved.track._password);
       delete resolved.track._password;
       resolved.track.password_required = pwdRequired;
@@ -563,15 +605,15 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
-    // verifyTrackPassword — verifica password d'accesso traccia
+    // verifyTrackPassword — verifica password d'accesso esame
     // ----------------------------------------------------------------
     if (data.action === "verifyTrackPassword") {
-      const tracciaId = data.examId;
-      if (!tracciaId) return corsResponse({ status: "error", message: "examId mancante" });
-      const traccia = readTraccia(tracciaId);
-      if (!traccia) return corsResponse({ status: "error", message: "Traccia non trovata" });
-      if (!traccia.password || traccia.modalita === "practice") return corsResponse({ status: "ok" });
-      if (String(data.password || "").trim() === traccia.password) return corsResponse({ status: "ok" });
+      const examId = data.examId;
+      if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
+      const esame = readEsame(examId);
+      if (!esame) return corsResponse({ status: "error", message: "Esame non trovato" });
+      if (!esame.password || esame.modalita === "practice") return corsResponse({ status: "ok" });
+      if (String(data.password || "").trim() === esame.password) return corsResponse({ status: "ok" });
       return corsResponse({ status: "error", message: "Password errata" });
     }
 
@@ -587,115 +629,158 @@ function doPost(e) {
     }
 
     // ----------------------------------------------------------------
-    // createTrack — crea nuova traccia nel foglio tracce
+    // createTrack — crea nuova traccia (solo template domande)
     // ----------------------------------------------------------------
     if (data.action === "createTrack") {
-      if (data.password !== getAdminPassword()) {
-        return corsResponse({ status: "error", message: "Password errata" });
-      }
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
       const sheet = getTracceSheet();
-      // Genera track ID: YYYY-MM-DD-xxxxxx
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       let suffix = "";
       for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-      const trackId = (data.exam_date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd")) + "-" + suffix;
-      sheet.appendRow([
-        trackId,
-        data.corso     || "",
-        data.exam_name || "",
-        data.exam_date || "",
-        data.duration  || 90,
-        data.mode      || "exam",
-        "closed",
-        JSON.stringify(data.items || []),
-        data.track_password || ""
-      ]);
+      const trackId = "t-" + suffix;
+      sheet.appendRow([trackId, data.nome || "Nuova traccia", JSON.stringify(data.items || [])]);
       return corsResponse({ status: "ok", track_id: trackId });
     }
 
     // ----------------------------------------------------------------
-    // getAllTracks — per admin
+    // getAllTracks — elenco tracce (template domande) per admin
     // ----------------------------------------------------------------
     if (data.action === "getAllTracks") {
-      if (data.password !== getAdminPassword()) {
-        return corsResponse({ status: "error", message: "Password errata" });
-      }
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getTracceSheet();
-      const tz     = Session.getScriptTimeZone();
       const values = sheet.getDataRange().getValues();
       const tracks = [];
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         const id  = String(row[T_ID]).trim();
-        if (!id || id === "TracciaID") continue;  // salta header e righe vuote
-        const rawDate = row[T_DATA];
-        let dataStr = rawDate instanceof Date && !isNaN(rawDate)
-          ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+        if (!id || id === "TracciaID") continue;
         let items = [];
         try { items = JSON.parse(String(row[T_ITEMS] || "") || "[]"); } catch(e) {}
-        tracks.push({
-          exam_id:   id,
-          exam_name: String(row[T_NOME]),
-          corso:     String(row[T_CORSO]),
-          exam_date: dataStr,
-          duration:  String(row[T_DURATA]),
-          mode:      String(row[T_MODALITA]) || "exam",
-          status:    String(row[T_STATO])    || "closed",
-          password:  String(row[T_PASSWORD] || "").trim(),
-          items
-        });
+        tracks.push({ track_id: id, nome: String(row[T_NOME]), items });
       }
       return corsResponse({ status: "ok", tracks, version: VERSION });
     }
 
     // ----------------------------------------------------------------
-    // setTrack — aggiorna attributi traccia (admin)
+    // setTrack — aggiorna nome e/o items di una traccia
     // ----------------------------------------------------------------
     if (data.action === "setTrack") {
-      if (data.password !== getAdminPassword()) {
-        return corsResponse({ status: "error", message: "Password errata" });
-      }
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getTracceSheet();
       const values = sheet.getDataRange().getValues();
       for (let i = 1; i < values.length; i++) {
-        if (String(values[i][T_ID]).trim() !== data.examId) continue;
+        if (String(values[i][T_ID]).trim() !== data.track_id) continue;
         const row = i + 1;
-        if (data.corso     !== undefined) sheet.getRange(row, T_CORSO + 1).setValue(data.corso);
-        if (data.exam_name !== undefined) sheet.getRange(row, T_NOME + 1).setValue(data.exam_name);
-        if (data.exam_date !== undefined) sheet.getRange(row, T_DATA + 1).setValue(data.exam_date);
-        if (data.duration  !== undefined) sheet.getRange(row, T_DURATA + 1).setValue(data.duration);
-        if (data.mode      !== undefined) sheet.getRange(row, T_MODALITA + 1).setValue(data.mode);
-        if (data.status         !== undefined) sheet.getRange(row, T_STATO    + 1).setValue(data.status);
-        if (data.items          !== undefined) sheet.getRange(row, T_ITEMS    + 1).setValue(JSON.stringify(data.items));
-        if (data.track_password !== undefined) sheet.getRange(row, T_PASSWORD + 1).setValue(data.track_password);
+        if (data.nome  !== undefined) sheet.getRange(row, T_NOME  + 1).setValue(data.nome);
+        if (data.items !== undefined) sheet.getRange(row, T_ITEMS + 1).setValue(JSON.stringify(data.items));
+        return corsResponse({ status: "ok" });
+      }
+      return corsResponse({ status: "error", message: "Traccia non trovata: " + data.track_id });
+    }
 
-        // Sincronizza anche _meta nel foglio risultati
-        const meta   = getMetaSheet();
-        const mvals  = meta.getDataRange().getValues();
+    // ----------------------------------------------------------------
+    // createEsame — crea nuova sessione d'esame
+    // ----------------------------------------------------------------
+    if (data.action === "createEsame") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const sheet = getEsamiSheet();
+      const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+      let suffix = "";
+      for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+      const examDate = data.exam_date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+      const examId   = examDate + "-" + suffix;
+      sheet.appendRow([
+        examId,
+        data.traccia_id     || "",
+        data.exam_name      || "",
+        examDate,
+        data.duration       || 90,
+        data.corso          || "",
+        data.mode           || "exam",
+        "closed",
+        data.track_password || ""
+      ]);
+      return corsResponse({ status: "ok", exam_id: examId });
+    }
+
+    // ----------------------------------------------------------------
+    // getAllEsami — elenco sessioni d'esame per admin
+    // ----------------------------------------------------------------
+    if (data.action === "getAllEsami") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const sheet  = getEsamiSheet();
+      const tz     = Session.getScriptTimeZone();
+      const values = sheet.getDataRange().getValues();
+      const esami  = [];
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i];
+        const id  = String(row[E_ID]).trim();
+        if (!id || id === "EsameID") continue;
+        const rawDate = row[E_DATA];
+        const dataStr = rawDate instanceof Date && !isNaN(rawDate)
+          ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+        esami.push({
+          exam_id:    id,
+          traccia_id: String(row[E_TRACCIA]).trim(),
+          nome:       String(row[E_NOME]),
+          data:       dataStr,
+          durata:     String(row[E_DURATA]),
+          corso:      String(row[E_CORSO]),
+          modalita:   String(row[E_MODALITA]) || "exam",
+          stato:      String(row[E_STATO])    || "closed",
+          password:   String(row[E_PASSWORD] || "").trim()
+        });
+      }
+      return corsResponse({ status: "ok", esami, version: VERSION });
+    }
+
+    // ----------------------------------------------------------------
+    // setEsame — aggiorna attributi di una sessione d'esame
+    // ----------------------------------------------------------------
+    if (data.action === "setEsame") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const sheet  = getEsamiSheet();
+      const values = sheet.getDataRange().getValues();
+      for (let i = 1; i < values.length; i++) {
+        if (String(values[i][E_ID]).trim() !== data.exam_id) continue;
+        const row = i + 1;
+        if (data.traccia_id     !== undefined) sheet.getRange(row, E_TRACCIA  + 1).setValue(data.traccia_id);
+        if (data.exam_name      !== undefined) sheet.getRange(row, E_NOME     + 1).setValue(data.exam_name);
+        if (data.exam_date      !== undefined) sheet.getRange(row, E_DATA     + 1).setValue(data.exam_date);
+        if (data.duration       !== undefined) sheet.getRange(row, E_DURATA   + 1).setValue(data.duration);
+        if (data.corso          !== undefined) sheet.getRange(row, E_CORSO    + 1).setValue(data.corso);
+        if (data.mode           !== undefined) sheet.getRange(row, E_MODALITA + 1).setValue(data.mode);
+        if (data.status         !== undefined) sheet.getRange(row, E_STATO    + 1).setValue(data.status);
+        if (data.track_password !== undefined) sheet.getRange(row, E_PASSWORD + 1).setValue(data.track_password);
+        // Sincronizza foglio Esami nel foglio risultati
+        const meta  = getMetaSheet();
+        const mvals = meta.getDataRange().getValues();
         for (let j = 1; j < mvals.length; j++) {
-          if (String(mvals[j][META_COLS.exam_id]) !== data.examId) continue;
+          if (String(mvals[j][META_COLS.exam_id]) !== data.exam_id) continue;
           const mrow = j + 1;
           if (data.exam_name !== undefined) meta.getRange(mrow, META_COLS.exam_name + 1).setValue(data.exam_name);
           if (data.exam_date !== undefined) meta.getRange(mrow, META_COLS.exam_date + 1).setValue(data.exam_date);
           if (data.duration  !== undefined) meta.getRange(mrow, META_COLS.duration  + 1).setValue(data.duration);
+          if (data.corso     !== undefined) meta.getRange(mrow, META_COLS.corso     + 1).setValue(data.corso);
           if (data.mode      !== undefined) meta.getRange(mrow, META_COLS.mode      + 1).setValue(data.mode);
           if (data.status    !== undefined) meta.getRange(mrow, META_COLS.status    + 1).setValue(data.status);
           break;
         }
         return corsResponse({ status: "ok" });
       }
-      return corsResponse({ status: "error", message: "Traccia non trovata: " + data.examId });
+      return corsResponse({ status: "error", message: "Esame non trovato: " + data.exam_id });
     }
 
     // ----------------------------------------------------------------
-    // getMonitor — studenti di una traccia (admin)
+    // getMonitor — studenti di un esame (admin)
     // ----------------------------------------------------------------
     if (data.action === "getMonitor") {
       if (data.password !== getAdminPassword()) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const examId  = data.examId;
-      const traccia = readTraccia(examId);
+      const esame   = readEsame(examId);
+      const traccia = esame ? readTraccia(esame.traccia_id) : null;
       const nQ      = traccia ? traccia.items.length : 20;
       const ss      = SpreadsheetApp.openById(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
@@ -734,8 +819,9 @@ function doPost(e) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const examId  = data.examId;
-      const traccia = readTraccia(examId);
-      const nQ      = traccia ? traccia.items.length : 20;
+      const esame2  = readEsame(examId);
+      const traccia2 = esame2 ? readTraccia(esame2.traccia_id) : null;
+      const nQ      = traccia2 ? traccia2.items.length : 20;
       const ss      = SpreadsheetApp.openById(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
@@ -834,8 +920,8 @@ function doPost(e) {
     const examId = data.examId;
     if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
 
-    const resolved = resolveTraccia(examId);
-    if (!resolved) return corsResponse({ status: "error", message: "Traccia non trovata: " + examId });
+    const resolved = resolveEsame(examId);
+    if (!resolved) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
 
     const track    = resolved.track;
     const nQ       = resolved.n_questions;
