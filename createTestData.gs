@@ -87,6 +87,15 @@ function _populateDomande(ss) {
      "Quale livello strutturale è stabilizzato dai ponti disolfuro?",
      '["Primaria","Secondaria","Terziaria","Quaternaria"]',
      "C","1","",""],
+    // mc Genetica aggiuntive — usate dal pool casuale della traccia t-aaa111
+    ["q_test10","bioinf","Genetica","Cromosomi","cromosomi,cariotipo","verificato","mc",
+     "Quanti cromosomi ha una cellula umana diploide?",
+     '["23 cromosomi","46 cromosomi","48 cromosomi","44 cromosomi"]',
+     "B","1","",""],
+    ["q_test11","bioinf","Genetica","Cromosomi","cromosomi,mitosi","verificato","mc",
+     "Quale fase della mitosi prevede l'allineamento dei cromosomi al piano equatoriale?",
+     '["Metafase","Anafase","Profase","Telofase"]',
+     "A","1","",""],
   ];
   qRows.forEach(r => qs.appendRow(r));
 
@@ -103,7 +112,8 @@ function _populateDomande(ss) {
       {"type":"fixed","id":"q_test02"},
       {"type":"fixed","id":"q_test04"},
       {"type":"fixed","id":"q_test06"},
-      {"type":"random","categoria":"Genetica","tag":"brca"}
+      {"type":"random","categoria":"Genetica","punti":1}
+      // pool candidati: q_test10 e q_test11 (Genetica, 1pt, verificato, non già usate come fisse)
     ])
   ]);
   tr.appendRow([
@@ -164,28 +174,31 @@ function _populateRisultati(ss) {
   meta.appendRow(["2026-06-09-test02","t-bbb222","Prova pratica bioinf","2026-06-09","90","Applicazioni di Bioinformatica","practice","open",new Date()]);
 
   // --- Tab risultati: 2026-06-01-test01 ---
-  // Domande assegnate: q_test01(mc,1pt) q_test02(mc,1pt) q_test04(fitb,1pt) q_test06(match,1pt) — totale 4pt
-  // Risposte corrette: q_test01→indice 1 (B), q_test02→indice 2 (C), q_test04→"Timina", q_test06→'["Timina","Citosina","Guanina","Adenina"]'
+  // Domande fisse: q_test01(mc,1pt) q_test02(mc,1pt) q_test04(fitb,1pt) q_test06(match,1pt)
+  // Slot casuale (5a domanda): q_test10 oppure q_test11 — studenti diversi ricevono domande diverse
+  //   q_test10: "Quanti cromosomi ha la cellula diploide?" → corretto = B = indice 1
+  //   q_test11: "Quale fase della mitosi?" → corretto = A = indice 0
+  // Totale 5pt
+  // Risposte corrette: q_test01→1(B), q_test02→2(C), q_test04→"Timina", q_test06→[0,1,2,3]
   const r1 = ss.insertSheet("2026-06-01-test01");
   const h1 = ["Matricola","Nominativo","Email","Score","Totale","Inizio","Fine","Durata","QIDs",
-               "Ans1","Pt1","Ans2","Pt2","Ans3","Pt3","Ans4","Pt4"];
+               "Ans1","Pt1","Ans2","Pt2","Ans3","Pt3","Ans4","Pt4","Ans5","Pt5"];
   r1.appendRow(h1);
   r1.getRange(1,1,1,h1.length).setFontWeight("bold");
   r1.setFrozenRows(1);
-  const qids1 = "q_test01,q_test02,q_test04,q_test06";
   const t1s = "01/06/2026 09:00:00";  // inizio comune
-  // q_test06 match: left=["Adenina","Guanina","Citosina","Timina"], right=["Timina","Citosina","Guanina","Adenina"]
-  // Risposta corretta come indici interi: [0,1,2,3] (ogni sinistra abbinata al destra parallelo)
-  // Risposta errata:                      [3,2,1,0] (tutto rovesciato → 0/4 corretti → 0pt)
-  // [Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs, Ans1,Pt1, Ans2,Pt2, Ans3,Pt3, Ans4,Pt4]
+  // q_test06 match: indici interi [0,1,2,3] = corretti; [3,2,1,0] = tutto sbagliato
+  // Studenti 1,3,6 → q_test10 (5a domanda corretta = indice 1)
+  // Studenti 2,4,5,7 → q_test11 (5a domanda corretta = indice 0)
+  // [Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs, Ans1,Pt1,Ans2,Pt2,Ans3,Pt3,Ans4,Pt4,Ans5,Pt5]
   const rows1 = [
-    ["100001","Rossi Mario",   "mario@test.it",    4,4, t1s,"01/06/2026 09:52:00","52 min",qids1, 1,1, 2,1, "Timina",1, "[0,1,2,3]",1],
-    ["100002","Bianchi Lucia", "lucia@test.it",    3,4, t1s,"01/06/2026 09:58:00","58 min",qids1, 1,1, 0,0, "Timina",1, "[0,1,2,3]",1],
-    ["100003","Verdi Giuseppe","giuseppe@test.it", 4,4, t1s,"01/06/2026 10:05:00","65 min",qids1, 1,1, 2,1, "Timina",1, "[0,1,2,3]",1],
-    ["100004","Ferrari Anna",  "anna@test.it",     1,4, t1s,"01/06/2026 10:10:00","70 min",qids1, 0,0, 2,1, "Uracile",0,"[3,2,1,0]",0],
-    ["100005","Esposito Marco","marco@test.it",    0,4, t1s,"01/06/2026 10:15:00","75 min",qids1, 0,0, 0,0, "Uracile",0,"[3,2,1,0]",0],
-    ["100006","Romano Sara",   "sara@test.it",     3,4, t1s,"01/06/2026 10:00:00","60 min",qids1, 1,1, 2,1, "Timina",1, "[3,2,1,0]",0],
-    ["100007","Colombo Luca",  "luca@test.it",     2,4, t1s,"01/06/2026 10:08:00","68 min",qids1, 1,1, 0,0, "Timina",1, "[3,2,1,0]",0],
+    ["100001","Rossi Mario",   "mario@test.it",    5,5, t1s,"01/06/2026 09:52:00","52 min","q_test01,q_test02,q_test04,q_test06,q_test10", 1,1, 2,1, "Timina",1, "[0,1,2,3]",1, 1,1],
+    ["100002","Bianchi Lucia", "lucia@test.it",    3,5, t1s,"01/06/2026 09:58:00","58 min","q_test01,q_test02,q_test04,q_test06,q_test11", 1,1, 0,0, "Timina",1, "[0,1,2,3]",1, 2,0],
+    ["100003","Verdi Giuseppe","giuseppe@test.it", 5,5, t1s,"01/06/2026 10:05:00","65 min","q_test01,q_test02,q_test04,q_test06,q_test10", 1,1, 2,1, "Timina",1, "[0,1,2,3]",1, 1,1],
+    ["100004","Ferrari Anna",  "anna@test.it",     1,5, t1s,"01/06/2026 10:10:00","70 min","q_test01,q_test02,q_test04,q_test06,q_test11", 0,0, 2,1, "Uracile",0,"[3,2,1,0]",0, 2,0],
+    ["100005","Esposito Marco","marco@test.it",    0,5, t1s,"01/06/2026 10:15:00","75 min","q_test01,q_test02,q_test04,q_test06,q_test11", 0,0, 0,0, "Uracile",0,"[3,2,1,0]",0, 3,0],
+    ["100006","Romano Sara",   "sara@test.it",     4,5, t1s,"01/06/2026 10:00:00","60 min","q_test01,q_test02,q_test04,q_test06,q_test10", 1,1, 2,1, "Timina",1, "[3,2,1,0]",0, 1,1],
+    ["100007","Colombo Luca",  "luca@test.it",     2,5, t1s,"01/06/2026 10:08:00","68 min","q_test01,q_test02,q_test04,q_test06,q_test11", 1,1, 0,0, "Timina",1, "[3,2,1,0]",0, 3,0],
   ];
   rows1.forEach(r => r1.appendRow(r));
 
