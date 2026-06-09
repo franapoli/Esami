@@ -702,6 +702,23 @@ document.getElementById("build-label").textContent = "build " + BUILD;
 let adminPassword  = "";
 let allEsami       = [];   // sessioni d'esame
 let allTracks      = [];   // tracce (template domande)
+let _tracksLoaded  = false;
+let _tracksPromise = null;
+
+function ensureTracksLoaded() {
+  if (_tracksLoaded) return Promise.resolve();
+  if (_tracksPromise) return _tracksPromise;
+  _tracksPromise = callScript({ action: "getAllTracks", password: adminPassword })
+    .then(rt => {
+      allTracks = rt.tracks || [];
+      _tracksLoaded = true;
+      populateTracciaSelects();
+      renderCrossref();
+    })
+    .catch(() => {})
+    .finally(() => { _tracksPromise = null; });
+  return _tracksPromise;
+}
 let currentEsame   = null; // esame selezionato nel selector bar
 let currentTraccia = null; // traccia selezionata nel tab Tracce
 let refreshTimer   = null;
@@ -756,12 +773,6 @@ async function doLogin() {
       document.getElementById("build-label").textContent =
         "build " + BUILD + " · v" + res.version;
     }
-    setLoadingMsg("Caricamento tracce…");
-    try {
-      const rt = await callScript({ action: "getAllTracks", password: pwd });
-      allTracks = rt.tracks || [];
-    } catch(e) { allTracks = []; }
-
     setLoadingMsg("Caricamento configurazione…");
     await loadSheetConfig();
 
@@ -769,9 +780,9 @@ async function doLogin() {
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
     populateEsameSelect(allEsami);
-    renderCrossref();
     document.getElementById("loading-overlay").classList.remove("active");
-    ensureDriveListLoaded(); // background, non blocca il login
+    ensureTracksLoaded();    // background: popola traccia-selects e crossref
+    ensureDriveListLoaded(); // background: popola i select Drive
   } catch(e) {
     document.getElementById("loading-overlay").classList.remove("active");
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
@@ -950,6 +961,7 @@ function logout() {
   if (refreshTimer) clearInterval(refreshTimer);
   adminPassword = ""; currentEsame = null; currentTraccia = null; refreshTimer = null; trackItems = []; allEsami = []; allTracks = [];
   allQuestions = null; _allQuestionsPromise = null;
+  _tracksLoaded = false; _tracksPromise = null;
   _driveListLoaded = false; _driveListPromise = null;
   document.getElementById("main-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
@@ -1641,11 +1653,11 @@ function ensureQuestionsLoaded() {
 
 // ---- INIT ----
 async function initDomandeTab() {
-  if (!allQuestions) {
+  if (!allQuestions || !_tracksLoaded) {
     document.getElementById("domande-loading").style.display = "block";
     document.getElementById("domande-content").style.display = "none";
     try {
-      await ensureQuestionsLoaded(); // usa il fetch in-flight se già avviato da Risultati
+      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded()]);
     } catch(e) {
       document.getElementById("domande-loading").textContent = "Errore: " + e.message;
       return;
