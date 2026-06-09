@@ -205,6 +205,26 @@
   .histo-bar-bg { flex: 1; background: #eee; height: 18px; position: relative; overflow: hidden; }
   .histo-bar-fill { height: 100%; background: #1a1a1a; transition: width 0.3s; }
   .histo-count { width: 28px; color: #555; flex-shrink: 0; }
+
+  /* Crossref tracce → esami */
+  #crossref-card { margin-bottom: 12px; }
+  #crossref-card table { width: 100%; border-collapse: collapse; font-size: 0.83em; }
+  #crossref-card th { text-align: left; font-weight: normal; color: #888;
+    text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8em;
+    padding: 4px 10px 8px; border-bottom: 1px solid #eee; }
+  #crossref-card td { padding: 6px 10px; border-bottom: 1px solid #f0f0ec; vertical-align: top; }
+  #crossref-card tr:last-child td { border-bottom: none; }
+  #crossref-card .tr-nome { font-weight: bold; color: #1a1a1a; white-space: nowrap; }
+  #crossref-card .tr-id   { font-size: 0.78em; color: #aaa; font-family: monospace; }
+  .esame-pill { display: inline-block; padding: 2px 9px; margin: 2px 3px 2px 0;
+    font-size: 0.82em; border: 1px solid #ddd; border-radius: 3px;
+    cursor: pointer; white-space: nowrap; }
+  .esame-pill:hover { background: #f0f0ec; }
+  .esame-pill.open   { border-color: #81c784; color: #2e7d32; }
+  .esame-pill.closed { border-color: #bbb; color: #666; }
+  .esame-pill .pill-dot { font-size: 0.7em; margin-right: 2px; }
+  .traccia-esami-inline { display: inline; }
+  .traccia-esami-inline .esame-pill { font-size: 0.78em; }
 </style>
 </head>
 <body>
@@ -443,6 +463,15 @@
       Caricamento in corso…
     </div>
     <div id="domande-content" style="display:block;">
+
+      <!-- Panoramica tracce → esami -->
+      <div class="card" id="crossref-card">
+        <h2 style="cursor:pointer;user-select:none;" onclick="toggleCrossref()">
+          Panoramica tracce / esami
+          <span id="crossref-toggle" style="font-size:0.85em;color:#aaa;font-weight:normal;margin-left:8px;">▲</span>
+        </h2>
+        <div id="crossref-body"></div>
+      </div>
 
       <!-- Selettore traccia + nome -->
       <div class="card" style="margin-bottom:16px;padding:16px 20px;">
@@ -692,6 +721,7 @@ async function doLogin() {
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
     populateEsameSelect(allEsami);
+    renderCrossref();
     document.getElementById("loading-overlay").classList.remove("active");
   } catch(e) {
     document.getElementById("loading-overlay").classList.remove("active");
@@ -915,6 +945,7 @@ function updateEsameInList(e) {
   if (idx >= 0) allEsami[idx] = { ...allEsami[idx], ...e };
   const prev = e.exam_id;
   populateEsameSelect(allEsami);
+  renderCrossref();
   document.getElementById("esame-select").value = prev;
 }
 
@@ -1352,9 +1383,15 @@ function updateDomandeTab() {
   document.getElementById("edit-traccia-form").style.display = (t && selVal !== "__new__") ? "block" : "none";
   if (t) {
     document.getElementById("cfg-traccia-nome").value = t.nome || "";
-    // mostra quanti esami usano questa traccia
-    const usati = allEsami.filter(e => e.traccia_id === t.track_id).length;
-    document.getElementById("traccia-esami-info").textContent = usati ? "Usata in " + usati + " esame" + (usati > 1 ? "i" : "") : "Non ancora usata";
+    // mostra esami che usano questa traccia
+    const usati = allEsami.filter(e => e.traccia_id === t.track_id);
+    const infoEl = document.getElementById("traccia-esami-info");
+    if (usati.length === 0) {
+      infoEl.innerHTML = '<span style="font-style:italic;">Non ancora usata</span>';
+    } else {
+      const pills = usati.map(e => buildEsamePill(e)).join(" ");
+      infoEl.innerHTML = `<span>Usata in ${usati.length} esame${usati.length > 1 ? "i" : ""}: </span><span class="traccia-esami-inline">${pills}</span>`;
+    }
     document.getElementById("save-items-msg").textContent = "";
     trackItems = JSON.parse(JSON.stringify(t.items || []));
   } else if (selVal !== "__new__") {
@@ -1406,6 +1443,63 @@ async function saveTrackItems() {
     msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
   } catch(e) {
     msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
+  }
+}
+
+// ---- CROSSREF TRACCE → ESAMI ----
+let crossrefOpen = true;
+
+function toggleCrossref() {
+  crossrefOpen = !crossrefOpen;
+  document.getElementById("crossref-body").style.display = crossrefOpen ? "" : "none";
+  document.getElementById("crossref-toggle").textContent = crossrefOpen ? "▲" : "▼";
+}
+
+function renderCrossref() {
+  const body = document.getElementById("crossref-body");
+  if (!body) return;
+  if (allTracks.length === 0) {
+    body.innerHTML = '<p style="color:#aaa;font-size:0.85em;font-style:italic;padding:4px 0 0;">Nessuna traccia presente.</p>';
+    return;
+  }
+  let html = '<table><thead><tr><th style="width:32%">Traccia</th><th>Esami che la usano</th></tr></thead><tbody>';
+  allTracks.forEach(t => {
+    const esami = allEsami.filter(e => e.traccia_id === t.track_id);
+    const esamiHtml = esami.length === 0
+      ? '<span style="color:#bbb;font-style:italic;">nessun esame</span>'
+      : esami.map(e => buildEsamePill(e)).join("");
+    html += `<tr>
+      <td>
+        <div class="tr-nome">${escHtml(t.nome || t.track_id)}</div>
+        <div class="tr-id">${escHtml(t.track_id)}</div>
+      </td>
+      <td>${esamiHtml}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function buildEsamePill(e) {
+  // normalizza campi: il server usa stato/modalita/nome/data, doCreateEsame usa status/mode/exam_name/exam_date
+  const stato    = e.stato    || e.status   || "closed";
+  const modalita = e.modalita || e.mode     || "exam";
+  const nome     = e.nome     || e.exam_name || e.exam_id;
+  const data     = e.data     || e.exam_date || "";
+  const isOpen   = stato === "open";
+  const dot      = isOpen ? "●" : "○";
+  const modeStr  = modalita === "practice" ? "eserc." : "esame";
+  const dataStr  = data ? ` ${data},` : "";
+  const label    = `${escHtml(nome)} <span style="color:#aaa">(${dataStr} ${modeStr})</span>`;
+  return `<span class="esame-pill ${isOpen ? 'open' : 'closed'}" onclick="jumpToEsame('${escHtml(e.exam_id)}')" title="${escHtml(e.exam_id)}"><span class="pill-dot">${dot}</span>${label}</span>`;
+}
+
+function jumpToEsame(examId) {
+  switchTab("admin");
+  const sel = document.getElementById("esame-select");
+  if (sel) {
+    sel.value = examId;
+    onEsameChange();
   }
 }
 
@@ -1465,6 +1559,7 @@ async function doCreateTraccia() {
     document.getElementById("traccia-select").value = res.track_id;
     trackItems = JSON.parse(JSON.stringify(newT.items));
     updateDomandeTab();
+    renderCrossref();
     msg.style.color="#2e7d32"; msg.textContent="✓ Traccia creata: " + res.track_id;
   } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
 }
@@ -1757,6 +1852,7 @@ async function doCreateEsame() {
                    exam_date:date, duration:dur, mode, status:"closed", password:pwd };
     allEsami.push(newE);
     populateEsameSelect(allEsami);
+    renderCrossref();
     document.getElementById("esame-select").value = res.exam_id;
     currentEsame = newE;
     msg.style.color="#2e7d32"; msg.textContent="✓ Esame creato: " + res.exam_id;
