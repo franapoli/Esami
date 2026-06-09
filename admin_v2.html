@@ -736,6 +736,21 @@ async function callScript(payload) {
   return resp.json();
 }
 
+// Formatta timestamp dal server ("DD/MM/YYYY HH:mm:ss" o ISO) → "DD/MM HH:mm"
+function fmtTs(s) {
+  if (!s) return "—";
+  const m = String(s).match(/^(\d{2}\/\d{2})\/\d{4}\s+(\d{2}:\d{2})/);
+  if (m) return m[1] + " " + m[2];
+  try {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const p = n => String(n).padStart(2, "0");
+      return p(d.getDate()) + "/" + p(d.getMonth()+1) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+    }
+  } catch(e) {}
+  return String(s);
+}
+
 function formatDateIt(dateStr) {
   if (!dateStr) return "—";
   const mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
@@ -1232,8 +1247,8 @@ function renderMonitorData(res) {
       <td>${escHtml(String(r.matricola))}</td>
       <td>${escHtml(String(r.nominativo||""))}</td>
       <td>${escHtml(String(r.email||""))}</td>
-      <td>${r.tsStart||"—"}</td>
-      <td>${r.finalized ? (r.tsEnd||"—") : "—"}</td>
+      <td>${fmtTs(r.tsStart)}</td>
+      <td>${r.finalized ? fmtTs(r.tsEnd) : "—"}</td>
       <td>${r.finalized ? escHtml(String(r.elapsed||"")) : "—"}</td>
       <td><span style="margin-right:6px;">${answered}/${nQ}</span>
           <span class="progress-mini"><span class="progress-mini-fill" style="width:${pct}%"></span></span></td>
@@ -1330,7 +1345,7 @@ function renderRisultati(res) {
     return rows.filter(r => (Number(r.pts[qi]) || 0) >= mp).length / rows.length;
   });
 
-  let thHtml = '<tr><th class="col-name">Studente</th>';
+  let thHtml = '<tr><th class="col-name">Studente</th><th>Inizio</th><th>Fine</th><th>Tempo</th>';
   for (let q = 0; q < nQ; q++) {
     const p = pctOk[q];
     const cls = p === null ? "" : p >= 0.8 ? " hdr-easy" : p <= 0.2 ? " hdr-hard" : "";
@@ -1341,6 +1356,9 @@ function renderRisultati(res) {
 
   document.getElementById("res-tbody").innerHTML = rows.map((r, ri) => {
     let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}</td>`;
+    cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${fmtTs(r.tsStart)}</td>`;
+    cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${fmtTs(r.tsEnd)}</td>`;
+    cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${escHtml(r.elapsed||"—")}</td>`;
     for (let q = 0; q < nQ; q++) {
       const pt = Number(r.pts[q]) || 0;
       const mp = maxPts[q];
@@ -1351,7 +1369,7 @@ function renderRisultati(res) {
     return `<tr class="res-row-click" onclick="showStudentDetail(${ri})" title="Clicca per dettaglio risposte">${cells}</tr>`;
   }).join("");
 
-  let tfHtml = '<tr><td class="col-name">% corretto</td>';
+  let tfHtml = '<tr><td class="col-name">% corretto</td><td></td><td></td><td></td>';
   for (let q = 0; q < nQ; q++) {
     const p   = pctOk[q];
     const cls = p === null ? "" : p >= 0.8 ? "cell-ok" : p <= 0.2 ? "cell-ko" : "";

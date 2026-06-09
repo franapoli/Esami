@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.15.0"; // aggiornare ad ogni deploy
+const VERSION = "2.16.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -894,9 +894,9 @@ function doPost(e) {
           nominativo: row[COL_NOMINATIVO - 1],
           email:      row[COL_EMAIL - 1],
           score:      row[COL_SCORE - 1],
-          tsStart:    row[COL_TS_START - 1],
-          tsEnd:      row[COL_TS_END - 1],
-          elapsed:    row[COL_ELAPSED - 1],
+          tsStart:    formatTs(row[COL_TS_START - 1]),
+          tsEnd:      formatTs(row[COL_TS_END - 1]),
+          elapsed:    String(row[COL_ELAPSED - 1] || ""),
           answered,
           finalized:  row[COL_TS_END - 1] !== ""
         });
@@ -935,6 +935,9 @@ function doPost(e) {
           matricola:  row[COL_MATRICOLA - 1],
           nominativo: row[COL_NOMINATIVO - 1],
           score:      row[COL_SCORE - 1],
+          tsStart:    formatTs(row[COL_TS_START - 1]),
+          tsEnd:      formatTs(row[COL_TS_END - 1]),
+          elapsed:    String(row[COL_ELAPSED - 1] || ""),
           pts,
           answers,
           qids
