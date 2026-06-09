@@ -640,6 +640,24 @@
         <h2>Distribuzione punteggi</h2>
         <div class="histo-wrap" id="histo-wrap"></div>
       </div>
+      <div class="card">
+        <h2>Punteggi per domanda
+          <span style="font-weight:normal;font-size:0.85em;color:#888;margin-left:12px;">
+            <span style="display:inline-block;width:12px;height:12px;background:#c8e6c9;vertical-align:middle;margin-right:4px;"></span>≥80% corretto
+            &nbsp;
+            <span style="display:inline-block;width:12px;height:12px;background:#ffcdd2;vertical-align:middle;margin-right:4px;"></span>≤20% corretto
+            <span style="margin-left:12px;color:#aaa;">· clicca uno studente per il dettaglio risposte ↓</span>
+          </span>
+        </h2>
+        <div class="res-wrap">
+          <table class="res-table" id="res-table">
+            <thead id="res-thead"></thead>
+            <tbody id="res-tbody"></tbody>
+            <tfoot id="res-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
       <div class="card" id="student-detail-card" style="display:none;">
         <h2>Dettaglio risposte — <span id="detail-student-name"></span></h2>
         <div class="detail-student-hdr">
@@ -657,23 +675,6 @@
               <th class="col-pt">Pt</th>
             </tr></thead>
             <tbody id="detail-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Punteggi per domanda
-          <span style="font-weight:normal;font-size:0.85em;color:#888;margin-left:12px;">
-            <span style="display:inline-block;width:12px;height:12px;background:#c8e6c9;vertical-align:middle;margin-right:4px;"></span>≥80% corretto
-            &nbsp;
-            <span style="display:inline-block;width:12px;height:12px;background:#ffcdd2;vertical-align:middle;margin-right:4px;"></span>≤20% corretto
-          </span>
-        </h2>
-        <div class="res-wrap">
-          <table class="res-table" id="res-table">
-            <thead id="res-thead"></thead>
-            <tbody id="res-tbody"></tbody>
-            <tfoot id="res-tfoot"></tfoot>
           </table>
         </div>
       </div>
@@ -1473,8 +1474,11 @@ async function showStudentDetail(rowIdx) {
   });
 
   if (qids.length === 0) {
+    const noQidMsg = r.qids === undefined
+      ? 'Il dettaglio domande non è disponibile: rideplova l\'Apps Script alla v2.13.0 per abilitare questa funzione.'
+      : 'Le domande assegnate a questo studente non sono registrate nel foglio risultati (campo QIDs vuoto).';
     document.getElementById("detail-tbody").innerHTML =
-      '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:16px 8px;">Nessun QID registrato per questo studente.</td></tr>';
+      `<tr><td colspan="6" style="color:#888;font-style:italic;padding:16px 8px;">${escHtml(noQidMsg)}</td></tr>`;
   } else {
     document.getElementById("detail-tbody").innerHTML = rows2.join("");
   }
