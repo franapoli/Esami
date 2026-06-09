@@ -531,6 +531,7 @@
             <button class="btn btn-sm" onclick="saveTrackItems()">Salva domande traccia</button>
             <span id="save-items-msg" style="font-size:0.85em;"></span>
           </div>
+          <div id="items-esami-warn" style="display:none;margin-top:10px;padding:8px 12px;background:#fff8e1;border:1px solid #ffe082;font-size:0.82em;color:#7a5300;"></div>
         </div>
 
         <!-- Colonna destra: aggiungi domande -->
@@ -1383,6 +1384,16 @@ function updateDomandeTab() {
   document.getElementById("edit-traccia-form").style.display = (t && selVal !== "__new__") ? "block" : "none";
   if (t) {
     document.getElementById("cfg-traccia-nome").value = t.nome || "";
+    // avviso modifica items se traccia già usata in esami
+    const esamiUsanti = allEsami.filter(e => e.traccia_id === t.track_id);
+    const warnEl = document.getElementById("items-esami-warn");
+    if (esamiUsanti.length > 0) {
+      const n = esamiUsanti.length;
+      warnEl.textContent = `⚠ Questa traccia è usata in ${n} esame${n > 1 ? "i" : ""}. Chi ha già iniziato conserva le proprie domande; nuovi accessi riceveranno le domande aggiornate.`;
+      warnEl.style.display = "";
+    } else {
+      warnEl.style.display = "none";
+    }
     // mostra esami che usano questa traccia
     const usati = allEsami.filter(e => e.traccia_id === t.track_id);
     const infoEl = document.getElementById("traccia-esami-info");
@@ -1522,6 +1533,7 @@ function onTracciaChange() {
     document.getElementById("new-traccia-form").style.display  = "none";
     document.getElementById("edit-traccia-form").style.display = "none";
     document.getElementById("traccia-esami-info").textContent  = "";
+    document.getElementById("items-esami-warn").style.display  = "none";
     renderItemsList(); renderQBrowser();
   }
 }
