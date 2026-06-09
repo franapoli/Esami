@@ -26,7 +26,7 @@ git commit -m "..."
 git push
 ```
 
-The pre-push hook in `.git/hooks/pre-push` auto-commits a BUILD update to `admin_v2.html` before pushing. The BUILD in admin reflects the commit *before* the current push (inherent limitation — hash is only known after commit). **Always push after committing** — the live site at `https://franapoli.github.io/Esami/` is the only way to verify results.
+The pre-commit hook in `.git/hooks/pre-commit` aggiorna automaticamente `const BUILD` in `admin_v2.html` all'hash HEAD (il commit precedente) prima di ogni commit. Il BUILD riflette quindi il commit genitore — un solo `git push` è sufficiente per aggiornare il live.
 
 ## Deployment of Apps Script
 
