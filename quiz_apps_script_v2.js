@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.11.0"; // aggiornare ad ogni deploy
+const VERSION = "2.12.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -235,42 +235,96 @@ function readEsame(examId) {
   return null;
 }
 
-// Costruisce l'oggetto domanda pronto per il client
-function buildQuestionObj(q, pos) {
+// Costruisce l'oggetto domanda pronto per il client.
+// withCorrect=false (default): omette le risposte corrette — usato per getTrack (studenti).
+// withCorrect=true: include le risposte corrette — usato solo internamente per scoring o admin.
+function buildQuestionObj(q, pos, withCorrect) {
   const obj = {
-    id:      q.id,
-    pos:     pos,
-    pts:     q.punti,
-    type:    q.tipo,
-    text:    q.testo,
-    correct: q.tipo === "mc" ? letterToIndex(q.corretta) : (q.tipo === "fitb" ? q.corretta : null)
+    id:   q.id,
+    pos:  pos,
+    pts:  q.punti,
+    type: q.tipo,
+    text: q.testo
   };
   if (q.tipo === "mc") {
     obj.options = q.options;
+    if (withCorrect) obj.correct = letterToIndex(q.corretta);
   } else if (q.tipo === "fitb") {
     if (q.placeholder) obj.placeholder = q.placeholder;
+    if (withCorrect) obj.correct = q.corretta;
   } else if (q.tipo === "match") {
-    obj.left  = q.options; // termini sinistra (JSON array da Q_OPTIONS)
+    obj.left = q.options;
     try { obj.right = JSON.parse(q.corretta); } catch(e) { obj.right = []; }
-    obj.correct = obj.right.slice(); // right[i] è la risposta corretta per left[i]
+    if (withCorrect) obj.correct = obj.right.slice();
+    else delete obj.right; // right è la risposta corretta — non inviare senza flag
   } else if (q.tipo === "free") {
     if (q.placeholder) obj.placeholder = q.placeholder;
-    obj.correct = null;
+    obj.correct = null; // free è sempre null, non rivela nulla
   } else if (q.tipo === "multi-fitb") {
     try {
       const d = JSON.parse(q.data || "{}");
-      obj.boxes = d.boxes || [];
-      obj.cols  = d.cols  || 1;
+      // Invia boxes senza il campo "correct" interno se non autorizzato
+      obj.boxes = (d.boxes || []).map(b => withCorrect ? b : { label: b.label, cols: b.cols, pts: b.pts });
+      obj.cols  = d.cols || 1;
     } catch(e) { obj.boxes = []; obj.cols = 1; }
-    obj.correct = obj.boxes.map(b => String(b.correct || "").trim());
+    if (withCorrect) obj.correct = obj.boxes.map(b => String(b.correct || "").trim());
   } else if (q.tipo === "cloze") {
     try {
       const d = JSON.parse(q.data || "{}");
-      obj.dropdowns = d.dropdowns || [];
+      // Invia dropdowns senza il campo "correct" interno se non autorizzato
+      obj.dropdowns = (d.dropdowns || []).map(dd =>
+        withCorrect ? dd : { options: dd.options }
+      );
     } catch(e) { obj.dropdowns = []; }
-    obj.correct = obj.dropdowns.map(dd => dd.correct ?? 0);
+    if (withCorrect) obj.correct = obj.dropdowns.map(dd => dd.correct ?? 0);
   }
   return obj;
+}
+
+// Calcola il punteggio server-side per una singola risposta
+function scoreAnswer(q, ans) {
+  if (q.tipo === "mc") {
+    const correct = letterToIndex(q.corretta);
+    return (parseInt(ans, 10) === correct) ? q.punti : 0;
+  }
+  if (q.tipo === "fitb") {
+    return (String(ans || "").trim().toLowerCase() === String(q.corretta || "").trim().toLowerCase()) ? q.punti : 0;
+  }
+  if (q.tipo === "match") {
+    try {
+      const right = JSON.parse(q.corretta);
+      const given = typeof ans === "string" ? JSON.parse(ans) : ans;
+      if (!Array.isArray(given)) return 0;
+      let ok = 0;
+      right.forEach((r, i) => { if (String(given[i] || "").trim() === String(r).trim()) ok++; });
+      return Math.round((ok / right.length) * q.punti);
+    } catch(e) { return 0; }
+  }
+  if (q.tipo === "multi-fitb") {
+    try {
+      const d = JSON.parse(q.data || "{}");
+      const boxes = d.boxes || [];
+      const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
+      let pts = 0;
+      boxes.forEach((b, i) => {
+        if (String(given[i] || "").trim().toLowerCase() === String(b.correct || "").trim().toLowerCase())
+          pts += (b.pts || 0);
+      });
+      return pts;
+    } catch(e) { return 0; }
+  }
+  if (q.tipo === "cloze") {
+    try {
+      const d = JSON.parse(q.data || "{}");
+      const dropdowns = d.dropdowns || [];
+      const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
+      let ok = 0;
+      dropdowns.forEach((dd, i) => { if (parseInt(given[i], 10) === (dd.correct ?? 0)) ok++; });
+      return dropdowns.length ? Math.round((ok / dropdowns.length) * q.punti) : 0;
+    } catch(e) { return 0; }
+  }
+  if (q.tipo === "free") return 0; // manuale
+  return 0;
 }
 
 // Fisher-Yates shuffle su array (in-place)
@@ -282,8 +336,10 @@ function shuffleArray(arr) {
   return arr;
 }
 
-// Risolve le domande di una traccia — usato internamente da resolveEsame
-function _resolveItems(items) {
+// Risolve le domande di una traccia.
+// withCorrect=false (default, per studenti): omette risposte corrette.
+// withCorrect=true (solo interno, per scoring server-side): include risposte corrette.
+function _resolveItems(items, withCorrect) {
   const allQ      = loadAllQuestions();
   const questions = [];
   const usedIds   = new Set();
@@ -292,10 +348,10 @@ function _resolveItems(items) {
       usedIds.add(item.id);
       const q = allQ[item.id];
       if (!q) {
-        questions.push({ id: item.id, error: "Domanda non trovata: " + item.id, pts: 0, type: "mc", text: "", options: [], correct: 0, pos: questions.length + 1 });
+        questions.push({ id: item.id, error: "Domanda non trovata: " + item.id, pts: 0, type: "mc", text: "", pos: questions.length + 1 });
         return;
       }
-      questions.push(buildQuestionObj(q, questions.length + 1));
+      questions.push(buildQuestionObj(q, questions.length + 1, withCorrect));
     } else if (item.type === "random") {
       const candidates = Object.values(allQ).filter(q => {
         if (usedIds.has(q.id)) return false;
@@ -309,7 +365,7 @@ function _resolveItems(items) {
         return true;
       });
       const picked = shuffleArray(candidates)[0];
-      if (picked) { usedIds.add(picked.id); questions.push(buildQuestionObj(picked, questions.length + 1)); }
+      if (picked) { usedIds.add(picked.id); questions.push(buildQuestionObj(picked, questions.length + 1, withCorrect)); }
     }
   });
   return questions;
@@ -973,8 +1029,8 @@ function doPost(e) {
       if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
       const qIdx = parseInt(data.qIndex, 10);
       const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
-      sheet.getRange(rowIndex, col).setValue(data.ans || "");
-      sheet.getRange(rowIndex, col + 1).setValue(data.pts !== undefined ? data.pts : "");
+      // Salva solo la risposta grezza — il punteggio viene calcolato server-side in finalize
+      sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
       return corsResponse({ status: "ok" });
     }
 
@@ -982,20 +1038,54 @@ function doPost(e) {
     if (data.action === "finalize") {
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
+
+      // Ricalcola il punteggio server-side — non fidarsi di score/pts inviati dal client.
+      // Usa gli ID assegnati allo studente (COL_QIDS) per trovare le domande esatte,
+      // incluse quelle random che erano state assegnate al momento dell'init.
+      const allQ = loadAllQuestions();
+      const existingRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const assignedIds = String(existingRow[COL_QIDS - 1] || "").split(",").map(s => s.trim()).filter(Boolean);
+
+      let serverScore = 0;
+      const scoredAnswers = [];
+
+      assignedIds.forEach((qId, i) => {
+        // Preferisci la risposta in data.answers se presente, altrimenti leggi dal foglio
+        let ans;
+        if (data.answers && data.answers[i] !== undefined) {
+          ans = data.answers[i].ans !== undefined ? data.answers[i].ans : String(data.answers[i]);
+        } else {
+          ans = existingRow[COL_ANS_FIRST - 1 + i * 2] ?? "";
+        }
+        const pts = scoreAnswer(allQ[qId], ans);
+        serverScore += pts;
+        scoredAnswers.push({ ans, pts });
+      });
+
+      // Prepara oggetti con risposte corrette per practice feedback
+      const qForFeedback = assignedIds.map(qId => buildQuestionObj(allQ[qId], 0, true));
+
       sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || "");
       sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || "");
-      sheet.getRange(rowIndex, COL_SCORE).setValue(data.score);
+      sheet.getRange(rowIndex, COL_SCORE).setValue(serverScore);   // score server-side
       sheet.getRange(rowIndex, COL_TS_START).setValue(formatTs(data.tsStart));
       sheet.getRange(rowIndex, COL_TS_END).setValue(formatTs(data.tsEnd));
       sheet.getRange(rowIndex, COL_ELAPSED).setValue(data.elapsed || "");
-      if (data.answers && data.answers.length > 0) {
-        data.answers.forEach((item, i) => {
-          const col = COL_ANS_FIRST + i * 2;
-          sheet.getRange(rowIndex, col).setValue(item.ans || "");
-          sheet.getRange(rowIndex, col + 1).setValue(item.pts !== undefined ? item.pts : "");
-        });
+      scoredAnswers.forEach((item, i) => {
+        const col = COL_ANS_FIRST + i * 2;
+        sheet.getRange(rowIndex, col).setValue(item.ans !== undefined ? item.ans : "");
+        sheet.getRange(rowIndex, col + 1).setValue(item.pts);
+      });
+
+      // In practice mode restituisce le risposte corrette per il feedback
+      const response = { status: "ok", score: serverScore, total_pts: totalPts };
+      if (track.mode === "practice") {
+        response.correct_answers = qForFeedback.map(q => ({
+          id: q.id, correct: q.correct, type: q.type,
+          options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns
+        }));
       }
-      return corsResponse({ status: "ok" });
+      return corsResponse(response);
     }
 
     return corsResponse({ status: "error", message: "Azione non riconosciuta: " + data.action });

@@ -843,31 +843,17 @@ async function saveProgress(qIndex, value) {
   setSaveStatus("Salvataggio…");
   try {
     const q = questions[qIndex];
-    let ans, pts;
+    let ans;
     if (q.type === "mc") {
       ans = (value !== null && value !== undefined) ? String(value) : "";
-      pts = value === q.correct ? q.pts : 0;
-    } else if (q.type === "fitb") {
-      ans = String(value || "");
-      pts = normalizeAnswer(value) === normalizeAnswer(q.correct) ? q.pts : 0;
-    } else if (q.type === "match") {
+    } else if (q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
       ans = JSON.stringify(value || []);
-      pts = scoreMatch(q, value);
-    } else if (q.type === "free") {
-      ans = String(value || "");
-      pts = 0;
-    } else if (q.type === "multi-fitb") {
-      ans = JSON.stringify(value || []);
-      pts = scoreMultiFitb(q, value);
-    } else if (q.type === "cloze") {
-      ans = JSON.stringify(value || []);
-      pts = scoreCloze(q, value);
     } else {
       ans = String(value || "");
-      pts = 0;
     }
+    // Invia solo la risposta grezza — il punteggio viene calcolato server-side in finalize
     await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
-                       qIndex: qIndex + 1, ans, pts });
+                       qIndex: qIndex + 1, ans });
     setSaveStatus("✓ Salvato");
   } catch(e) {
     setSaveStatus("⚠ Salvataggio fallito");
@@ -903,116 +889,95 @@ async function showResults() {
   document.getElementById("quiz-wrapper").classList.remove("active");
   document.getElementById("thankyou").style.display = "block";
 
-  let score = 0;
-  const resultRows = [];
-
-  questions.forEach((q, i) => {
-    const userAns = answers[i];
-    let correct = false, pts = 0, userDisplay = "—", correctDisplay = "—", ansRaw = "";
-
-    if (q.type === "mc") {
-      pts = (userAns === q.correct) ? q.pts : 0;
-      correct = (pts === q.pts);
-      userDisplay    = userAns !== null ? q.options[userAns] : "—";
-      correctDisplay = q.options[q.correct];
-      ansRaw = userAns !== null ? String(userAns) : "";
-    } else if (q.type === "fitb") {
-      pts = normalizeAnswer(userAns) === normalizeAnswer(q.correct) ? q.pts : 0;
-      correct = (pts === q.pts);
-      userDisplay    = userAns || "—";
-      correctDisplay = q.correct;
-      ansRaw = String(userAns || "");
-    } else if (q.type === "match") {
-      pts = scoreMatch(q, userAns);
-      correct = (pts === q.pts);
-      userDisplay    = Array.isArray(userAns) ? q.left.map((l, j) => l + " → " + (userAns[j] !== null ? q.right[userAns[j]] : "—")).join("; ") : "—";
-      correctDisplay = q.left.map((l, j) => l + " → " + q.right[j]).join("; ");
-      ansRaw = JSON.stringify(userAns || []);
-    } else if (q.type === "free") {
-      pts = 0;
-      correct = false;
-      userDisplay    = String(userAns || "—");
-      correctDisplay = "(valutazione manuale)";
-      ansRaw = String(userAns || "");
-    } else if (q.type === "multi-fitb") {
-      pts = scoreMultiFitb(q, userAns);
-      correct = (pts === q.pts);
-      userDisplay    = Array.isArray(userAns) ? q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (userAns[j] || "—")).join(", ") : "—";
-      correctDisplay = q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + b.correct).join(", ");
-      ansRaw = JSON.stringify(userAns || []);
-    } else if (q.type === "cloze") {
-      pts = scoreCloze(q, userAns);
-      correct = (pts === q.pts);
-      userDisplay    = Array.isArray(userAns) ? q.dropdowns.map((dd, j) => dd.options[userAns[j]] || "—").join(" / ") : "—";
-      correctDisplay = q.dropdowns.map(dd => dd.options[dd.correct]).join(" / ");
-      ansRaw = JSON.stringify(userAns || []);
+  // Costruisce le risposte grezze da inviare al server (nessun punteggio client-side)
+  const rawAnswers = questions.map((q, i) => {
+    const value = answers[i];
+    let ans;
+    if (q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
+      ans = JSON.stringify(value || []);
+    } else if (q.type === "mc") {
+      ans = (value !== null && value !== undefined) ? String(value) : "";
+    } else {
+      ans = String(value || "");
     }
-
-    score += pts;
-    resultRows.push({ ans: ansRaw, pts, correct, correctDisplay, qText: q.text, qPts: q.pts, userDisplay });
+    return { ans };
   });
 
-  // ---- PRACTICE ----
-  if (EXAM_MODE === "practice") {
-    document.getElementById("send-status").innerHTML =
-      "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + score + " / " + TOTAL_PTS + "</div>" +
-      "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione</div>" +
-      "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
-      "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
-      "<th style='padding:8px;text-align:left;font-weight:normal;'>Dom.</th>" +
-      "<th style='padding:8px;text-align:left;font-weight:normal;'>La tua risposta</th>" +
-      "<th style='padding:8px;text-align:left;font-weight:normal;'>Risposta corretta</th>" +
-      "<th style='padding:8px;text-align:center;font-weight:normal;'>Pt</th>" +
-      "</tr></thead><tbody>" +
-      resultRows.map((r, i) => {
-        const bg        = r.correct ? "#f0f7f0" : (r.userDisplay === "—" ? "#fff" : "#fdf0f0");
-        const icon      = r.correct ? "✓" : (r.userDisplay === "—" ? "–" : "✗");
-        const iconColor = r.correct ? "#2e7d32" : (r.userDisplay === "—" ? "#888" : "#b00");
-        return "<tr style='border-bottom:1px solid #eee;background:" + bg + ";'>" +
-          "<td style='padding:8px;color:#777;'>" + (i + 1) + "</td>" +
-          "<td style='padding:8px;'><span style='color:" + iconColor + ";margin-right:6px;'>" + icon + "</span>" + escHtml(r.userDisplay) + "</td>" +
-          "<td style='padding:8px;color:#1a5c1a;'>" + (r.correct ? "" : escHtml(r.correctDisplay)) + "</td>" +
-          "<td style='padding:8px;text-align:center;'>" + r.pts + "/" + r.qPts + "</td>" +
-          "</tr>";
-      }).join("") + "</tbody></table>";
-    document.getElementById("send-done").style.display = "none";
-    document.getElementById("btn-retry").style.display = "none";
-    document.getElementById("btn-restart").style.display = "inline-block";
-
-    // Salva su Sheets in background (fire-and-forget)
-    const endTimePr  = new Date();
-    const elapsedPr  = startTime ? Math.round((endTimePr - startTime) / 1000) : null;
-    const elapsedStrPr = elapsedPr !== null ? Math.floor(elapsedPr / 60) + "m " + (elapsedPr % 60) + "s" : "";
-    clearLocal();
-    callScript({
-      action: "finalize", examId: EXAM_ID,
-      matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail,
-      score, answers: resultRows,
-      tsStart: startTime ? startTime.toISOString() : "",
-      tsEnd: endTimePr.toISOString(), elapsed: elapsedStrPr
-    }).catch(() => {});
-    return;
-  }
-
-  // ---- EXAM ----
   const endTime    = new Date();
   const elapsed    = startTime ? Math.round((endTime - startTime) / 1000) : null;
   const elapsedStr = elapsed !== null ? Math.floor(elapsed / 60) + "m " + (elapsed % 60) + "s" : "";
 
   lastFinalizePayload = {
-    action:    "finalize",
-    matricola: studentMatricola,
+    action:     "finalize",
+    matricola:  studentMatricola,
     nominativo: studentNominativo,
-    email:     studentEmail,
-    examId:    EXAM_ID,
-    score,
-    answers:   resultRows,
-    tsStart:   startTime ? startTime.toISOString() : "",
-    tsEnd:     endTime.toISOString(),
-    elapsed:   elapsedStr
+    email:      studentEmail,
+    examId:     EXAM_ID,
+    answers:    rawAnswers,   // solo risposte grezze — punteggio calcolato server-side
+    tsStart:    startTime ? startTime.toISOString() : "",
+    tsEnd:      endTime.toISOString(),
+    elapsed:    elapsedStr
   };
 
+  clearLocal();
   await doFinalize();
+}
+
+// Mostra il riepilogo risultati (practice) usando le risposte corrette ricevute dal server
+function showPracticeResults(serverScore, correctAnswers) {
+  const statusEl = document.getElementById("send-status");
+  const rows = questions.map((q, i) => {
+    const userAns = answers[i];
+    const ca      = correctAnswers ? correctAnswers[i] : null;
+    let userDisplay = "—", correctDisplay = "—", pts = 0, isCorrect = false;
+    const serverPts = ca ? (ca.pts || 0) : 0; // verrà usato dal server, qui solo display
+
+    if (q.type === "mc") {
+      userDisplay = (userAns !== null && userAns !== undefined && q.options) ? (q.options[userAns] || "—") : "—";
+      correctDisplay = (ca && ca.correct !== undefined && q.options) ? (q.options[ca.correct] || "—") : "—";
+    } else if (q.type === "fitb") {
+      userDisplay    = userAns || "—";
+      correctDisplay = ca ? (ca.correct || "—") : "—";
+    } else if (q.type === "match") {
+      userDisplay = Array.isArray(userAns) && q.left
+        ? q.left.map((l, j) => l + " → " + (userAns[j] !== null && ca && ca.right ? (ca.right[userAns[j]] || "—") : "—")).join("; ")
+        : "—";
+      correctDisplay = (ca && ca.right && q.left) ? q.left.map((l, j) => l + " → " + ca.right[j]).join("; ") : "—";
+    } else if (q.type === "free") {
+      userDisplay    = String(userAns || "—");
+      correctDisplay = "(valutazione manuale)";
+    } else if (q.type === "multi-fitb") {
+      userDisplay = Array.isArray(userAns) && q.boxes
+        ? q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (userAns[j] || "—")).join(", ") : "—";
+      correctDisplay = (ca && ca.boxes)
+        ? ca.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (b.correct || "")).join(", ") : "—";
+    } else if (q.type === "cloze") {
+      userDisplay = Array.isArray(userAns) && q.dropdowns
+        ? q.dropdowns.map((dd, j) => dd.options[userAns[j]] || "—").join(" / ") : "—";
+      correctDisplay = (ca && ca.dropdowns)
+        ? ca.dropdowns.map(dd => dd.options[dd.correct]).join(" / ") : "—";
+    }
+    return { userDisplay, correctDisplay, qText: q.text, qPts: q.pts };
+  });
+
+  // Recupera i punteggi per domanda dal server (scoredAnswers non disponibili qui — usiamo solo score totale)
+  statusEl.innerHTML =
+    "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + serverScore + " / " + TOTAL_PTS + "</div>" +
+    "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione</div>" +
+    "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
+    "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
+    "<th style='padding:8px;text-align:left;font-weight:normal;'>Dom.</th>" +
+    "<th style='padding:8px;text-align:left;font-weight:normal;'>La tua risposta</th>" +
+    "<th style='padding:8px;text-align:left;font-weight:normal;'>Risposta corretta</th>" +
+    "</tr></thead><tbody>" +
+    rows.map((r, i) => "<tr style='border-bottom:1px solid #eee;'>" +
+      "<td style='padding:8px;color:#777;'>" + (i + 1) + "</td>" +
+      "<td style='padding:8px;'>" + escHtml(r.userDisplay) + "</td>" +
+      "<td style='padding:8px;color:#1a5c1a;'>" + escHtml(r.correctDisplay) + "</td>" +
+      "</tr>").join("") + "</tbody></table>";
+  document.getElementById("send-done").style.display = "none";
+  document.getElementById("btn-retry").style.display = "none";
+  document.getElementById("btn-restart").style.display = "inline-block";
 }
 
 async function doFinalize() {
@@ -1025,12 +990,30 @@ async function doFinalize() {
   doneEl.style.display   = "none";
   retryBtn.style.display = "none";
 
-  const ok = await callScriptWithRetry(lastFinalizePayload, 3);
+  let res = null;
+  try {
+    res = await callScript(lastFinalizePayload);
+  } catch(e) { res = null; }
 
-  if (ok) {
+  if (!res || res.status !== "ok") {
+    // Riprova fino a 3 volte
+    for (let attempt = 0; attempt < 3 && (!res || res.status !== "ok"); attempt++) {
+      try { res = await callScript(lastFinalizePayload); } catch(e) { res = null; }
+    }
+  }
+
+  if (res && res.status === "ok") {
     clearLocal();
-    statusEl.textContent = "";
-    doneEl.style.display = "block";
+    if (EXAM_MODE === "practice") {
+      // Mostra risultati con risposte corrette ricevute dal server
+      showPracticeResults(res.score, res.correct_answers);
+    } else {
+      // Exam: mostra solo score confermato dal server
+      statusEl.innerHTML = "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" +
+        (res.score !== undefined ? res.score : "—") + " / " + TOTAL_PTS + "</div>" +
+        "<div style='font-size:0.9em;color:#555;'>Punteggio registrato.</div>";
+      doneEl.style.display = "block";
+    }
   } else {
     statusEl.textContent = "⚠ Salvataggio non riuscito. I tuoi dati sono al sicuro in questo browser.";
     statusEl.style.color = "#b00";
