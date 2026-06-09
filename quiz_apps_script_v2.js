@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.18.0"; // aggiornare ad ogni deploy
+const VERSION = "2.19.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -426,21 +426,61 @@ function resolveTraccia(examId) { return resolveEsame(examId); }
 // ------------------------------------------------------------
 // Foglio risultati (identico a v1, ma usa SHEET_RESULTS_ID)
 // ------------------------------------------------------------
-function getAdminPassword() {
+function getConfigSheet() {
   const ss = SpreadsheetApp.openById(getSheetResultsId());
-  let sheet = ss.getSheetByName("_config");
-  if (!sheet) {
-    sheet = ss.insertSheet("_config");
-    sheet.appendRow(["Chiave", "Valore"]);
-    sheet.appendRow(["admin_password", "cambiami"]);
-    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
-    sheet.setFrozenRows(1);
+  let cfg = ss.getSheetByName("_config");
+  if (!cfg) {
+    cfg = ss.insertSheet("_config");
+    cfg.appendRow(["Chiave", "Valore"]);
+    cfg.appendRow(["admin_password", "cambiami"]);
+    cfg.getRange(1, 1, 1, 2).setFontWeight("bold");
+    cfg.setFrozenRows(1);
   }
-  const values = sheet.getDataRange().getValues();
+  return cfg;
+}
+
+function getAdminPassword() {
+  const values = getConfigSheet().getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]) === "admin_password") return String(values[i][1]);
   }
   return "";
+}
+
+// Legge extra minuti globali per un esame (scope "all")
+function getExtraMinutesAll(examId) {
+  const key = "extra_time:" + examId + ":all";
+  const vals = getConfigSheet().getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === key) return Number(vals[i][1]) || 0;
+  }
+  return 0;
+}
+
+// Legge extra minuti individuali per uno studente (NON include "all")
+function getExtraMinutesIndividual(examId, matricola) {
+  const key = "extra_time:" + examId + ":" + String(matricola);
+  const vals = getConfigSheet().getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === key) return Number(vals[i][1]) || 0;
+  }
+  return 0;
+}
+
+// Aggiunge (o sottrae) deltaMinutes per uno scope ("all" o matricola). Restituisce nuovo totale.
+function addExtraMinutes(examId, scope, deltaMinutes) {
+  const key = "extra_time:" + examId + ":" + scope;
+  const cfg  = getConfigSheet();
+  const vals = cfg.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === key) {
+      const newVal = (Number(vals[i][1]) || 0) + deltaMinutes;
+      cfg.getRange(i + 1, 2).setValue(newVal);
+      return newVal;
+    }
+  }
+  cfg.appendRow([key, deltaMinutes]);
+  return deltaMinutes;
 }
 
 function getMetaSheet() {
@@ -539,6 +579,20 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+
+    // ----------------------------------------------------------------
+    // addExtraTime — aggiunge (o sottrae) minuti a tutti o a uno studente
+    // ----------------------------------------------------------------
+    if (data.action === "addExtraTime") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const minutes = Number(data.minutes) || 0;
+      const scope   = String(data.scope || "all");   // "all" o matricola specifica
+      const examId  = String(data.exam_id || "");
+      if (!examId)  return corsResponse({ status: "error", message: "exam_id mancante" });
+      if (minutes === 0) return corsResponse({ status: "ok", total: getExtraMinutesAll(examId), scope });
+      const newTotal = addExtraMinutes(examId, scope, minutes);
+      return corsResponse({ status: "ok", total: newTotal, scope, exam_id: examId });
+    }
 
     // ----------------------------------------------------------------
     // getConfig — legge gli ID dei fogli attivi (admin)
@@ -684,6 +738,12 @@ function doPost(e) {
       const pwdRequired = !!(resolved.track._password);
       delete resolved.track._password;
       resolved.track.password_required = pwdRequired;
+      // Aggiunge extra tempo globale alla durata (per refreshDuration lato client)
+      const extraAll = getExtraMinutesAll(examId);
+      if (extraAll !== 0) {
+        const base = parseInt(resolved.track.duration, 10) || 0;
+        resolved.track.duration = String(base + extraAll);
+      }
       // SICUREZZA: getTrack restituisce SOLO metadati e conteggi per la cover.
       // Il contenuto delle domande NON viene mai esposto qui — verrebbe altrimenti
       // raccolto in anticipo (anche a esame chiuso) da chiunque conosca l'URL.
@@ -1091,7 +1151,9 @@ function doPost(e) {
       const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
       // Salva solo la risposta grezza — il punteggio è calcolato server-side in finalize
       sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
-      return corsResponse({ status: "ok" });
+      // Restituisce extra tempo individuale (NON include "all", già gestito via getTrack)
+      const extraInd = getExtraMinutesIndividual(track.exam_id, data.matricola);
+      return corsResponse({ status: "ok", extra_minutes_individual: extraInd });
     }
 
     // ---- FINALIZE ----
@@ -1144,7 +1206,9 @@ function doPost(e) {
         if (serverStart) {
           const secs = Math.round((serverEnd - serverStart) / 1000);
           elapsedStr = Math.floor(secs / 60) + "m " + (secs % 60) + "s";
-          const durMin = parseInt(track.duration, 10);
+          const extraAll = getExtraMinutesAll(track.exam_id);
+          const extraInd = getExtraMinutesIndividual(track.exam_id, data.matricola);
+          const durMin = parseInt(track.duration, 10) + extraAll + extraInd;
           if (durMin > 0 && secs > durMin * 60 + 60) { // 60s di tolleranza
             overtime = true;
             elapsedStr += " ⚠ oltre tempo";

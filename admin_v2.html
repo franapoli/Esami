@@ -463,6 +463,15 @@
         <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
         <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 4px;border-top:1px solid #eee;margin-top:8px;">
+        <span style="font-size:0.88em;color:#555;">Tempo extra:</span>
+        <input type="number" id="extra-minutes-input" value="10" step="5" style="width:64px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.9em;">
+        <span style="font-size:0.88em;color:#555;">min</span>
+        <button class="btn btn-sm" onclick="doAddExtraTime('all')">+ Tutti</button>
+        <button class="btn btn-sm" id="btn-extra-student" onclick="doAddExtraTime('student')" disabled style="opacity:0.5;">+ Studente selezionato</button>
+        <span id="extra-student-label" style="font-size:0.85em;color:#1565c0;font-style:italic;"></span>
+        <span id="extra-time-msg" style="font-size:0.85em;margin-left:4px;"></span>
+      </div>
       <table>
         <thead>
           <tr>
@@ -1216,8 +1225,10 @@ function renderMonitorData(res) {
         ? '<span class="badge badge-prog">In corso</span>'
         : '<span class="badge badge-wait">Connesso</span>';
     const score = r.finalized && r.score !== "" ? r.score : "—";
-    return `<tr class="${r.finalized ? "finalized" : ""}">
-      <td>${escHtml(String(r.matricola))}</td>
+    const mat = escHtml(String(r.matricola));
+    const nom = escHtml(String(r.nominativo||""));
+    return `<tr class="${r.finalized ? "finalized" : ""}" id="mrow-${mat}" onclick="selectMonitorStudent('${mat}','${nom}')" style="cursor:pointer;">
+      <td>${mat}</td>
       <td>${escHtml(String(r.nominativo||""))}</td>
       <td>${escHtml(String(r.email||""))}</td>
       <td>${fmtTs(r.tsStart)}</td>
@@ -1234,6 +1245,47 @@ function renderMonitorData(res) {
 function startAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (activeTab === "monitor") loadMonitorData(); }, 30000);
+}
+
+let _selectedMonitorMatricola = null;
+let _selectedMonitorNominativo = null;
+
+function selectMonitorStudent(matricola, nominativo) {
+  _selectedMonitorMatricola = matricola;
+  _selectedMonitorNominativo = nominativo;
+  // Evidenzia riga
+  document.querySelectorAll("#monitor-body tr").forEach(tr => {
+    tr.style.background = tr.id === "mrow-" + matricola ? "#e3f2fd" : "";
+  });
+  const lbl = document.getElementById("extra-student-label");
+  if (lbl) lbl.textContent = nominativo || matricola;
+  const btn = document.getElementById("btn-extra-student");
+  if (btn) { btn.disabled = false; btn.style.opacity = "1"; }
+}
+
+async function doAddExtraTime(scope) {
+  if (!currentEsame) return;
+  const minutes = parseInt(document.getElementById("extra-minutes-input").value, 10);
+  if (isNaN(minutes) || minutes === 0) return;
+  const actualScope = scope === "student" ? _selectedMonitorMatricola : "all";
+  if (scope === "student" && !actualScope) return;
+  const msg = document.getElementById("extra-time-msg");
+  msg.style.color = "#555"; msg.textContent = "…";
+  try {
+    const res = await callScript({
+      action: "addExtraTime", password: adminPassword,
+      exam_id: currentEsame.exam_id, scope: actualScope, minutes
+    });
+    if (res.status === "ok") {
+      const who = scope === "all" ? "tutti" : (_selectedMonitorNominativo || actualScope);
+      msg.style.color = "#2e7d32";
+      msg.textContent = `✓ ${minutes > 0 ? "+" : ""}${minutes} min → ${who} (tot. ${res.total} min)`;
+    } else {
+      msg.style.color = "#b00"; msg.textContent = res.message || "Errore.";
+    }
+  } catch(e) {
+    msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
+  }
 }
 
 // ---- TAB RISULTATI ----

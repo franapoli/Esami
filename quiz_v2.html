@@ -159,6 +159,7 @@
       <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.05em;color:#777;margin-bottom:4px;">Tempo rimanente</div>
       <div id="timer" style="font-size:1.6em;font-weight:bold;font-family:monospace;color:#1a1a1a;letter-spacing:2px;">--:--</div>
     </div>
+    <div id="extra-time-toast" style="display:none;margin-top:8px;padding:6px 10px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:4px;font-size:0.82em;color:#2e7d32;text-align:center;"></div>
     <button class="btn" style="width:100%;margin-top:20px;background:#b00;" onclick="confirmSubmit()">Consegna</button>
     <button class="btn btn-outline" style="width:100%;margin-top:8px;font-size:0.85em;" onclick="abandonQuiz()">Abbandona</button>
     <div id="practice-hint" style="display:none;margin-top:14px;font-size:0.78em;color:#7b5e00;background:#fff8e1;border:1px solid #ffe082;padding:8px 10px;line-height:1.5;">
@@ -208,6 +209,8 @@ let shuffleMap        = [];
 let matchSelected     = null; // {qIdx, rightOrigIdx, fromSlot: null|leftIdx}
 let startTime         = null;
 let timerInterval     = null;
+let _durationRefreshInterval = null;
+let extraMinutesIndividualApplied = 0;
 
 // ---- UTILITÀ ----
 function formatDateIt(dateStr) {
@@ -497,6 +500,12 @@ async function initQuiz() {
     buildGrid();
     renderQuestion();
     startTimer();
+    extraMinutesIndividualApplied = 0;
+    // Aggiornamento periodico durata (cattura extra tempo aggiunto dal docente)
+    if (_durationRefreshInterval) clearInterval(_durationRefreshInterval);
+    if (EXAM_MODE !== "practice") {
+      _durationRefreshInterval = setInterval(refreshDuration, 60 * 1000);
+    }
   } catch(err) {
     document.getElementById("cover-error").textContent = "Errore: " + err.message;
     console.error("initQuiz error:", err);
@@ -512,6 +521,7 @@ function startTimer() {
     return;
   }
   if (timerInterval) clearInterval(timerInterval);
+  if (_durationRefreshInterval) { clearInterval(_durationRefreshInterval); _durationRefreshInterval = null; }
   timerInterval = setInterval(updateTimer, 1000);
   updateTimer();
 }
@@ -625,7 +635,9 @@ async function refreshDuration() {
     const newDur = res.track.duration !== undefined && res.track.duration !== ""
       ? parseInt(res.track.duration) : EXAM_DURATION_MIN;
     if (newDur === EXAM_DURATION_MIN) return; // nessun cambiamento
+    const delta = newDur - EXAM_DURATION_MIN;
     EXAM_DURATION_MIN = newDur;
+    if (delta > 0) showExtraTimeToast("+" + delta + " minuti aggiunti");
     // Riavvia il timer con la nuova durata (startTime rimane invariato)
     if (EXAM_DURATION_MIN === 0) {
       clearInterval(timerInterval);
@@ -635,6 +647,15 @@ async function refreshDuration() {
       startTimer();
     }
   } catch(e) { /* silenzioso */ }
+}
+
+function showExtraTimeToast(msg) {
+  const el = document.getElementById("extra-time-toast");
+  if (!el) return;
+  el.textContent = "⏱ " + msg;
+  el.style.display = "block";
+  clearTimeout(el._hideTimeout);
+  el._hideTimeout = setTimeout(() => { el.style.display = "none"; }, 6000);
 }
 
 // ---- RENDER ----
@@ -865,9 +886,18 @@ async function saveProgress(qIndex, value) {
       ans = String(value || "");
     }
     // Invia solo la risposta grezza — il punteggio viene calcolato server-side in finalize
-    await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
-                       qIndex: qIndex + 1, ans });
+    const res = await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
+                                   qIndex: qIndex + 1, ans });
     setSaveStatus("✓ Salvato");
+    // Propaga extra tempo individuale (global extra è gestito via refreshDuration)
+    const extraInd = res.extra_minutes_individual || 0;
+    if (extraInd > extraMinutesIndividualApplied) {
+      const delta = extraInd - extraMinutesIndividualApplied;
+      extraMinutesIndividualApplied = extraInd;
+      EXAM_DURATION_MIN += delta;
+      showExtraTimeToast("+" + delta + " minuti aggiunti");
+      startTimer();
+    }
   } catch(e) {
     setSaveStatus("⚠ Salvataggio fallito");
   }
@@ -899,6 +929,7 @@ let lastFinalizePayload = null;
 
 async function showResults() {
   if (timerInterval) clearInterval(timerInterval);
+  if (_durationRefreshInterval) { clearInterval(_durationRefreshInterval); _durationRefreshInterval = null; }
   document.getElementById("quiz-wrapper").classList.remove("active");
   document.getElementById("thankyou").style.display = "block";
 
@@ -1040,6 +1071,7 @@ async function abandonQuiz() {
   if (!confirm("Sei sicuro di voler abbandonare il quiz?\nLa tua sessione verrà cancellata e dovrai ricominciare dall'inizio.")) return;
 
   if (timerInterval) clearInterval(timerInterval);
+  if (_durationRefreshInterval) { clearInterval(_durationRefreshInterval); _durationRefreshInterval = null; }
 
   // Cancella la riga sul server (fire-and-forget)
   if (studentMatricola) {
@@ -1076,6 +1108,7 @@ async function abandonQuiz() {
 
 async function restartQuiz() {
   if (timerInterval) clearInterval(timerInterval);
+  if (_durationRefreshInterval) { clearInterval(_durationRefreshInterval); _durationRefreshInterval = null; }
   document.getElementById("thankyou").style.display = "none";
   document.getElementById("btn-restart").style.display = "none";
 
