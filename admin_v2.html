@@ -236,9 +236,9 @@
       <h1>QuizForge Admin <span id="build-label" style="font-size:0.55em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
       <span style="font-size:0.78em;color:#888;white-space:nowrap;flex-shrink:0;margin-left:16px;">Cartella Drive:</span>
       <input type="text" id="cfg-folder-url" placeholder="URL o ID cartella Drive"
-        style="flex:1;min-width:180px;max-width:320px;font-size:0.78em;padding:3px 8px;border:1px solid #ddd;font-family:monospace;">
+        style="flex:1;min-width:180px;max-width:320px;font-size:0.78em;padding:3px 8px;border:1px solid #ddd;font-family:monospace;"
+        onkeydown="if(event.key==='Enter') loadDriveList()">
       <a id="link-folder" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri cartella">↗</a>
-      <button class="btn btn-sm btn-outline" onclick="loadDriveList()" style="flex-shrink:0;">Aggiorna</button>
       <span id="drive-msg" style="font-size:0.78em;color:#888;white-space:nowrap;flex-shrink:0;"></span>
       <button class="btn btn-sm btn-outline" onclick="logout()" style="margin-left:auto;flex-shrink:0;">Esci</button>
     </div>
