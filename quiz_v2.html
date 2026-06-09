@@ -238,6 +238,7 @@ function saveLocal() {
     answers,
     current,
     shuffleMap,
+    questions,   // set autoritativo assegnato dal server: necessario per ripresa coerente (tracce random)
     startTime: startTime ? startTime.toISOString() : null
   }));
 }
@@ -287,10 +288,12 @@ async function loadTrack() {
       return false;
     }
 
-    // Domande
-    questions = res.questions || [];
-    answers   = new Array(questions.length).fill(null);
-    TOTAL_PTS = res.total_pts || questions.reduce((s, q) => s + (q.pts || 0), 0);
+    // Le domande NON arrivano più da getTrack (sicurezza): vengono assegnate dal
+    // server all'avvio (init/resetPractice). Qui usiamo solo i conteggi per la cover.
+    questions = [];
+    answers   = [];
+    TOTAL_PTS = res.total_pts || 0;
+    const N_QUESTIONS = res.n_questions || 0;
 
     // Metadati traccia
     const t = res.track;
@@ -307,7 +310,7 @@ async function loadTrack() {
     const durLabel = EXAM_DURATION_MIN === 0 ? "senza limite di tempo" : EXAM_DURATION_MIN + " minuti";
     document.getElementById("cover-subtitle").innerHTML =
       (t.corso ? t.corso + " &nbsp;|&nbsp; " : "") +
-      questions.length + " domande &nbsp;|&nbsp; " + TOTAL_PTS + " punti &nbsp;|&nbsp; " + durLabel;
+      N_QUESTIONS + " domande &nbsp;|&nbsp; " + TOTAL_PTS + " punti &nbsp;|&nbsp; " + durLabel;
 
     if (EXAM_MODE === "practice") {
       document.getElementById("practice-badge").style.display = "block";
@@ -361,6 +364,12 @@ window.addEventListener("load", async function() {
   studentNominativo = saved.nominativo || "";
   studentMatricola  = saved.matricola;
   studentEmail      = saved.email || "";
+  // Ripristina il set di domande autoritativo salvato all'init (coerente con COL_QIDS sul server).
+  // Per tracce random, getTrack al reload darebbe un set diverso da quello assegnato: usa quello salvato.
+  if (Array.isArray(saved.questions) && saved.questions.length) {
+    questions = saved.questions;
+    TOTAL_PTS = questions.reduce((s, q) => s + (q.pts || 0), 0);
+  }
   answers           = saved.answers || new Array(questions.length).fill(null);
   current           = saved.current || 0;
   shuffleMap        = saved.shuffleMap || null;
@@ -419,8 +428,9 @@ async function initQuiz() {
   btn.textContent = "Verifica in corso…";
 
   try {
-    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID,
-                                   questionIds: questions.map(q => q.id) });
+    // Il server assegna le domande (non si inviano questionIds: il server li ignora per sicurezza)
+    let authoritative = null;
+    const res = await callScript({ action:"init", nominativo, matricola, email, examId: EXAM_ID });
     if (res.status === "duplicate") {
       if (EXAM_MODE === "practice") {
         const reset = confirm(
@@ -440,6 +450,7 @@ async function initQuiz() {
           btn.textContent = "Inizia il quiz";
           return;
         }
+        authoritative = resetRes;
       } else {
         document.getElementById("cover-error").textContent = res.finalized
           ? "Hai già consegnato il quiz con questa matricola."
@@ -448,7 +459,22 @@ async function initQuiz() {
         btn.textContent = "Inizia il quiz";
         return;
       }
+    } else if (res.status === "ok") {
+      authoritative = res;
+    } else {
+      document.getElementById("cover-error").textContent = res.message || "Errore di avvio. Riprova.";
+      btn.disabled = false;
+      btn.textContent = "Inizia il quiz";
+      return;
     }
+
+    // SICUREZZA: adotta ESATTAMENTE il set di domande assegnato dal server (quello che verrà valutato)
+    if (authoritative && Array.isArray(authoritative.questions)) {
+      questions = authoritative.questions;
+      if (authoritative.total_pts !== undefined) TOTAL_PTS = authoritative.total_pts;
+    }
+    answers = new Array(questions.length).fill(null);
+
     studentNominativo = nominativo;
     studentMatricola  = matricola;
     studentEmail      = email;
@@ -816,28 +842,10 @@ function saveClozeBox(idx, val) {
   enqueueProgress(current, answers[current]);
 }
 
-function scoreCloze(q, value) {
-  if (!Array.isArray(value) || !q.dropdowns) return 0;
-  let correct = 0;
-  q.dropdowns.forEach((dd, i) => { if (value[i] === dd.correct) correct++; });
-  return Math.round((correct / q.dropdowns.length) * q.pts);
-}
-
-function scoreMatch(q, value) {
-  if (!Array.isArray(value) || !q.right) return 0;
-  let correct = 0;
-  value.forEach((rightIdx, leftIdx) => { if (rightIdx === leftIdx) correct++; });
-  return Math.round((correct / q.left.length) * q.pts);
-}
-
-function scoreMultiFitb(q, value) {
-  if (!Array.isArray(value) || !q.boxes) return 0;
-  let pts = 0;
-  q.boxes.forEach((box, i) => {
-    if (normalizeAnswer(value[i]) === normalizeAnswer(box.correct)) pts += (box.pts || 0);
-  });
-  return pts;
-}
+// NB: lo scoring è interamente server-side (Apps Script). Il client non conosce
+// più le risposte corrette durante l'esame, quindi non esistono funzioni di scoring
+// client-side. Le risposte corrette vengono mostrate solo in practice, dopo la
+// consegna, usando i dati restituiti da finalize (correct_answers).
 
 async function saveProgress(qIndex, value) {
   setSaveStatus("Salvataggio…");
@@ -1067,22 +1075,18 @@ async function restartQuiz() {
   document.getElementById("btn-restart").style.display = "none";
 
   if (EXAM_MODE === "practice") {
-    // Mostra overlay di caricamento e ricarica le domande dal server
+    // Reset sul server: è il server a riassegnare le domande (set autoritativo)
     document.getElementById("loading-overlay").classList.remove("hidden");
     try {
-      const res = await callScript({ action: "getTrack", examId: EXAM_ID });
-      if (res.status === "ok") {
-        questions = res.questions || [];
-        TOTAL_PTS = res.total_pts || questions.reduce((s, q) => s + (q.pts || 0), 0);
+      const resetRes = await callScript({ action: "resetPractice", examId: EXAM_ID,
+                         matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail });
+      if (resetRes && resetRes.status === "ok" && Array.isArray(resetRes.questions)) {
+        questions = resetRes.questions;
+        TOTAL_PTS = resetRes.total_pts !== undefined ? resetRes.total_pts : questions.reduce((s, q) => s + (q.pts || 0), 0);
       }
     } catch(e) { /* usa le domande precedenti se la rete non risponde */ }
     document.getElementById("loading-overlay").classList.add("hidden");
 
-    // Reset sul server
-    await callScript({ action: "resetPractice", examId: EXAM_ID,
-                       matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail,
-                       questionIds: questions.map(q => q.id) })
-          .catch(() => {});
     answers   = new Array(questions.length).fill(null);
     current   = 0;
     startTime = new Date();

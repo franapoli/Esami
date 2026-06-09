@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.12.0"; // aggiornare ad ogni deploy
+const VERSION = "2.13.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -94,6 +94,14 @@ function formatTs(isoStr) {
     return pad(d.getDate()) + "/" + pad(d.getMonth()+1) + "/" + d.getFullYear()
       + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
   } catch(e) { return isoStr; }
+}
+
+// Inverso di formatTs: "DD/MM/YYYY HH:mm:ss" → Date (o null)
+function parseTs(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+  if (!m) { const d = new Date(s); return isNaN(d) ? null : d; }
+  return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +m[6]);
 }
 
 function corsResponse(obj) {
@@ -282,22 +290,38 @@ function buildQuestionObj(q, pos, withCorrect) {
 }
 
 // Calcola il punteggio server-side per una singola risposta
+// Normalizza una risposta testuale — IDENTICO a normalizeAnswer() in quiz_v2.html
+// (rimuove TUTTI gli spazi e abbassa a minuscolo) per coerenza di scoring.
+function normalizeText(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/\s/g, "").toLowerCase();
+}
+
+// Calcola il punteggio server-side per una singola risposta.
+// q è l'oggetto domanda grezzo dal repository (allQ[id]); ans è la risposta grezza dello studente.
 function scoreAnswer(q, ans) {
+  if (!q) return 0; // domanda inesistente → 0 (protezione contro ID iniettati)
   if (q.tipo === "mc") {
     const correct = letterToIndex(q.corretta);
     return (parseInt(ans, 10) === correct) ? q.punti : 0;
   }
   if (q.tipo === "fitb") {
-    return (String(ans || "").trim().toLowerCase() === String(q.corretta || "").trim().toLowerCase()) ? q.punti : 0;
+    return (normalizeText(ans) === normalizeText(q.corretta)) ? q.punti : 0;
   }
   if (q.tipo === "match") {
+    // Il client salva un array di INDICI: given[i] = indice (in q.right) scelto per il termine sinistro i.
+    // La risposta è corretta per la posizione i se right[given[i]] === right[i] (ovvero given[i] === i,
+    // confrontando per valore per gestire eventuali stringhe duplicate).
     try {
       const right = JSON.parse(q.corretta);
       const given = typeof ans === "string" ? JSON.parse(ans) : ans;
       if (!Array.isArray(given)) return 0;
       let ok = 0;
-      right.forEach((r, i) => { if (String(given[i] || "").trim() === String(r).trim()) ok++; });
-      return Math.round((ok / right.length) * q.punti);
+      right.forEach((r, i) => {
+        const chosenIdx = parseInt(given[i], 10);
+        if (!isNaN(chosenIdx) && String(right[chosenIdx] ?? "").trim() === String(r).trim()) ok++;
+      });
+      return right.length ? Math.round((ok / right.length) * q.punti) : 0;
     } catch(e) { return 0; }
   }
   if (q.tipo === "multi-fitb") {
@@ -307,8 +331,7 @@ function scoreAnswer(q, ans) {
       const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
       let pts = 0;
       boxes.forEach((b, i) => {
-        if (String(given[i] || "").trim().toLowerCase() === String(b.correct || "").trim().toLowerCase())
-          pts += (b.pts || 0);
+        if (normalizeText(given[i]) === normalizeText(b.correct)) pts += (b.pts || 0);
       });
       return pts;
     } catch(e) { return 0; }
@@ -323,7 +346,7 @@ function scoreAnswer(q, ans) {
       return dropdowns.length ? Math.round((ok / dropdowns.length) * q.punti) : 0;
     } catch(e) { return 0; }
   }
-  if (q.tipo === "free") return 0; // manuale
+  if (q.tipo === "free") return 0; // valutazione manuale
   return 0;
 }
 
@@ -657,7 +680,16 @@ function doPost(e) {
       const pwdRequired = !!(resolved.track._password);
       delete resolved.track._password;
       resolved.track.password_required = pwdRequired;
-      return corsResponse({ status: "ok", ...resolved });
+      // SICUREZZA: getTrack restituisce SOLO metadati e conteggi per la cover.
+      // Il contenuto delle domande NON viene mai esposto qui — verrebbe altrimenti
+      // raccolto in anticipo (anche a esame chiuso) da chiunque conosca l'URL.
+      // Le domande effettive sono assegnate server-side da init/resetPractice.
+      return corsResponse({
+        status:      "ok",
+        track:       resolved.track,
+        n_questions: resolved.n_questions,
+        total_pts:   resolved.total_pts
+      });
     }
 
     // ----------------------------------------------------------------
@@ -996,96 +1028,146 @@ function doPost(e) {
       }
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex !== -1) sheet.deleteRow(rowIndex);
+      // Le domande sono assegnate dal SERVER (resolved.questions), mai dal client
+      const assigned = resolved.questions;
+      const qIds     = assigned.map(q => q.id);
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
                    "", totalPts, formatTs(new Date().toISOString()), "", "",
-                   data.questionIds ? data.questionIds.join(",") : ""];
-      for (let i = 0; i < nQ; i++) { row.push(""); row.push(""); }
+                   qIds.join(",")];
+      for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
       sheet.appendRow(row);
       sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
-      return corsResponse({ status: "ok" });
+      return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts });
     }
 
     // ---- INIT ----
     if (data.action === "init") {
-      const values = sheet.getDataRange().getValues();
-      for (let i = 1; i < values.length; i++) {
-        if (String(values[i][COL_MATRICOLA - 1]) === String(data.matricola)) {
-          return corsResponse({ status: "duplicate", finalized: values[i][COL_TS_END - 1] !== "" });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const values = sheet.getDataRange().getValues();
+        for (let i = 1; i < values.length; i++) {
+          if (String(values[i][COL_MATRICOLA - 1]) === String(data.matricola)) {
+            return corsResponse({ status: "duplicate", finalized: values[i][COL_TS_END - 1] !== "" });
+          }
         }
+        // SICUREZZA: le domande sono assegnate dal SERVER, mai accettate dal client.
+        // resolved.questions è la risoluzione server-side (senza risposte corrette).
+        const assigned = resolved.questions;
+        const qIds     = assigned.map(q => q.id);
+        // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
+        const row = [String(data.matricola), data.nominativo || "", data.email || "",
+                     "", totalPts, formatTs(new Date().toISOString()), "", "",
+                     qIds.join(",")];
+        for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
+        sheet.appendRow(row);
+        sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
+        // Restituisce le domande autoritative: il client DEVE renderizzare esattamente queste
+        return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
       }
-      // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
-      const row = [String(data.matricola), data.nominativo || "", data.email || "",
-                   "", totalPts, formatTs(new Date().toISOString()), "", "",
-                   data.questionIds ? data.questionIds.join(",") : ""];
-      for (let i = 0; i < nQ; i++) { row.push(""); row.push(""); }
-      sheet.appendRow(row);
-      sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
-      return corsResponse({ status: "ok" });
     }
 
     // ---- UPDATE ----
     if (data.action === "update") {
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
+      // Blocca modifiche dopo la consegna definitiva (anti-manomissione, exam mode)
+      if (track.mode !== "practice") {
+        const ended = sheet.getRange(rowIndex, COL_TS_END).getValue();
+        if (ended !== "" && ended !== null) {
+          return corsResponse({ status: "error", message: "Esame già consegnato" });
+        }
+      }
       const qIdx = parseInt(data.qIndex, 10);
       const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
-      // Salva solo la risposta grezza — il punteggio viene calcolato server-side in finalize
+      // Salva solo la risposta grezza — il punteggio è calcolato server-side in finalize
       sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
       return corsResponse({ status: "ok" });
     }
 
     // ---- FINALIZE ----
     if (data.action === "finalize") {
-      const rowIndex = findRow(sheet, data.matricola);
-      if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const rowIndex = findRow(sheet, data.matricola);
+        if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
 
-      // Ricalcola il punteggio server-side — non fidarsi di score/pts inviati dal client.
-      // Usa gli ID assegnati allo studente (COL_QIDS) per trovare le domande esatte,
-      // incluse quelle random che erano state assegnate al momento dell'init.
-      const allQ = loadAllQuestions();
-      const existingRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const assignedIds = String(existingRow[COL_QIDS - 1] || "").split(",").map(s => s.trim()).filter(Boolean);
+        const existingRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-      let serverScore = 0;
-      const scoredAnswers = [];
-
-      assignedIds.forEach((qId, i) => {
-        // Preferisci la risposta in data.answers se presente, altrimenti leggi dal foglio
-        let ans;
-        if (data.answers && data.answers[i] !== undefined) {
-          ans = data.answers[i].ans !== undefined ? data.answers[i].ans : String(data.answers[i]);
-        } else {
-          ans = existingRow[COL_ANS_FIRST - 1 + i * 2] ?? "";
+        // ANTI-ORACLE: in exam mode, una volta consegnato il punteggio è CONGELATO.
+        // Una ri-finalizzazione NON ricalcola e restituisce sempre lo score memorizzato,
+        // ignorando eventuali nuove risposte. Questo impedisce di sottomettere set di
+        // risposte diversi leggendo lo score per dedurre le risposte corrette per tentativi.
+        // È idempotente: i retry di rete legittimi ricevono comunque il loro punteggio.
+        if (track.mode !== "practice" && existingRow[COL_TS_END - 1] !== "" && existingRow[COL_TS_END - 1] !== null) {
+          return corsResponse({
+            status: "ok", already: true,
+            score: existingRow[COL_SCORE - 1], total_pts: totalPts
+          });
         }
-        const pts = scoreAnswer(allQ[qId], ans);
-        serverScore += pts;
-        scoredAnswers.push({ ans, pts });
-      });
 
-      // Prepara oggetti con risposte corrette per practice feedback
-      const qForFeedback = assignedIds.map(qId => buildQuestionObj(allQ[qId], 0, true));
+        // Punteggio ricalcolato SERVER-SIDE usando gli ID assegnati (COL_QIDS), mai score/pts dal client
+        const allQ = loadAllQuestions();
+        const assignedIds = String(existingRow[COL_QIDS - 1] || "").split(",").map(s => s.trim()).filter(Boolean);
 
-      sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || "");
-      sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || "");
-      sheet.getRange(rowIndex, COL_SCORE).setValue(serverScore);   // score server-side
-      sheet.getRange(rowIndex, COL_TS_START).setValue(formatTs(data.tsStart));
-      sheet.getRange(rowIndex, COL_TS_END).setValue(formatTs(data.tsEnd));
-      sheet.getRange(rowIndex, COL_ELAPSED).setValue(data.elapsed || "");
-      scoredAnswers.forEach((item, i) => {
-        const col = COL_ANS_FIRST + i * 2;
-        sheet.getRange(rowIndex, col).setValue(item.ans !== undefined ? item.ans : "");
-        sheet.getRange(rowIndex, col + 1).setValue(item.pts);
-      });
+        let serverScore = 0;
+        const scoredAnswers = [];
+        assignedIds.forEach((qId, i) => {
+          // Usa la risposta inviata se presente, altrimenti quella già salvata da update
+          let ans;
+          if (data.answers && data.answers[i] !== undefined) {
+            ans = data.answers[i].ans !== undefined ? data.answers[i].ans : String(data.answers[i]);
+          } else {
+            ans = existingRow[COL_ANS_FIRST - 1 + i * 2] ?? "";
+          }
+          const pts = scoreAnswer(allQ[qId], ans);
+          serverScore += pts;
+          scoredAnswers.push({ ans, pts });
+        });
 
-      // In practice mode restituisce le risposte corrette per il feedback
-      const response = { status: "ok", score: serverScore, total_pts: totalPts };
-      if (track.mode === "practice") {
-        response.correct_answers = qForFeedback.map(q => ({
-          id: q.id, correct: q.correct, type: q.type,
-          options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns
-        }));
+        // Tempo calcolato SERVER-SIDE: inizio dal foglio (scritto all'init), fine = adesso.
+        // Ignora tsStart/tsEnd/elapsed inviati dal client (manomissibili).
+        const serverStart = parseTs(existingRow[COL_TS_START - 1]);
+        const serverEnd   = new Date();
+        let elapsedStr = data.elapsed || "";
+        let overtime = false;
+        if (serverStart) {
+          const secs = Math.round((serverEnd - serverStart) / 1000);
+          elapsedStr = Math.floor(secs / 60) + "m " + (secs % 60) + "s";
+          const durMin = parseInt(track.duration, 10);
+          if (durMin > 0 && secs > durMin * 60 + 60) { // 60s di tolleranza
+            overtime = true;
+            elapsedStr += " ⚠ oltre tempo";
+          }
+        }
+
+        sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || existingRow[COL_NOMINATIVO - 1] || "");
+        sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || existingRow[COL_EMAIL - 1] || "");
+        sheet.getRange(rowIndex, COL_SCORE).setValue(serverScore);            // score server-side
+        sheet.getRange(rowIndex, COL_TS_END).setValue(formatTs(serverEnd.toISOString())); // fine server-side
+        sheet.getRange(rowIndex, COL_ELAPSED).setValue(elapsedStr);
+        scoredAnswers.forEach((item, i) => {
+          const col = COL_ANS_FIRST + i * 2;
+          sheet.getRange(rowIndex, col).setValue(item.ans !== undefined ? item.ans : "");
+          sheet.getRange(rowIndex, col + 1).setValue(item.pts);
+        });
+
+        const response = { status: "ok", score: serverScore, total_pts: totalPts, overtime: overtime };
+        // Le risposte corrette si rivelano SOLO in practice e SOLO dopo la consegna
+        if (track.mode === "practice") {
+          const qForFeedback = assignedIds.map(qId => buildQuestionObj(allQ[qId], 0, true));
+          response.correct_answers = qForFeedback.map(q => ({
+            id: q.id, correct: q.correct, type: q.type,
+            options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns
+          }));
+        }
+        return corsResponse(response);
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
       }
-      return corsResponse(response);
     }
 
     return corsResponse({ status: "error", message: "Azione non riconosciuta: " + data.action });
