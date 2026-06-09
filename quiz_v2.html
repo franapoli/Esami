@@ -367,7 +367,13 @@ window.addEventListener("load", async function() {
   const saved = loadLocal();
   if (!saved) return;
   const resume = confirm("Trovata una sessione in corso per " + saved.nominativo + " (" + saved.matricola + ").\nVuoi riprendere da dove avevi lasciato?");
-  if (!resume) { clearLocal(); return; }
+  if (!resume) {
+    clearLocal();
+    document.getElementById("cognome").value   = saved.nominativo || "";
+    document.getElementById("matricola").value = saved.matricola  || "";
+    document.getElementById("email").value     = saved.email      || "";
+    return;
+  }
 
   studentNominativo = saved.nominativo || "";
   studentMatricola  = saved.matricola;
@@ -1083,6 +1089,11 @@ async function abandonQuiz() {
 
   clearLocal();
 
+  // Salva i dati studente prima di azzerarli, per pre-popolare la cover
+  const prevNominativo = studentNominativo;
+  const prevMatricola  = studentMatricola;
+  const prevEmail      = studentEmail;
+
   // Reset stato
   studentMatricola  = "";
   studentNominativo = "";
@@ -1102,11 +1113,9 @@ async function abandonQuiz() {
   btn.disabled = false;
   btn.textContent = "Inizia il quiz";
 
-  if (EXAM_MODE === "exam") {
-    document.getElementById("cognome").value    = "";
-    document.getElementById("matricola").value  = "";
-    document.getElementById("email").value      = "";
-  }
+  document.getElementById("cognome").value   = prevNominativo;
+  document.getElementById("matricola").value = prevMatricola;
+  document.getElementById("email").value     = prevEmail;
 }
 
 async function restartQuiz() {
