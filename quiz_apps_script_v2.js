@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.16.0"; // aggiornare ad ogni deploy
+const VERSION = "2.17.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -263,8 +263,10 @@ function buildQuestionObj(q, pos, withCorrect) {
   } else if (q.tipo === "match") {
     obj.left = q.options;
     try { obj.right = JSON.parse(q.corretta); } catch(e) { obj.right = []; }
+    // obj.right (item della colonna destra) va sempre inviato: lo studente ne ha bisogno
+    // per visualizzare la domanda. La risposta corretta sono gli INDICI in obj.correct,
+    // che viene inviato solo con withCorrect=true.
     if (withCorrect) obj.correct = obj.right.slice();
-    else delete obj.right; // right è la risposta corretta — non inviare senza flag
   } else if (q.tipo === "free") {
     if (q.placeholder) obj.placeholder = q.placeholder;
     obj.correct = null; // free è sempre null, non rivela nulla
