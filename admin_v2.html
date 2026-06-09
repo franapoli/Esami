@@ -217,26 +217,19 @@
 <div id="main-panel">
 
   <div class="panel-header">
-    <!-- Riga 1: titolo + fogli attivi + pulsanti -->
+    <!-- Riga 1: titolo + fogli attivi (solo link) + pulsanti -->
     <div class="panel-header-row1">
       <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
-      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin-left:24px;">
-        <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
-          <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande:</span>
-          <input type="text" id="cfg-qs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio domande">
-          <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
-        </div>
-        <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
-          <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati:</span>
-          <input type="text" id="cfg-rs-url" style="flex:1;min-width:0;font-size:0.78em;padding:3px 6px;border:1px solid #ddd;font-family:monospace;" placeholder="URL o ID foglio risultati">
-          <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri">↗</a>
-        </div>
+      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;margin-left:24px;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande: <a id="link-questions" href="#" target="_blank" style="color:#1a73e8;text-decoration:none;" title="Apri foglio domande">—</a></span>
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati: <a id="link-results" href="#" target="_blank" style="color:#1a73e8;text-decoration:none;" title="Apri foglio risultati">—</a></span>
         <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
-        <button class="btn btn-sm btn-outline" onclick="saveSheetConfig()" style="margin-top:0;font-size:0.82em;flex-shrink:0;">Salva</button>
-        <button class="btn btn-sm btn-outline" onclick="logout()" style="flex-shrink:0;">Esci</button>
+        <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
+        </div>
       </div>
     </div>
-    <!-- Riga 2: cartella Drive + lista fogli + crea nuovo -->
+    <!-- Riga 2: cartella Drive + selezione fogli + Apps Script -->
     <div class="panel-header-row2">
       <span class="ph-label">Cartella Drive:</span>
       <input type="text" id="cfg-folder-url" placeholder="URL o ID cartella Drive">
@@ -260,6 +253,9 @@
       <a id="link-script" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri editor Apps Script">↗</a>
       <span id="drive-msg" style="color:#888;flex-shrink:0;white-space:nowrap;"></span>
     </div>
+    <!-- Campi nascosti per mantenere compatibilità con saveSheetConfig/loadSheetConfig -->
+    <input type="hidden" id="cfg-qs-url">
+    <input type="hidden" id="cfg-rs-url">
   </div>
 
   <div class="track-selector-bar">
@@ -684,8 +680,16 @@ async function loadSheetConfig() {
     if (res.status !== "ok") return;
     document.getElementById("cfg-qs-url").value = res.questions_url || "";
     document.getElementById("cfg-rs-url").value = res.results_url  || "";
-    if (res.questions_url) document.getElementById("link-questions").href = res.questions_url;
-    if (res.results_url)   document.getElementById("link-results").href   = res.results_url;
+    if (res.questions_url) {
+      const lq = document.getElementById("link-questions");
+      lq.href = res.questions_url;
+      lq.textContent = (res.questions_name || "apri") + " ↗";
+    }
+    if (res.results_url) {
+      const lr = document.getElementById("link-results");
+      lr.href = res.results_url;
+      lr.textContent = (res.results_name || "apri") + " ↗";
+    }
     if (res.folder_url) {
       document.getElementById("cfg-folder-url").value = res.folder_url;
       document.getElementById("link-folder").href = res.folder_url;
@@ -758,10 +762,21 @@ async function loadDriveList() {
 
 function populateDriveSelect(selectId, files) {
   const sel = document.getElementById(selectId);
-  sel.style.display = "";
+  const which = selectId === "drive-qs-select" ? "qs" : "rs";
+  const currentUrl = document.getElementById(which === "qs" ? "cfg-qs-url" : "cfg-rs-url").value.trim();
+  const currentId  = extractSheetId(currentUrl);
   sel.innerHTML = '<option value="">— seleziona —</option>' +
-    files.map(f => `<option value="${f.id}" data-url="${f.url}">${f.name}</option>`).join("");
-  sel.style.display = ""; // show
+    files.map(f => {
+      const selected = (f.id === currentId) ? ' selected' : '';
+      return `<option value="${f.id}" data-url="${f.url}"${selected}>${f.name}</option>`;
+    }).join("");
+  // Aggiorna link riga 1 se c'è una selezione
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    const linkEl = document.getElementById(which === "qs" ? "link-questions" : "link-results");
+    linkEl.href = opt.dataset.url || "#";
+    linkEl.textContent = opt.text + " ↗";
+  }
 }
 
 function driveSelectChanged(which) {
@@ -770,8 +785,9 @@ function driveSelectChanged(which) {
   if (!opt || !opt.value) return;
   const urlField = document.getElementById(which === "qs" ? "cfg-qs-url" : "cfg-rs-url");
   const linkEl   = document.getElementById(which === "qs" ? "link-questions" : "link-results");
-  urlField.value = opt.dataset.url || "";
-  if (opt.dataset.url) linkEl.href = opt.dataset.url;
+  urlField.value = opt.dataset.url || opt.value;
+  linkEl.href = opt.dataset.url || "#";
+  linkEl.textContent = opt.text + " ↗";
   // Salva automaticamente
   saveSheetConfig();
 }
@@ -794,10 +810,17 @@ async function createNewSheet(type) {
     const urlField = document.getElementById(type === "questions" ? "cfg-qs-url" : "cfg-rs-url");
     const linkEl   = document.getElementById(type === "questions" ? "link-questions" : "link-results");
     urlField.value = res.url;
-    if (linkEl) linkEl.href = res.url;
+    if (linkEl) { linkEl.href = res.url; linkEl.textContent = name.trim() + " ↗"; }
     await saveSheetConfig();
-    // Ricarica la lista Drive
+    // Ricarica la lista Drive e pre-seleziona il nuovo foglio
     await loadDriveList();
+    const selId = type === "questions" ? "drive-qs-select" : "drive-rs-select";
+    const sel = document.getElementById(selId);
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].dataset.url === res.url || sel.options[i].value === res.id) {
+        sel.selectedIndex = i; break;
+      }
+    }
   } catch(e) { msg.style.color="#b00"; msg.textContent="Errore di rete."; }
 }
 
