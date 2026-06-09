@@ -706,16 +706,8 @@ async function loadSheetConfig() {
     if (res.status !== "ok") return;
     document.getElementById("cfg-qs-url").value = res.questions_url || "";
     document.getElementById("cfg-rs-url").value = res.results_url  || "";
-    if (res.questions_url) {
-      const lq = document.getElementById("link-questions");
-      lq.href = res.questions_url;
-      lq.textContent = (res.questions_name || "apri") + " ↗";
-    }
-    if (res.results_url) {
-      const lr = document.getElementById("link-results");
-      lr.href = res.results_url;
-      lr.textContent = (res.results_name || "apri") + " ↗";
-    }
+    if (res.questions_url) document.getElementById("link-questions").href = res.questions_url;
+    if (res.results_url)   document.getElementById("link-results").href   = res.results_url;
     if (res.folder_url) {
       document.getElementById("cfg-folder-url").value = res.folder_url;
       document.getElementById("link-folder").href = res.folder_url;
@@ -801,7 +793,6 @@ function populateDriveSelect(selectId, files) {
   if (opt && opt.value) {
     const linkEl = document.getElementById(which === "qs" ? "link-questions" : "link-results");
     linkEl.href = opt.dataset.url || "#";
-    linkEl.textContent = opt.text + " ↗";
   }
 }
 
@@ -813,7 +804,6 @@ function driveSelectChanged(which) {
   const linkEl   = document.getElementById(which === "qs" ? "link-questions" : "link-results");
   urlField.value = opt.dataset.url || opt.value;
   linkEl.href = opt.dataset.url || "#";
-  linkEl.textContent = opt.text + " ↗";
   // Salva automaticamente
   saveSheetConfig();
 }
@@ -836,7 +826,7 @@ async function createNewSheet(type) {
     const urlField = document.getElementById(type === "questions" ? "cfg-qs-url" : "cfg-rs-url");
     const linkEl   = document.getElementById(type === "questions" ? "link-questions" : "link-results");
     urlField.value = res.url;
-    if (linkEl) { linkEl.href = res.url; linkEl.textContent = name.trim() + " ↗"; }
+    if (linkEl) linkEl.href = res.url;
     await saveSheetConfig();
     // Ricarica la lista Drive e pre-seleziona il nuovo foglio
     await loadDriveList();
