@@ -174,15 +174,18 @@ function _populateRisultati(ss) {
   r1.setFrozenRows(1);
   const qids1 = "q_test01,q_test02,q_test04,q_test06";
   const t1s = "01/06/2026 09:00:00";  // inizio comune
+  // q_test06 match: left=["Adenina","Guanina","Citosina","Timina"], right=["Timina","Citosina","Guanina","Adenina"]
+  // Risposta corretta come indici interi: [0,1,2,3] (ogni sinistra abbinata al destra parallelo)
+  // Risposta errata:                      [3,2,1,0] (tutto rovesciato → 0/4 corretti → 0pt)
   // [Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs, Ans1,Pt1, Ans2,Pt2, Ans3,Pt3, Ans4,Pt4]
   const rows1 = [
-    ["100001","Rossi Mario",   "mario@test.it",    4,4, t1s,"01/06/2026 09:52:00","52 min",qids1, 1,1, 2,1, "Timina",1, '["Timina","Citosina","Guanina","Adenina"]',1],
-    ["100002","Bianchi Lucia", "lucia@test.it",    3,4, t1s,"01/06/2026 09:58:00","58 min",qids1, 1,1, 0,0, "Timina",1, '["Timina","Citosina","Guanina","Adenina"]',1],
-    ["100003","Verdi Giuseppe","giuseppe@test.it", 4,4, t1s,"01/06/2026 10:05:00","65 min",qids1, 1,1, 2,1, "Timina",1, '["Timina","Citosina","Guanina","Adenina"]',1],
-    ["100004","Ferrari Anna",  "anna@test.it",     1,4, t1s,"01/06/2026 10:10:00","70 min",qids1, 0,0, 2,1, "Uracile",0,'["Adenina","Citosina","Guanina","Timina"]',0],
-    ["100005","Esposito Marco","marco@test.it",    0,4, t1s,"01/06/2026 10:15:00","75 min",qids1, 0,0, 0,0, "Uracile",0,'["Adenina","Guanina","Citosina","Timina"]',0],
-    ["100006","Romano Sara",   "sara@test.it",     3,4, t1s,"01/06/2026 10:00:00","60 min",qids1, 1,1, 2,1, "Timina",1, '["Adenina","Citosina","Guanina","Timina"]',0],
-    ["100007","Colombo Luca",  "luca@test.it",     2,4, t1s,"01/06/2026 10:08:00","68 min",qids1, 1,1, 0,0, "Timina",1, '["Timina","Guanina","Citosina","Adenina"]',0],
+    ["100001","Rossi Mario",   "mario@test.it",    4,4, t1s,"01/06/2026 09:52:00","52 min",qids1, 1,1, 2,1, "Timina",1, "[0,1,2,3]",1],
+    ["100002","Bianchi Lucia", "lucia@test.it",    3,4, t1s,"01/06/2026 09:58:00","58 min",qids1, 1,1, 0,0, "Timina",1, "[0,1,2,3]",1],
+    ["100003","Verdi Giuseppe","giuseppe@test.it", 4,4, t1s,"01/06/2026 10:05:00","65 min",qids1, 1,1, 2,1, "Timina",1, "[0,1,2,3]",1],
+    ["100004","Ferrari Anna",  "anna@test.it",     1,4, t1s,"01/06/2026 10:10:00","70 min",qids1, 0,0, 2,1, "Uracile",0,"[3,2,1,0]",0],
+    ["100005","Esposito Marco","marco@test.it",    0,4, t1s,"01/06/2026 10:15:00","75 min",qids1, 0,0, 0,0, "Uracile",0,"[3,2,1,0]",0],
+    ["100006","Romano Sara",   "sara@test.it",     3,4, t1s,"01/06/2026 10:00:00","60 min",qids1, 1,1, 2,1, "Timina",1, "[3,2,1,0]",0],
+    ["100007","Colombo Luca",  "luca@test.it",     2,4, t1s,"01/06/2026 10:08:00","68 min",qids1, 1,1, 0,0, "Timina",1, "[3,2,1,0]",0],
   ];
   rows1.forEach(r => r1.appendRow(r));
 

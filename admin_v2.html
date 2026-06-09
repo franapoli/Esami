@@ -1340,8 +1340,16 @@ function formatAnswerHtml(q, ans) {
       const right = JSON.parse(q.corretta || "[]");
       const left  = Array.isArray(q.options) ? q.options : [];
       return given.map((gi, i) => {
-        const chosen = right[gi] !== undefined ? escHtml(String(right[gi])) : "?";
-        return `<div>${escHtml(String(left[i] || i+1))} → ${chosen}</div>`;
+        let chosen;
+        const idx = parseInt(gi, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < right.length) {
+          chosen = right[idx]; // formato reale: indice intero
+        } else if (typeof gi === "string" && gi !== "") {
+          chosen = gi;          // formato legacy/test: valore stringa diretto
+        } else {
+          chosen = "?";
+        }
+        return `<div>${escHtml(String(left[i] || i+1))} → ${escHtml(String(chosen))}</div>`;
       }).join("");
     }
     if (q.tipo === "multi-fitb") {
