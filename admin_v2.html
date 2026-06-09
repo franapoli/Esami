@@ -664,7 +664,8 @@ async function doLogin() {
       allTracks = rt.tracks || [];
     } catch(e) { allTracks = []; }
     populateEsameSelect(allEsami);
-    loadSheetConfig();
+    await loadSheetConfig();
+    loadDriveList(true);  // popola i dropdown automaticamente (silenzioso se cartella non configurata)
   } catch(e) {
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
   }
@@ -737,10 +738,10 @@ async function saveSheetConfig() {
 }
 
 // ── Drive folder ─────────────────────────────────────────────────────────────
-async function loadDriveList() {
+async function loadDriveList(silent = false) {
   const msg = document.getElementById("drive-msg");
   const fId = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
-  if (!fId) { msg.style.color="#b00"; msg.textContent="Inserisci l'URL della cartella."; return; }
+  if (!fId) { if (!silent) { msg.style.color="#b00"; msg.textContent="Inserisci l'URL della cartella."; } return; }
   msg.style.color = "#555"; msg.textContent = "Caricamento…";
   try {
     const res = await callScript({ action: "listDriveFolder", password: adminPassword, folder_id: fId });
