@@ -162,6 +162,8 @@
   .add-btn { background:none; border:1px solid #bbb; cursor:pointer; color:#555; font-size:0.88em;
              padding:2px 7px; flex-shrink:0; line-height:1.4; border-radius:2px; }
   .add-btn:hover { background:#e8f4e8; border-color:#4caf50; color:#2e7d32; }
+  .q-row.used { opacity: 0.45; }
+  .q-row.used .add-btn { cursor: not-allowed; }
 
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
@@ -2039,12 +2041,18 @@ function renderQBrowser() {
     return;
   }
 
+  const usedIds = new Set(trackItems.filter(i => i.type === "fixed").map(i => i.id));
+
   browser.innerHTML = filtered.map(q => {
     const shortText = q.testo.length > 110 ? q.testo.substring(0, 110) + "…" : q.testo;
     const qs = q.stato || "verificato";
     const statoLabel = qs === "bozza" ? "✎ bozza" : "✓";
-    return `<div class="q-row" onclick="previewQuestion('${q.id}',event)">
-      <button class="add-btn" onclick="event.stopPropagation();addFixedItem('${q.id}')" title="Aggiungi alla traccia">←</button>
+    const isUsed = usedIds.has(q.id);
+    const addBtn = isUsed
+      ? `<button class="add-btn" disabled title="Già nella traccia">←</button>`
+      : `<button class="add-btn" onclick="event.stopPropagation();addFixedItem('${q.id}')" title="Aggiungi alla traccia">←</button>`;
+    return `<div class="q-row${isUsed ? ' used' : ''}" onclick="previewQuestion('${q.id}',event)">
+      ${addBtn}
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
         <div class="q-row-meta">
@@ -2063,6 +2071,7 @@ function addFixedItem(id) {
   if (!isEditingItems) return;
   trackItems.push({ type: "fixed", id });
   renderItemsList();
+  renderQBrowser();
 }
 
 function addRandomItem() {
@@ -2095,6 +2104,7 @@ function addRandomItem() {
 function removeItem(idx) {
   trackItems.splice(idx, 1);
   renderItemsList();
+  renderQBrowser();
 }
 
 function moveItem(idx, dir) {
@@ -2192,6 +2202,7 @@ function clearItems() {
   if (!isEditingItems) return;
   trackItems = [];
   renderItemsList();
+  renderQBrowser();
 }
 
 // ---- CREA ESAME ----
