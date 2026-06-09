@@ -338,38 +338,20 @@
     </div>
     <div id="track-card" style="display:none;">
 
-      <!-- Stato e controllo (solo esame esistente) -->
-      <div class="card" id="esame-status-card">
-        <h2>Stato e controllo</h2>
-        <div class="status-bar">
-          <div class="dot" id="status-dot"></div>
-          <div id="status-text"></div>
-        </div>
-        <div class="action-row">
-          <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
-          <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
-          <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova esame</a>
-          <button class="btn btn-sm btn-outline" onclick="duplicateEsame()">Duplica esame</button>
-        </div>
-        <div id="status-msg" class="ok-msg"></div>
-      </div>
-
       <!-- Form: nuovo esame -->
-      <div id="new-track-form" class="card" style="display:none;margin-bottom:16px;">
+      <div id="new-track-form" class="card" style="display:none;">
         <h2>Nuovo esame</h2>
         <div class="row2">
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-traccia-ref">Traccia (set domande)</label>
-            <select id="new-traccia-ref">
-              <option value="">— seleziona traccia —</option>
-            </select>
+            <label for="new-traccia-ref">Traccia</label>
+            <select id="new-traccia-ref"><option value="">— seleziona —</option></select>
           </div>
           <div class="field" style="flex:2;min-width:180px;">
             <label for="new-corso">Corso</label>
             <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
           </div>
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-name">Nome esame <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
+            <label for="new-name">Nome <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
             <input type="text" id="new-name" autocomplete="new-password" placeholder="Default: nome traccia">
           </div>
           <div class="field" style="min-width:140px;">
@@ -398,14 +380,32 @@
         </div>
       </div>
 
-      <!-- Form: modifica esame esistente -->
-      <div id="cfg-card" class="card" style="display:none;margin-bottom:16px;">
-        <h2>Attributi esame</h2>
+      <!-- Card esame esistente: stato + campi unificati -->
+      <div class="card" id="esame-status-card">
+
+        <!-- Stato + azioni -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+          <div class="dot" id="status-dot"></div>
+          <strong id="status-stato" style="font-size:1em;letter-spacing:.03em;"></strong>
+          <span id="status-badge"></span>
+          <code style="font-size:0.78em;color:#aaa;margin-left:4px;" id="status-examid"></code>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
+            <button class="btn btn-sm btn-green" onclick="setStatus('open')">▶ Apri</button>
+            <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
+            <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova esame</a>
+            <button class="btn btn-sm btn-outline" onclick="duplicateEsame()">Duplica</button>
+          </div>
+          <div id="status-msg" class="ok-msg" style="width:100%;margin:2px 0 0;min-height:1em;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:0 0 16px;">
+
+        <!-- Campi esame -->
         <div class="row2">
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-traccia-ref">Traccia (set domande)</label>
+            <label for="cfg-traccia-ref">Traccia</label>
             <select id="cfg-traccia-ref" onchange="onEsameTracciaChange()">
-              <option value="">— seleziona traccia —</option>
+              <option value="">— seleziona —</option>
             </select>
           </div>
           <div class="field" style="flex:2;min-width:180px;">
@@ -413,7 +413,7 @@
             <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
           </div>
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-name">Nome esame <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
+            <label for="cfg-name">Nome <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
             <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Default: nome traccia">
           </div>
           <div class="field" style="min-width:140px;">
@@ -433,15 +433,16 @@
             </select>
           </div>
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame — vuoto = nessuna)</span></label>
-            <input type="text" id="cfg-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
+            <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame)</span></label>
+            <input type="text" id="cfg-pwd" placeholder="Nessuna" autocomplete="off" style="font-family:monospace;">
           </div>
         </div>
-        <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-          <button class="btn btn-sm" style="margin-top:0;" onclick="saveTrack()">Salva attributi</button>
-          <p class="note" style="margin:0;">Le modifiche sono visibili agli studenti al prossimo caricamento.</p>
+
+        <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-sm" style="margin-top:0;" onclick="saveTrack()">Salva</button>
           <div id="edit-msg" class="ok-msg" style="margin:0;"></div>
         </div>
+
       </div>
 
     </div>
@@ -1077,20 +1078,16 @@ function switchTab(name) {
 function updateAdminTab() {
   const isNew = (currentEsame === null);
   const has   = !!currentEsame;
-  document.getElementById("admin-placeholder").style.display  = (!has && !isNew) ? "block" : "none";
-  document.getElementById("track-card").style.display         = "block";
-  document.getElementById("esame-status-card").style.display  = has ? "block" : "none";
-  document.getElementById("new-track-form").style.display     = isNew ? "block" : "none";
-  document.getElementById("cfg-card").style.display           = has ? "block" : "none";
+  document.getElementById("track-card").style.display        = "block";
+  document.getElementById("new-track-form").style.display    = isNew ? "block" : "none";
+  document.getElementById("esame-status-card").style.display = has   ? "block" : "none";
   populateTracciaSelects();
-  if (!has) {
-    document.getElementById("admin-placeholder").style.display = "none";
-    return;
-  }
+  if (!has) return;
   renderTrackStatus(currentEsame);
   populateEsameEditForm(currentEsame);
   updateProvaLink(currentEsame.exam_id);
   document.getElementById("status-msg").textContent = "";
+  document.getElementById("edit-msg").textContent   = "";
 }
 
 function updateProvaLink(examId) {
@@ -1100,24 +1097,12 @@ function updateProvaLink(examId) {
 
 function renderTrackStatus(e) {
   const isOpen = e.stato === "open";
-  document.getElementById("status-dot").className = "dot " + (isOpen ? "open" : "closed");
-  const modeBadge = e.modalita === "practice"
+  document.getElementById("status-dot").className    = "dot " + (isOpen ? "open" : "closed");
+  document.getElementById("status-stato").textContent = isOpen ? "APERTO" : "CHIUSO";
+  document.getElementById("status-badge").innerHTML  = e.modalita === "practice"
     ? '<span class="badge badge-practice">Esercitazione</span>'
     : '<span class="badge badge-exam">Esame</span>';
-  const dur = e.durata === "0" || e.durata === 0 ? "senza limite" : (e.durata || "—") + " min";
-  const t   = allTracks.find(t => t.track_id === e.traccia_id);
-  const nome = e.nome && e.nome.trim() ? e.nome : (t ? t.nome : e.traccia_id);
-  const tracciaLabel = t ? escHtml(t.nome) : escHtml(e.traccia_id || "—");
-  const tracciaHtml = e.traccia_id
-    ? `<a href="#" onclick="switchTab('domande');return false;" title="${escHtml(e.traccia_id)}" style="color:inherit;text-decoration:underline dotted;">${tracciaLabel}</a>`
-    : "—";
-  document.getElementById("status-text").innerHTML =
-    "<strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong>" + modeBadge +
-    " &nbsp;|&nbsp; " + escHtml(e.corso || "—") +
-    " &nbsp;|&nbsp; " + escHtml(nome) +
-    (e.data ? " &nbsp;|&nbsp; " + formatDateIt(e.data) : "") +
-    " &nbsp;|&nbsp; " + dur +
-    " &nbsp;|&nbsp; Traccia: " + tracciaHtml;
+  document.getElementById("status-examid").textContent = e.exam_id || "";
 }
 
 function populateEsameEditForm(e) {
