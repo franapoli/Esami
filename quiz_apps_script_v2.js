@@ -921,15 +921,18 @@ function doPost(e) {
         if (row[COL_TS_END - 1] === "") continue;
         const qids = String(row[COL_QIDS - 1] || "");
         const rowNQ = qids ? qids.split(",").filter(x => x.trim()).length : nQ;
-        const pts = [];
+        const pts = [], answers = [];
         for (let q = 0; q < rowNQ; q++) {
+          answers.push(String(row[COL_ANS_FIRST - 1 + q * 2] ?? ""));
           pts.push(Number(row[COL_ANS_FIRST - 1 + q * 2 + 1]) || 0);
         }
         rows.push({
           matricola:  row[COL_MATRICOLA - 1],
           nominativo: row[COL_NOMINATIVO - 1],
           score:      row[COL_SCORE - 1],
-          pts
+          pts,
+          answers,
+          qids
         });
       }
       return corsResponse({ status: "ok", rows, track: readMetaTrack(examId) });

@@ -206,6 +206,32 @@
   .histo-bar-fill { height: 100%; background: #1a1a1a; transition: width 0.3s; }
   .histo-count { width: 28px; color: #555; flex-shrink: 0; }
 
+  /* Dettaglio risposte studente */
+  #student-detail-card { margin-top: 18px; scroll-margin-top: 20px; }
+  #student-detail-card h2 { cursor: default; }
+  .detail-student-hdr { display:flex; align-items:baseline; gap:16px; margin-bottom:14px; flex-wrap:wrap; }
+  .detail-student-name { font-size:1.05em; font-weight:bold; }
+  .detail-student-score { font-size:0.92em; color:#555; }
+  .detail-table { width:100%; border-collapse:collapse; font-size:0.84em; }
+  .detail-table th { text-align:left; font-weight:normal; color:#888; text-transform:uppercase;
+    font-size:0.78em; letter-spacing:0.04em; padding:4px 8px 8px; border-bottom:1px solid #eee; }
+  .detail-table td { padding:7px 8px; border-bottom:1px solid #f0f0ec; vertical-align:top; }
+  .detail-table tr:last-child td { border-bottom:none; }
+  .detail-table .col-n   { width:28px; text-align:right; color:#aaa; font-size:0.85em; }
+  .detail-table .col-tipo { width:72px; }
+  .detail-table .col-pt  { width:50px; text-align:center; font-weight:bold; }
+  .detail-q-text { line-height:1.4; color:#1a1a1a; }
+  .detail-ans  { line-height:1.4; }
+  .detail-ans-ok  { color:#2e7d32; }
+  .detail-ans-ko  { color:#b00; }
+  .detail-ans-na  { color:#aaa; font-style:italic; }
+  .detail-ans-free { color:#555; font-style:italic; }
+  .detail-tipo-badge { display:inline-block; padding:1px 6px; font-size:0.75em;
+    background:#f0f0ec; color:#555; border-radius:2px; }
+  .res-row-click { cursor:pointer; }
+  .res-row-click:hover td { background:#fafaf7; }
+  .res-row-click.selected td { background:#e8f0fe; }
+
   /* Crossref tracce → esami */
   #crossref-card { margin-bottom: 12px; }
   #crossref-card table { width: 100%; border-collapse: collapse; font-size: 0.83em; }
@@ -614,6 +640,27 @@
         <h2>Distribuzione punteggi</h2>
         <div class="histo-wrap" id="histo-wrap"></div>
       </div>
+      <div class="card" id="student-detail-card" style="display:none;">
+        <h2>Dettaglio risposte — <span id="detail-student-name"></span></h2>
+        <div class="detail-student-hdr">
+          <span class="detail-student-score" id="detail-student-score"></span>
+          <button class="btn btn-sm btn-outline" style="margin-top:0;" onclick="closeStudentDetail()">✕ Chiudi</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="detail-table">
+            <thead><tr>
+              <th class="col-n">#</th>
+              <th class="col-tipo">Tipo</th>
+              <th>Domanda</th>
+              <th>Risposta data</th>
+              <th>Risposta corretta</th>
+              <th class="col-pt">Pt</th>
+            </tr></thead>
+            <tbody id="detail-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Punteggi per domanda
           <span style="font-weight:normal;font-size:0.85em;color:#888;margin-left:12px;">
@@ -659,6 +706,8 @@ let currentTraccia = null; // traccia selezionata nel tab Tracce
 let refreshTimer   = null;
 let activeTab      = "admin";
 let currentNQ      = 20;
+let currentResultsData = null;  // ultima risposta getResults — usato per dettaglio studente
+let selectedDetailRow  = -1;
 
 async function callScript(payload) {
   const resp = await fetch(SCRIPT_URL, {
@@ -1186,6 +1235,8 @@ async function loadRisultatiData() {
 }
 
 function renderRisultati(res) {
+  currentResultsData = res;
+  closeStudentDetail();
   const track = res.track || {};
   const rows  = res.rows  || [];
   const nQ    = rows.length > 0 ? rows[0].pts.length : currentNQ;
@@ -1239,7 +1290,7 @@ function renderRisultati(res) {
   thHtml += '<th>Tot</th></tr>';
   document.getElementById("res-thead").innerHTML = thHtml;
 
-  document.getElementById("res-tbody").innerHTML = rows.map(r => {
+  document.getElementById("res-tbody").innerHTML = rows.map((r, ri) => {
     let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}</td>`;
     for (let q = 0; q < nQ; q++) {
       const pt = Number(r.pts[q]) || 0;
@@ -1248,7 +1299,7 @@ function renderRisultati(res) {
       cells += `<td class="${cls}">${pt > 0 ? pt : "·"}</td>`;
     }
     cells += `<td class="col-score">${Number(r.score) || 0}</td>`;
-    return `<tr>${cells}</tr>`;
+    return `<tr class="res-row-click" onclick="showStudentDetail(${ri})" title="Clicca per dettaglio risposte">${cells}</tr>`;
   }).join("");
 
   let tfHtml = '<tr><td class="col-name">% corretto</td>';
@@ -1260,6 +1311,183 @@ function renderRisultati(res) {
   }
   tfHtml += "<td></td></tr>";
   document.getElementById("res-tfoot").innerHTML = tfHtml;
+}
+
+// ---- DETTAGLIO RISPOSTE STUDENTE ----
+
+function letterToIndexAdmin(letter) {
+  const l = String(letter).toUpperCase().trim();
+  const idx = l.charCodeAt(0) - 65;
+  return idx >= 0 && idx < 26 ? idx : 0;
+}
+
+function formatAnswerHtml(q, ans) {
+  if (ans === "" || ans === null || ans === undefined) return '<span class="detail-ans-na">—</span>';
+  try {
+    if (q.tipo === "mc") {
+      const idx = parseInt(ans, 10);
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const txt = (opts[idx] !== undefined) ? escHtml(String(opts[idx])) : escHtml(ans);
+      return `<span class="detail-ans">${txt}</span>`;
+    }
+    if (q.tipo === "fitb" || q.tipo === "free") {
+      const cls = q.tipo === "free" ? "detail-ans-free" : "detail-ans";
+      return `<span class="${cls}">${escHtml(String(ans))}</span>`;
+    }
+    if (q.tipo === "match") {
+      const given = typeof ans === "string" ? JSON.parse(ans) : ans;
+      const right = JSON.parse(q.corretta || "[]");
+      const left  = Array.isArray(q.options) ? q.options : [];
+      return given.map((gi, i) => {
+        const chosen = right[gi] !== undefined ? escHtml(String(right[gi])) : "?";
+        return `<div>${escHtml(String(left[i] || i+1))} → ${chosen}</div>`;
+      }).join("");
+    }
+    if (q.tipo === "multi-fitb") {
+      const given = typeof ans === "string" ? JSON.parse(ans) : ans;
+      const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
+      const boxes = d.boxes || [];
+      return given.map((v, i) => {
+        const lbl = escHtml(String((boxes[i] && boxes[i].label) || (i+1)));
+        return `<div>${lbl}: ${escHtml(String(v ?? "—"))}</div>`;
+      }).join("");
+    }
+    if (q.tipo === "cloze") {
+      const given = typeof ans === "string" ? JSON.parse(ans) : ans;
+      const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
+      const dds = d.dropdowns || [];
+      return given.map((gi, i) => {
+        const opts = (dds[i] && dds[i].options) || [];
+        return `<div>Blank ${i+1}: ${escHtml(String(opts[gi] ?? gi))}</div>`;
+      }).join("");
+    }
+  } catch(e) {}
+  return `<span class="detail-ans">${escHtml(String(ans))}</span>`;
+}
+
+function formatCorrectHtml(q) {
+  if (q.tipo === "free") return '<span class="detail-ans-na">manuale</span>';
+  try {
+    if (q.tipo === "mc") {
+      const idx = letterToIndexAdmin(q.corretta);
+      const opts = Array.isArray(q.options) ? q.options : [];
+      return `<span class="detail-ans-ok">${escHtml(String(opts[idx] || q.corretta))}</span>`;
+    }
+    if (q.tipo === "fitb") {
+      return `<span class="detail-ans-ok">${escHtml(String(q.corretta))}</span>`;
+    }
+    if (q.tipo === "match") {
+      const right = JSON.parse(q.corretta || "[]");
+      const left  = Array.isArray(q.options) ? q.options : [];
+      return right.map((r, i) =>
+        `<div class="detail-ans-ok">${escHtml(String(left[i] || i+1))} → ${escHtml(String(r))}</div>`
+      ).join("");
+    }
+    if (q.tipo === "multi-fitb") {
+      const correct = JSON.parse(q.corretta || "[]");
+      const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
+      const boxes = d.boxes || [];
+      return correct.map((c, i) => {
+        const lbl = escHtml(String((boxes[i] && boxes[i].label) || (i+1)));
+        return `<div class="detail-ans-ok">${lbl}: ${escHtml(String(c))}</div>`;
+      }).join("");
+    }
+    if (q.tipo === "cloze") {
+      const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
+      const dds = d.dropdowns || [];
+      return dds.map((dd, i) => {
+        const c = dd.correct ?? 0;
+        return `<div class="detail-ans-ok">Blank ${i+1}: ${escHtml(String((dd.options || [])[c] ?? c))}</div>`;
+      }).join("");
+    }
+  } catch(e) {}
+  return `<span class="detail-ans-ok">${escHtml(String(q.corretta))}</span>`;
+}
+
+async function showStudentDetail(rowIdx) {
+  if (!currentResultsData) return;
+  const rows = currentResultsData.rows || [];
+  const r = rows[rowIdx];
+  if (!r) return;
+
+  // Evidenzia riga selezionata
+  document.querySelectorAll(".res-row-click").forEach((tr, i) => {
+    tr.classList.toggle("selected", i === rowIdx);
+  });
+  selectedDetailRow = rowIdx;
+
+  // Carica allQuestions se non ancora disponibile
+  if (!allQuestions) {
+    document.getElementById("detail-tbody").innerHTML =
+      '<tr><td colspan="6" style="color:#888;font-style:italic;">Caricamento domande…</td></tr>';
+    document.getElementById("student-detail-card").style.display = "";
+    try {
+      const res = await callScript({ action: "getQuestions", password: adminPassword });
+      if (res.status !== "ok") throw new Error(res.message);
+      allQuestions = res.questions || [];
+      buildCategoryFilters();
+    } catch(e) {
+      document.getElementById("detail-tbody").innerHTML =
+        `<tr><td colspan="6" style="color:#b00;">Errore caricamento domande: ${escHtml(e.message)}</td></tr>`;
+      return;
+    }
+  }
+
+  const qMap = Object.fromEntries(allQuestions.map(q => [q.id, q]));
+  const qids = r.qids ? r.qids.split(",").map(x => x.trim()).filter(Boolean) : [];
+  const nome  = escHtml(String(r.nominativo || r.matricola));
+  const score = Number(r.score) || 0;
+  const totale = (currentResultsData.rows[0]?.pts || []).reduce((s, _, qi) =>
+    s + Math.max(...(currentResultsData.rows.map(row => Number(row.pts[qi]) || 0))), 0);
+
+  document.getElementById("detail-student-name").textContent = r.nominativo || r.matricola;
+  document.getElementById("detail-student-score").textContent =
+    `Matricola ${r.matricola}  ·  Punteggio: ${score} / ${totale || "?"}`;
+
+  const rows2 = qids.map((qid, qi) => {
+    const q   = qMap[qid];
+    const ans = r.answers ? r.answers[qi] : "";
+    const pt  = r.pts[qi] ?? 0;
+    const maxPt = q ? (q.punti || 1) : 1;
+    const isFree = q && q.tipo === "free";
+    const ptCls = isFree ? "" : (pt >= maxPt ? "detail-ans-ok" : pt > 0 ? "" : "detail-ans-ko");
+
+    if (!q) {
+      return `<tr>
+        <td class="col-n">${qi+1}</td>
+        <td class="col-tipo"><span class="detail-tipo-badge">?</span></td>
+        <td class="detail-q-text"><span style="color:#aaa;font-style:italic;">${escHtml(qid)} (non trovata)</span></td>
+        <td>—</td><td>—</td>
+        <td class="col-pt">${pt}</td>
+      </tr>`;
+    }
+    const testo = q.testo.length > 120 ? escHtml(q.testo.slice(0, 120)) + "…" : escHtml(q.testo);
+    return `<tr>
+      <td class="col-n">${qi+1}</td>
+      <td class="col-tipo"><span class="detail-tipo-badge">${escHtml(q.tipo)}</span></td>
+      <td class="detail-q-text" title="${escHtml(q.testo)}">${testo}</td>
+      <td class="detail-ans">${formatAnswerHtml(q, ans)}</td>
+      <td>${formatCorrectHtml(q)}</td>
+      <td class="col-pt ${ptCls}">${isFree ? pt+"*" : pt+"/"+maxPt}</td>
+    </tr>`;
+  });
+
+  if (qids.length === 0) {
+    document.getElementById("detail-tbody").innerHTML =
+      '<tr><td colspan="6" style="color:#aaa;font-style:italic;padding:16px 8px;">Nessun QID registrato per questo studente.</td></tr>';
+  } else {
+    document.getElementById("detail-tbody").innerHTML = rows2.join("");
+  }
+
+  const card = document.getElementById("student-detail-card");
+  card.style.display = "";
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function closeStudentDetail() {
+  document.getElementById("student-detail-card").style.display = "none";
+  document.querySelectorAll(".res-row-click").forEach(tr => tr.classList.remove("selected"));
+  selectedDetailRow = -1;
 }
 
 function renderHistogram(rows, maxScore) {
