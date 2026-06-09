@@ -1,0 +1,7 @@
+test/
+.DS_Store
+.claude/
+domande_generate/
+questions_vhl.csv
+tracce_vhl.csv
+createTestData.gs
