@@ -291,14 +291,14 @@
     <!-- Riga 2: dropdown fogli + nuovo + Apps Script -->
     <div class="panel-header-row2">
       <span class="ph-label">Domande:</span>
-      <select id="drive-qs-select" onchange="driveSelectChanged('qs')" style="min-width:160px;max-width:260px;">
+      <select id="drive-qs-select" onchange="driveSelectChanged('qs')" onfocus="ensureDriveListLoaded()" style="min-width:160px;max-width:260px;">
         <option value="">— seleziona —</option>
       </select>
       <a id="link-questions" href="#" target="_blank" style="color:#888;text-decoration:none;flex-shrink:0;" title="Apri foglio domande">↗</a>
       <button class="btn btn-outline btn-ph" onclick="createNewSheet('questions')">+ Nuovo</button>
       <span class="ph-sep">|</span>
       <span class="ph-label">Risultati:</span>
-      <select id="drive-rs-select" onchange="driveSelectChanged('rs')" style="min-width:160px;max-width:260px;">
+      <select id="drive-rs-select" onchange="driveSelectChanged('rs')" onfocus="ensureDriveListLoaded()" style="min-width:160px;max-width:260px;">
         <option value="">— seleziona —</option>
       </select>
       <a id="link-results" href="#" target="_blank" style="color:#888;text-decoration:none;flex-shrink:0;" title="Apri foglio risultati">↗</a>
@@ -765,9 +765,6 @@ async function doLogin() {
     setLoadingMsg("Caricamento configurazione…");
     await loadSheetConfig();
 
-    setLoadingMsg("Caricamento lista fogli…");
-    await loadDriveList(true);
-
     // Mostra il pannello
     document.getElementById("login-panel").style.display = "none";
     document.getElementById("main-panel").classList.add("active");
@@ -839,6 +836,20 @@ async function saveSheetConfig() {
 }
 
 // ── Drive folder ─────────────────────────────────────────────────────────────
+let _driveListLoaded  = false;
+let _driveListPromise = null;
+
+// Carica la lista fogli Drive una sola volta; le chiamate successive (es. focus
+// sul select) attendono la stessa promise e non fanno un secondo round-trip.
+function ensureDriveListLoaded() {
+  if (_driveListLoaded) return Promise.resolve();
+  if (_driveListPromise) return _driveListPromise;
+  _driveListPromise = loadDriveList(true)
+    .catch(() => {})
+    .finally(() => { _driveListPromise = null; });
+  return _driveListPromise;
+}
+
 async function loadDriveList(silent = false) {
   const msg = document.getElementById("drive-msg");
   const fId = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
@@ -849,6 +860,7 @@ async function loadDriveList(silent = false) {
     if (res.status !== "ok") { msg.style.color="#b00"; msg.textContent = res.message||"Errore."; return; }
     populateDriveSelect("drive-qs-select", res.files);
     populateDriveSelect("drive-rs-select", res.files);
+    _driveListLoaded = true;
     msg.style.color = "#2e7d32";
     msg.textContent = res.files.length ? "✓ " + res.files.length + " fogli" : "Cartella vuota";
     // Salva folder_id in config se è cambiato
@@ -924,6 +936,8 @@ async function createNewSheet(type) {
 function logout() {
   if (refreshTimer) clearInterval(refreshTimer);
   adminPassword = ""; currentEsame = null; currentTraccia = null; refreshTimer = null; trackItems = []; allEsami = []; allTracks = [];
+  allQuestions = null; _allQuestionsPromise = null;
+  _driveListLoaded = false; _driveListPromise = null;
   document.getElementById("main-panel").classList.remove("active");
   document.getElementById("login-panel").style.display = "";
   document.getElementById("pwd").value = "";
