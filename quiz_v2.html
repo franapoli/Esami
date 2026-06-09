@@ -260,7 +260,16 @@ function callScript(payload) {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload)
-  }).then(r => r.json());
+  }).then(r => {
+    if (!r.ok) throw new Error("HTTP " + r.status + " " + r.statusText);
+    return r.text().then(text => {
+      try { return JSON.parse(text); }
+      catch(e) {
+        console.error("Risposta non-JSON da Apps Script:", text.slice(0, 500));
+        throw new Error("Risposta non valida dal server (non JSON). Controlla il deployment.");
+      }
+    });
+  });
 }
 
 async function callScriptWithRetry(payload, maxRetries) {
@@ -410,7 +419,7 @@ async function initQuiz() {
         return;
       }
     } catch(e) {
-      document.getElementById("cover-error").textContent = "Errore di connessione. Riprova.";
+      document.getElementById("cover-error").textContent = "Errore di connessione: " + e.message;
       btn.disabled = false;
       btn.textContent = "Inizia il quiz";
       return;
@@ -494,7 +503,8 @@ async function initQuiz() {
     renderQuestion();
     startTimer();
   } catch(err) {
-    document.getElementById("cover-error").textContent = "Errore di connessione. Riprova.";
+    document.getElementById("cover-error").textContent = "Errore: " + err.message;
+    console.error("initQuiz error:", err);
     btn.disabled = false;
     btn.textContent = "Inizia il quiz";
   }
