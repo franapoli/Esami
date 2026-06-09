@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quiz — Applicazioni di Bioinformatica</title>
+<title>Quiz</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; }
@@ -123,9 +123,9 @@
 
 <!-- COVER -->
 <div id="cover" style="display:none;">
-  <h1>Quiz — Applicazioni di Bioinformatica</h1>
+  <h1 id="cover-title">Quiz</h1>
   <p class="subtitle" id="cover-subtitle"></p>
-  <p id="cover-date" style="font-size:0.95em;color:#1a1a1a;margin-top:4px;font-weight:bold;"></p>
+  <p id="cover-date" style="display:none;"></p>
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
     ⚙ Modalità esercitazione — puoi ripetere il quiz tutte le volte che vuoi
   </div>
@@ -314,10 +314,13 @@ async function loadTrack() {
     const examStatus  = t.status || "closed";
 
     // Cover
-    document.getElementById("cover-date").textContent = formatDateIt(EXAM_DATE);
     const durLabel = EXAM_DURATION_MIN === 0 ? "senza limite di tempo" : EXAM_DURATION_MIN + " minuti";
+    const titleParts = ["Quiz"];
+    if (t.corso) titleParts.push(t.corso);
+    if (EXAM_DATE) titleParts.push(formatDateIt(EXAM_DATE));
+    document.getElementById("cover-title").textContent = titleParts.join(" — ");
+    document.title = titleParts.join(" — ");
     document.getElementById("cover-subtitle").innerHTML =
-      (t.corso ? t.corso + " &nbsp;|&nbsp; " : "") +
       N_QUESTIONS + " domande &nbsp;|&nbsp; " + TOTAL_PTS + " punti &nbsp;|&nbsp; " + durLabel;
 
     if (EXAM_MODE === "practice") {
