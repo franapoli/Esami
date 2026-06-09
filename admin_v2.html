@@ -217,43 +217,40 @@
 <div id="main-panel">
 
   <div class="panel-header">
-    <!-- Riga 1: titolo + fogli attivi (solo link) + pulsanti -->
+    <!-- Riga 1: titolo + dropdown fogli + pulsanti -->
     <div class="panel-header-row1">
       <h1>Pannello Amministratore <span style="font-size:0.75em;color:#888;font-weight:normal;">v2</span> <span id="build-label" style="font-size:0.6em;color:#bbb;font-weight:normal;font-family:monospace;"></span></h1>
-      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;margin-left:24px;">
-        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Domande: <a id="link-questions" href="#" target="_blank" style="color:#1a73e8;text-decoration:none;" title="Apri foglio domande">—</a></span>
-        <span style="font-size:0.78em;color:#888;white-space:nowrap;">Risultati: <a id="link-results" href="#" target="_blank" style="color:#1a73e8;text-decoration:none;" title="Apri foglio risultati">—</a></span>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;margin-left:24px;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;flex-shrink:0;">Domande:</span>
+        <select id="drive-qs-select" onchange="driveSelectChanged('qs')" style="flex:1;min-width:120px;max-width:220px;font-size:0.82em;padding:3px 6px;border:1px solid #ddd;">
+          <option value="">— carica lista —</option>
+        </select>
+        <a id="link-questions" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri foglio domande">↗</a>
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;flex-shrink:0;">Risultati:</span>
+        <select id="drive-rs-select" onchange="driveSelectChanged('rs')" style="flex:1;min-width:120px;max-width:220px;font-size:0.82em;padding:3px 6px;border:1px solid #ddd;">
+          <option value="">— carica lista —</option>
+        </select>
+        <a id="link-results" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri foglio risultati">↗</a>
         <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
-        <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0;">
-          <button class="btn btn-sm btn-outline" onclick="logout()">Esci</button>
-        </div>
+        <button class="btn btn-sm btn-outline" onclick="logout()" style="margin-left:auto;flex-shrink:0;">Esci</button>
       </div>
     </div>
-    <!-- Riga 2: cartella Drive + selezione fogli + Apps Script -->
+    <!-- Riga 2: cartella Drive + crea nuovo + Apps Script -->
     <div class="panel-header-row2">
       <span class="ph-label">Cartella Drive:</span>
       <input type="text" id="cfg-folder-url" placeholder="URL o ID cartella Drive">
       <a id="link-folder" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri cartella">↗</a>
       <button class="btn btn-outline btn-ph" onclick="loadDriveList()">Carica lista</button>
       <span class="ph-sep">|</span>
-      <span class="ph-label">Domande:</span>
-      <select id="drive-qs-select" onchange="driveSelectChanged('qs')">
-        <option value="">— carica lista —</option>
-      </select>
-      <button class="btn btn-outline btn-ph" onclick="createNewSheet('questions')" title="Crea nuovo foglio domande">+ Nuovo</button>
-      <span class="ph-sep">|</span>
-      <span class="ph-label">Risultati:</span>
-      <select id="drive-rs-select" onchange="driveSelectChanged('rs')">
-        <option value="">— carica lista —</option>
-      </select>
-      <button class="btn btn-outline btn-ph" onclick="createNewSheet('results')" title="Crea nuovo foglio risultati">+ Nuovo</button>
+      <button class="btn btn-outline btn-ph" onclick="createNewSheet('questions')">+ Nuovo foglio domande</button>
+      <button class="btn btn-outline btn-ph" onclick="createNewSheet('results')">+ Nuovo foglio risultati</button>
       <span class="ph-sep">|</span>
       <span class="ph-label">Apps Script:</span>
       <input type="text" id="cfg-script-url" placeholder="URL editor Apps Script" style="max-width:220px;">
       <a id="link-script" href="#" target="_blank" style="font-size:0.82em;color:#888;text-decoration:none;flex-shrink:0;" title="Apri editor Apps Script">↗</a>
       <span id="drive-msg" style="color:#888;flex-shrink:0;white-space:nowrap;"></span>
     </div>
-    <!-- Campi nascosti per mantenere compatibilità con saveSheetConfig/loadSheetConfig -->
+    <!-- Campi nascosti per ID correnti -->
     <input type="hidden" id="cfg-qs-url">
     <input type="hidden" id="cfg-rs-url">
   </div>
