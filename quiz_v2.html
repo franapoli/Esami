@@ -194,7 +194,6 @@ const EXAM_ID = new URLSearchParams(window.location.search).get("id") || "vhl-20
 // Caricati dinamicamente da getTrack
 let questions    = [];
 let EXAM_DATE    = "";
-let EXAM_NAME    = "";
 let EXAM_DURATION_MIN = 60;
 let EXAM_MODE         = "exam";
 let EXAM_PWD_REQUIRED = false;
@@ -305,15 +304,13 @@ async function loadTrack() {
     // Metadati traccia
     const t = res.track;
     EXAM_DATE         = t.exam_date || "";
-    EXAM_NAME         = t.exam_name || "";
     EXAM_DURATION_MIN = t.duration !== undefined && t.duration !== "" ? parseInt(t.duration) : 60;
     EXAM_MODE         = t.mode || "exam";
     EXAM_PWD_REQUIRED = !!(t.password_required) && EXAM_MODE === "exam";
     const examStatus  = t.status || "closed";
 
     // Cover
-    document.getElementById("cover-date").textContent =
-      (EXAM_NAME ? EXAM_NAME + " — " : "") + formatDateIt(EXAM_DATE);
+    document.getElementById("cover-date").textContent = formatDateIt(EXAM_DATE);
     const durLabel = EXAM_DURATION_MIN === 0 ? "senza limite di tempo" : EXAM_DURATION_MIN + " minuti";
     document.getElementById("cover-subtitle").innerHTML =
       (t.corso ? t.corso + " &nbsp;|&nbsp; " : "") +

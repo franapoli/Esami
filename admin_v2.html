@@ -350,10 +350,6 @@
             <label for="new-corso">Corso</label>
             <input type="text" id="new-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
           </div>
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-name">Nome <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
-            <input type="text" id="new-name" autocomplete="new-password" placeholder="Default: nome traccia">
-          </div>
           <div class="field" style="min-width:140px;">
             <label for="new-date">Data</label>
             <input type="date" id="new-date" autocomplete="new-password">
@@ -411,10 +407,6 @@
           <div class="field" style="flex:2;min-width:180px;">
             <label for="cfg-corso">Corso</label>
             <input type="text" id="cfg-corso" autocomplete="new-password" placeholder="Es. Applicazioni di Bioinformatica">
-          </div>
-          <div class="field" style="flex:2;min-width:180px;">
-            <label for="cfg-name">Nome <span style="font-weight:normal;color:#aaa;">(opzionale)</span></label>
-            <input type="text" id="cfg-name" autocomplete="new-password" placeholder="Default: nome traccia">
           </div>
           <div class="field" style="min-width:140px;">
             <label for="cfg-date">Data</label>
@@ -1108,7 +1100,6 @@ function renderTrackStatus(e) {
 function populateEsameEditForm(e) {
   document.getElementById("cfg-traccia-ref").value = e.traccia_id || "";
   document.getElementById("cfg-corso").value = e.corso    || "";
-  document.getElementById("cfg-name").value  = e.nome     || "";
   document.getElementById("cfg-date").value  = e.data     || "";
   document.getElementById("cfg-dur").value   = e.durata   || "90";
   document.getElementById("cfg-mode").value  = e.modalita || "exam";
@@ -1139,7 +1130,6 @@ async function saveTrack() {
       action:"setEsame", password:adminPassword, exam_id:currentEsame.exam_id,
       traccia_id:     document.getElementById("cfg-traccia-ref").value,
       corso:          document.getElementById("cfg-corso").value.trim(),
-      exam_name:      document.getElementById("cfg-name").value.trim(),
       exam_date:      document.getElementById("cfg-date").value.trim(),
       duration:       document.getElementById("cfg-dur").value.trim(),
       mode:           document.getElementById("cfg-mode").value,
@@ -1148,7 +1138,6 @@ async function saveTrack() {
     if (res.status === "ok") {
       currentEsame.traccia_id = document.getElementById("cfg-traccia-ref").value;
       currentEsame.corso      = document.getElementById("cfg-corso").value.trim();
-      currentEsame.nome       = document.getElementById("cfg-name").value.trim();
       currentEsame.data       = document.getElementById("cfg-date").value.trim();
       currentEsame.durata     = document.getElementById("cfg-dur").value.trim();
       currentEsame.modalita   = document.getElementById("cfg-mode").value;
@@ -1205,9 +1194,8 @@ function renderMonitorData(res) {
   const dateIt  = formatDateIt(track.exam_date || "");
   const modeLbl = track.mode === "practice" ? " — esercitazione" : "";
   document.getElementById("monitor-meta").innerHTML =
-    "<strong>" + escHtml(track.exam_name || track.exam_id || "—") + "</strong>" +
-    (dateIt ? " &nbsp;|&nbsp; " + dateIt : "") + modeLbl +
-    " &nbsp;|&nbsp; <code style='font-size:0.85em'>" + escHtml(track.exam_id || "—") + "</code>";
+    "<code style='font-size:0.85em'>" + escHtml(track.exam_id || "—") + "</code>" +
+    (dateIt ? " &nbsp;|&nbsp; " + dateIt : "") + modeLbl;
 
   const done = rows.filter(r => r.finalized).length;
   document.getElementById("stat-total").textContent = rows.length;
@@ -1292,7 +1280,7 @@ function renderRisultati(res) {
   currentNQ   = nQ; // aggiorna per il monitor
 
   document.getElementById("risultati-meta").innerHTML =
-    "<strong>" + escHtml(track.exam_name || track.exam_id || "—") + "</strong>" +
+    "<code style='font-size:0.85em'>" + escHtml(track.exam_id || "—") + "</code>" +
     (track.exam_date ? " &nbsp;|&nbsp; " + formatDateIt(track.exam_date) : "");
 
   document.getElementById("res-stat-n").textContent = rows.length;
@@ -1742,7 +1730,6 @@ function duplicateEsame() {
   currentEsame = null;
   document.getElementById("esame-select").value = "";
   document.getElementById("new-corso").value     = "";
-  document.getElementById("new-name").value      = "";
   document.getElementById("new-date").value      = "";
   document.getElementById("new-dur").value       = "90";
   document.getElementById("new-mode").value      = "exam";
@@ -1811,16 +1798,15 @@ function renderCrossref() {
 }
 
 function buildEsamePill(e) {
-  // normalizza campi: il server usa stato/modalita/nome/data, doCreateEsame usa status/mode/exam_name/exam_date
   const stato    = e.stato    || e.status   || "closed";
   const modalita = e.modalita || e.mode     || "exam";
-  const nome     = e.nome     || e.exam_name || e.exam_id;
   const data     = e.data     || e.exam_date || "";
+  const examId   = e.exam_id  || "—";
   const isOpen   = stato === "open";
   const dot      = isOpen ? "●" : "○";
   const modeStr  = modalita === "practice" ? "eserc." : "esame";
   const dataStr  = data ? ` ${data},` : "";
-  const label    = `${escHtml(nome)} <span style="color:#aaa">(${dataStr} ${modeStr})</span>`;
+  const label    = `${escHtml(examId)} <span style="color:#aaa">(${dataStr} ${modeStr})</span>`;
   return `<span class="esame-pill ${isOpen ? 'open' : 'closed'}" onclick="jumpToEsame('${escHtml(e.exam_id)}')" title="${escHtml(e.exam_id)}"><span class="pill-dot">${dot}</span>${label}</span>`;
 }
 
@@ -2160,7 +2146,6 @@ function clearItems() {
 async function doCreateEsame() {
   const tracciaId = document.getElementById("new-traccia-ref").value;
   const corso = document.getElementById("new-corso").value.trim();
-  const name  = document.getElementById("new-name").value.trim();
   const date  = document.getElementById("new-date").value;
   const dur   = document.getElementById("new-dur").value;
   const mode  = document.getElementById("new-mode").value;
@@ -2174,12 +2159,12 @@ async function doCreateEsame() {
   try {
     const res = await callScript({
       action:"createEsame", password:adminPassword,
-      traccia_id:tracciaId, corso, exam_name:name, exam_date:date,
+      traccia_id:tracciaId, corso, exam_date:date,
       duration:dur, mode, track_password:pwd
     });
     if (res.status !== "ok") throw new Error(res.message);
 
-    const newE = { exam_id:res.exam_id, traccia_id:tracciaId, corso, exam_name:name,
+    const newE = { exam_id:res.exam_id, traccia_id:tracciaId, corso,
                    exam_date:date, duration:dur, mode, status:"closed", password:pwd };
     allEsami.push(newE);
     populateEsameSelect(allEsami);

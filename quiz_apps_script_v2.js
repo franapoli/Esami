@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.17.0"; // aggiornare ad ogni deploy
+const VERSION = "2.18.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -74,7 +74,7 @@ const E_PASSWORD = 8;  // I  password accesso (solo exam; vuota = nessuna)
 const META_COLS = {
   exam_id:    0,  // A
   traccia_id: 1,  // B
-  exam_name:  2,  // C
+  // col 2 (C) riservata (era exam_name, non più usata)
   exam_date:  3,  // D
   duration:   4,  // E
   corso:      5,  // F
@@ -230,7 +230,6 @@ function readEsame(examId) {
     return {
       exam_id:    String(row[E_ID]).trim(),
       traccia_id: String(row[E_TRACCIA]).trim(),
-      nome:       String(row[E_NOME]),
       data:       dataStr,
       durata:     String(row[E_DURATA]),
       corso:      String(row[E_CORSO]),
@@ -407,7 +406,6 @@ function resolveEsame(examId) {
   return {
     track: {
       exam_id:    esame.exam_id,
-      exam_name:  esame.nome || "",   // solo il nome esame — mai il nome traccia
       exam_date:  esame.data,
       duration:   esame.durata,
       mode:       esame.modalita,
@@ -474,7 +472,6 @@ function readMetaTrack(examId) {
     return {
       exam_id:    examId,
       traccia_id: String(values[i][META_COLS.traccia_id] || ""),
-      exam_name:  String(values[i][META_COLS.exam_name]),
       exam_date:  examDate,
       duration:   String(values[i][META_COLS.duration]),
       corso:      String(values[i][META_COLS.corso] || ""),
@@ -494,7 +491,7 @@ function ensureMetaTrack(track) {
   meta.appendRow([
     track.exam_id,
     track.traccia_id  || "",
-    track.exam_name,
+    "",               // col C riservata (era exam_name)
     track.exam_date,
     track.duration,
     track.corso       || "",
@@ -787,7 +784,7 @@ function doPost(e) {
       sheet.appendRow([
         examId,
         data.traccia_id     || "",
-        data.exam_name      || "",
+        "",               // col C riservata (era exam_name)
         examDate,
         data.duration       || 90,
         data.corso          || "",
@@ -817,7 +814,6 @@ function doPost(e) {
         esami.push({
           exam_id:    id,
           traccia_id: String(row[E_TRACCIA]).trim(),
-          nome:       String(row[E_NOME]),
           data:       dataStr,
           durata:     String(row[E_DURATA]),
           corso:      String(row[E_CORSO]),
@@ -840,7 +836,6 @@ function doPost(e) {
         if (String(values[i][E_ID]).trim() !== data.exam_id) continue;
         const row = i + 1;
         if (data.traccia_id     !== undefined) sheet.getRange(row, E_TRACCIA  + 1).setValue(data.traccia_id);
-        if (data.exam_name      !== undefined) sheet.getRange(row, E_NOME     + 1).setValue(data.exam_name);
         if (data.exam_date      !== undefined) sheet.getRange(row, E_DATA     + 1).setValue(data.exam_date);
         if (data.duration       !== undefined) sheet.getRange(row, E_DURATA   + 1).setValue(data.duration);
         if (data.corso          !== undefined) sheet.getRange(row, E_CORSO    + 1).setValue(data.corso);
@@ -853,7 +848,6 @@ function doPost(e) {
         for (let j = 1; j < mvals.length; j++) {
           if (String(mvals[j][META_COLS.exam_id]) !== data.exam_id) continue;
           const mrow = j + 1;
-          if (data.exam_name !== undefined) meta.getRange(mrow, META_COLS.exam_name + 1).setValue(data.exam_name);
           if (data.exam_date !== undefined) meta.getRange(mrow, META_COLS.exam_date + 1).setValue(data.exam_date);
           if (data.duration  !== undefined) meta.getRange(mrow, META_COLS.duration  + 1).setValue(data.duration);
           if (data.corso     !== undefined) meta.getRange(mrow, META_COLS.corso     + 1).setValue(data.corso);
