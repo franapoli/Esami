@@ -900,7 +900,8 @@ function populateDriveSelect(selectId, files) {
   const which = selectId === "drive-qs-select" ? "qs" : "rs";
   const currentUrl = document.getElementById(which === "qs" ? "cfg-qs-url" : "cfg-rs-url").value.trim();
   const currentId  = extractSheetId(currentUrl);
-  sel.innerHTML = '<option value="">— seleziona —</option>' +
+  const placeholder = files.length ? '' : '<option value="">— seleziona —</option>';
+  sel.innerHTML = placeholder +
     files.map(f => {
       const selected = (f.id === currentId) ? ' selected' : '';
       return `<option value="${f.id}" data-url="${f.url}"${selected}>${f.name}</option>`;
