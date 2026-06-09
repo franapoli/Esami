@@ -1223,7 +1223,10 @@ async function loadRisultatiData() {
   }
   try {
     const res = await callScript({ action:"getResults", password:adminPassword, examId:currentEsame.exam_id });
-    if (res.status === "ok") renderRisultati(res);
+    if (res.status === "ok") {
+      renderRisultati(res);
+      ensureQuestionsLoaded(); // pre-fetch in background — pronto quando l'utente clicca uno studente
+    }
     document.getElementById("risultati-loading").style.display  = "none";
     document.getElementById("risultati-updating").style.display = "none";
     document.getElementById("risultati-content").style.display  = "block";
@@ -1425,16 +1428,13 @@ async function showStudentDetail(rowIdx) {
   });
   selectedDetailRow = rowIdx;
 
-  // Carica allQuestions se non ancora disponibile
+  // Attende allQuestions — di norma già in memoria grazie al pre-fetch avviato da getResults
   if (!allQuestions) {
     document.getElementById("detail-tbody").innerHTML =
       '<tr><td colspan="6" style="color:#888;font-style:italic;">Caricamento domande…</td></tr>';
     document.getElementById("student-detail-card").style.display = "";
     try {
-      const res = await callScript({ action: "getQuestions", password: adminPassword });
-      if (res.status !== "ok") throw new Error(res.message);
-      allQuestions = res.questions || [];
-      buildCategoryFilters();
+      await ensureQuestionsLoaded();
     } catch(e) {
       document.getElementById("detail-tbody").innerHTML =
         `<tr><td colspan="6" style="color:#b00;">Errore caricamento domande: ${escHtml(e.message)}</td></tr>`;
@@ -1592,9 +1592,25 @@ document.addEventListener("keydown", e => {
 // ============================================================
 // TAB: DOMANDE
 // ============================================================
-let allQuestions   = null;  // array caricato una volta sola
+let allQuestions        = null;  // array caricato una volta sola
+let _allQuestionsPromise = null; // fetch in-flight — evita doppi round-trip
 let trackItems     = [];    // [{type:"fixed",id} | {type:"random",categoria,sottocateg,tag}]
 let isEditingItems = true;  // false = sola lettura (traccia chiusa)
+
+// Carica allQuestions una sola volta; le chiamate successive attendono la stessa promise.
+// Può essere invocata senza await per un pre-fetch in background.
+function ensureQuestionsLoaded() {
+  if (allQuestions) return Promise.resolve();
+  if (_allQuestionsPromise) return _allQuestionsPromise;
+  _allQuestionsPromise = callScript({ action: "getQuestions", password: adminPassword })
+    .then(res => {
+      if (res.status !== "ok") throw new Error(res.message || "getQuestions error");
+      allQuestions = res.questions || [];
+      buildCategoryFilters();
+    })
+    .finally(() => { _allQuestionsPromise = null; });
+  return _allQuestionsPromise;
+}
 
 // ---- INIT ----
 async function initDomandeTab() {
@@ -1602,10 +1618,7 @@ async function initDomandeTab() {
     document.getElementById("domande-loading").style.display = "block";
     document.getElementById("domande-content").style.display = "none";
     try {
-      const res = await callScript({ action: "getQuestions", password: adminPassword });
-      if (res.status !== "ok") throw new Error(res.message);
-      allQuestions = res.questions || [];
-      buildCategoryFilters();
+      await ensureQuestionsLoaded(); // usa il fetch in-flight se già avviato da Risultati
     } catch(e) {
       document.getElementById("domande-loading").textContent = "Errore: " + e.message;
       return;
