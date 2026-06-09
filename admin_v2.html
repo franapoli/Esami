@@ -1640,6 +1640,19 @@ async function initDomandeTab() {
   }
   document.getElementById("domande-loading").style.display = "none";
   document.getElementById("domande-content").style.display = "block";
+
+  // Se c'è un esame selezionato, pre-seleziona la sua traccia (se esiste)
+  if (currentEsame && currentEsame.traccia_id) {
+    const tracciaExists = allTracks.some(t => t.track_id === currentEsame.traccia_id);
+    if (tracciaExists) {
+      const sel = document.getElementById("traccia-select");
+      if (sel.value !== currentEsame.traccia_id) {
+        sel.value = currentEsame.traccia_id;
+        onTracciaChange(); // imposta currentTraccia e chiama updateDomandeTab
+        return;
+      }
+    }
+  }
   updateDomandeTab();
 }
 
