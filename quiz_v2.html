@@ -211,6 +211,7 @@ let startTime         = null;
 let timerInterval     = null;
 let _durationRefreshInterval = null;
 let extraMinutesIndividualApplied = 0;
+let quizEnded         = false;  // impedisce di applicare extra tempo dopo la consegna
 
 // ---- UTILITÀ ----
 function formatDateIt(dateStr) {
@@ -501,6 +502,7 @@ async function initQuiz() {
     renderQuestion();
     startTimer();
     extraMinutesIndividualApplied = 0;
+    quizEnded = false;
     // Aggiornamento periodico durata (cattura extra tempo aggiunto dal docente)
     if (_durationRefreshInterval) clearInterval(_durationRefreshInterval);
     if (EXAM_MODE !== "practice") {
@@ -628,7 +630,7 @@ async function _flushSaveQueue() {
 
 // ---- AGGIORNAMENTO DURATA DA SERVER ----
 async function refreshDuration() {
-  if (EXAM_MODE === "practice") return;
+  if (EXAM_MODE === "practice" || quizEnded) return;
   try {
     const res = await callScript({ action: "getTrack", examId: EXAM_ID });
     if (res.status !== "ok" || !res.track) return;
@@ -891,7 +893,7 @@ async function saveProgress(qIndex, value) {
     setSaveStatus("✓ Salvato");
     // Propaga extra tempo individuale (global extra è gestito via refreshDuration)
     const extraInd = res.extra_minutes_individual || 0;
-    if (extraInd > extraMinutesIndividualApplied) {
+    if (!quizEnded && extraInd > extraMinutesIndividualApplied) {
       const delta = extraInd - extraMinutesIndividualApplied;
       extraMinutesIndividualApplied = extraInd;
       EXAM_DURATION_MIN += delta;
@@ -928,6 +930,7 @@ function confirmSubmit() {
 let lastFinalizePayload = null;
 
 async function showResults() {
+  quizEnded = true;
   if (timerInterval) clearInterval(timerInterval);
   if (_durationRefreshInterval) { clearInterval(_durationRefreshInterval); _durationRefreshInterval = null; }
   document.getElementById("quiz-wrapper").classList.remove("active");
