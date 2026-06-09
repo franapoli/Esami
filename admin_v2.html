@@ -786,6 +786,18 @@ async function loadSheetConfig() {
     document.getElementById("cfg-rs-url").value = res.results_url  || "";
     if (res.questions_url) document.getElementById("link-questions").href = res.questions_url;
     if (res.results_url)   document.getElementById("link-results").href   = res.results_url;
+    // Pre-popola i select con il foglio attivo (senza caricare tutta la lista Drive)
+    // Quando l'utente apre il dropdown, populateDriveSelect sostituisce con la lista completa
+    if (res.questions_id) {
+      const label = res.questions_name || res.questions_id;
+      document.getElementById("drive-qs-select").innerHTML =
+        `<option value="${res.questions_id}" data-url="${res.questions_url || ''}" selected>${escHtml(label)}</option>`;
+    }
+    if (res.results_id) {
+      const label = res.results_name || res.results_id;
+      document.getElementById("drive-rs-select").innerHTML =
+        `<option value="${res.results_id}" data-url="${res.results_url || ''}" selected>${escHtml(label)}</option>`;
+    }
     if (res.folder_url) {
       document.getElementById("cfg-folder-url").value = res.folder_url;
       document.getElementById("link-folder").href = res.folder_url;

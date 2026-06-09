@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.13.0"; // aggiornare ad ogni deploy
+const VERSION = "2.14.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -553,10 +553,15 @@ function doPost(e) {
       const rId  = getSheetResultsId();
       const fId  = getDriveFolderId();
       const scriptEditorUrl = PropertiesService.getScriptProperties().getProperty("SCRIPT_EDITOR_URL") || "";
+      // Legge solo il nome (metadato) — non apre il foglio intero
+      let qName = ""; try { qName = DriveApp.getFileById(qId).getName(); } catch(e) {}
+      let rName = ""; try { rName = DriveApp.getFileById(rId).getName(); } catch(e) {}
       return corsResponse({
         status: "ok",
         questions_id:      qId,
+        questions_name:    qName,
         results_id:        rId,
+        results_name:      rName,
         folder_id:         fId,
         questions_url:     "https://docs.google.com/spreadsheets/d/" + qId + "/edit",
         results_url:       "https://docs.google.com/spreadsheets/d/" + rId + "/edit",
