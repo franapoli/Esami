@@ -1267,19 +1267,24 @@ function renderHistogram(rows, maxScore) {
   if (rows.length === 0) { wrap.innerHTML = '<p style="color:#888;font-size:0.88em;">Nessun dato.</p>'; return; }
   const counts = Array(maxScore + 1).fill(0);
   rows.forEach(r => { const s = Math.min(Math.max(Math.round(Number(r.score) || 0), 0), maxScore); counts[s]++; });
-  const maxCount = Math.max(...counts);
   const step = 2;
-  let html = "";
+  // Raggruppa per bin PRIMA di calcolare il massimo, altrimenti maxCount è sul singolo punteggio
+  // e le barre con bin > maxSingolo vengono clippate tutte a 100%
+  const bins = [];
   for (let s = 0; s <= maxScore; s += step) {
-    const cnt = counts[s] + (counts[s+1] || 0);
-    const pct = maxCount > 0 ? (cnt / maxCount) * 100 : 0;
-    const label = s + (s+1 <= maxScore ? "–"+(s+1) : "");
+    bins.push({ s, cnt: counts[s] + (counts[s + 1] || 0) });
+  }
+  const maxCount = Math.max(...bins.map(b => b.cnt), 1);
+  let html = "";
+  bins.forEach(({ s, cnt }) => {
+    const pct = (cnt / maxCount) * 100;
+    const label = s + (s + 1 <= maxScore ? "–" + (s + 1) : "");
     html += `<div class="histo-bar-row">
       <span class="histo-label">${label}</span>
       <div class="histo-bar-bg"><div class="histo-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
       <span class="histo-count">${cnt > 0 ? cnt : ""}</span>
     </div>`;
-  }
+  });
   wrap.innerHTML = html;
 }
 
