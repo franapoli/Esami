@@ -1092,12 +1092,17 @@ function renderTrackStatus(e) {
   const dur = e.durata === "0" || e.durata === 0 ? "senza limite" : (e.durata || "—") + " min";
   const t   = allTracks.find(t => t.track_id === e.traccia_id);
   const nome = e.nome && e.nome.trim() ? e.nome : (t ? t.nome : e.traccia_id);
+  const tracciaLabel = t ? escHtml(t.nome) : escHtml(e.traccia_id || "—");
+  const tracciaHtml = e.traccia_id
+    ? `<a href="#" onclick="switchTab('domande');return false;" title="${escHtml(e.traccia_id)}" style="color:inherit;text-decoration:underline dotted;">${tracciaLabel}</a>`
+    : "—";
   document.getElementById("status-text").innerHTML =
     "<strong>" + (isOpen ? "APERTO" : "CHIUSO") + "</strong>" + modeBadge +
     " &nbsp;|&nbsp; " + escHtml(e.corso || "—") +
     " &nbsp;|&nbsp; " + escHtml(nome) +
     (e.data ? " &nbsp;|&nbsp; " + formatDateIt(e.data) : "") +
-    " &nbsp;|&nbsp; " + dur;
+    " &nbsp;|&nbsp; " + dur +
+    " &nbsp;|&nbsp; Traccia: " + tracciaHtml;
 }
 
 function populateEsameEditForm(e) {
