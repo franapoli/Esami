@@ -378,6 +378,7 @@ function _resolveItems(items, withCorrect) {
     } else if (item.type === "random") {
       const candidates = Object.values(allQ).filter(q => {
         if (usedIds.has(q.id)) return false;
+        if ((q.stato || "verificato") === "bozza") return false; // le bozze non vengono assegnate
         if (item.categoria && q.categoria !== item.categoria) return false;
         if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
         if (item.tag) {
