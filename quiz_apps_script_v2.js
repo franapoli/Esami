@@ -221,7 +221,7 @@ function readEsame(examId) {
   const sheet  = getEsamiSheet();
   const tz     = Session.getScriptTimeZone();
   const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
+  for (let i = 0; i < values.length; i++) {
     const row = values[i];
     if (String(row[E_ID]).trim() !== examId) continue;
     const rawDate = row[E_DATA];
@@ -719,7 +719,8 @@ function doPost(e) {
           cfg.appendRow(["admin_password", getAdminPassword()]);
           cfg.getRange(1, 1, 1, 2).setFontWeight("bold");
           cfg.setFrozenRows(1);
-          ss.insertSheet("Esami");
+          const esTab = ss.insertSheet("Esami");
+          esTab.appendRow(["EsameID","TracciaID","Nome","Data","Durata (min)","Corso","Modalità","Stato","Password"]);
         }
 
         const id = ss.getId();
@@ -742,7 +743,7 @@ function doPost(e) {
       const tz     = Session.getScriptTimeZone();
       const values = sheet.getDataRange().getValues();
       const exams  = [];
-      for (let i = 1; i < values.length; i++) {
+      for (let i = 0; i < values.length; i++) {
         const row   = values[i];
         const id    = String(row[E_ID]).trim();
         const stato = String(row[E_STATO]).trim();
@@ -901,7 +902,7 @@ function doPost(e) {
       const tz     = Session.getScriptTimeZone();
       const values = sheet.getDataRange().getValues();
       const esami  = [];
-      for (let i = 1; i < values.length; i++) {
+      for (let i = 0; i < values.length; i++) {
         const row = values[i];
         const id  = String(row[E_ID]).trim();
         if (!id || id === "EsameID") continue;
@@ -929,7 +930,7 @@ function doPost(e) {
       if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getEsamiSheet();
       const values = sheet.getDataRange().getValues();
-      for (let i = 1; i < values.length; i++) {
+      for (let i = 0; i < values.length; i++) {
         if (String(values[i][E_ID]).trim() !== data.exam_id) continue;
         const row = i + 1;
         if (data.traccia_id     !== undefined) sheet.getRange(row, E_TRACCIA  + 1).setValue(data.traccia_id);
