@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.19.0"; // aggiornare ad ogni deploy
+const VERSION = "2.20.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
