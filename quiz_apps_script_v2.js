@@ -524,22 +524,30 @@ function readMetaTrack(examId) {
 }
 
 function ensureMetaTrack(track) {
-  const existing = readMetaTrack(track.exam_id);
-  if (existing) return existing;
-  const meta = getMetaSheet();
-  const now  = formatTs(new Date().toISOString());
-  meta.appendRow([
-    track.exam_id,
-    track.traccia_id  || "",
-    "",               // col C riservata (era exam_name)
-    track.exam_date,
-    track.duration,
-    track.corso       || "",
-    track.mode        || "exam",
-    track.status      || "closed",
-    now
-  ]);
-  return readMetaTrack(track.exam_id);
+  if (readMetaTrack(track.exam_id)) return readMetaTrack(track.exam_id);
+  // Double-check con lock per evitare righe duplicate da chiamate concorrenti
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(e) {}
+  try {
+    const existing = readMetaTrack(track.exam_id);
+    if (existing) return existing;
+    const meta = getMetaSheet();
+    const now  = formatTs(new Date().toISOString());
+    meta.appendRow([
+      track.exam_id,
+      track.traccia_id  || "",
+      "",               // col C riservata (era exam_name)
+      track.exam_date,
+      track.duration,
+      track.corso       || "",
+      track.mode        || "exam",
+      track.status      || "closed",
+      now
+    ]);
+    return readMetaTrack(track.exam_id);
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
 }
 
 function getResultSheet(examId, nQuestions) {
@@ -724,6 +732,35 @@ function doPost(e) {
       } catch(e) {
         return corsResponse({ status: "error", message: "Errore creazione foglio: " + e.message });
       }
+    }
+
+    // ----------------------------------------------------------------
+    // getPublicExams — elenco pubblico degli esami aperti (no password)
+    // ----------------------------------------------------------------
+    if (data.action === "getPublicExams") {
+      const sheet  = getEsamiSheet();
+      const tz     = Session.getScriptTimeZone();
+      const values = sheet.getDataRange().getValues();
+      const exams  = [];
+      for (let i = 1; i < values.length; i++) {
+        const row   = values[i];
+        const id    = String(row[E_ID]).trim();
+        const stato = String(row[E_STATO]).trim();
+        if (!id || id === "EsameID") continue;
+        if (stato !== "open") continue;
+        const rawDate = row[E_DATA];
+        const dataStr = rawDate instanceof Date && !isNaN(rawDate)
+          ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+        exams.push({
+          exam_id:  id,
+          corso:    String(row[E_CORSO]).trim(),
+          data:     dataStr,
+          durata:   Number(row[E_DURATA]) || 0,
+          modalita: String(row[E_MODALITA]).trim() || "exam"
+        });
+      }
+      exams.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+      return corsResponse({ status: "ok", exams });
     }
 
     // ----------------------------------------------------------------
@@ -1197,6 +1234,12 @@ function doPost(e) {
           scoredAnswers.push({ ans, pts });
         });
 
+        const nScored  = assignedIds.filter(qId => allQ[qId] && allQ[qId].tipo !== "free").length;
+        const nCorrect = scoredAnswers.filter((sa, i) => {
+          const q = allQ[assignedIds[i]];
+          return q && q.tipo !== "free" && sa.pts >= (Number(q.punti) || 1);
+        }).length;
+
         // Tempo calcolato SERVER-SIDE: inizio dal foglio (scritto all'init), fine = adesso.
         // Ignora tsStart/tsEnd/elapsed inviati dal client (manomissibili).
         const serverStart = parseTs(existingRow[COL_TS_START - 1]);
@@ -1226,13 +1269,15 @@ function doPost(e) {
           sheet.getRange(rowIndex, col + 1).setValue(item.pts);
         });
 
-        const response = { status: "ok", score: serverScore, total_pts: totalPts, overtime: overtime };
+        const response = { status: "ok", score: serverScore, total_pts: totalPts, overtime: overtime, n_correct: nCorrect, n_scored: nScored };
         // Le risposte corrette si rivelano SOLO in practice e SOLO dopo la consegna
         if (track.mode === "practice") {
           const qForFeedback = assignedIds.map(qId => buildQuestionObj(allQ[qId], 0, true));
-          response.correct_answers = qForFeedback.map(q => ({
+          response.correct_answers = qForFeedback.map((q, idx) => ({
             id: q.id, correct: q.correct, type: q.type,
-            options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns
+            options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns,
+            scored_pts: scoredAnswers[idx].pts,
+            max_pts: Number(allQ[assignedIds[idx]]?.punti) || 1
           }));
         }
         return corsResponse(response);

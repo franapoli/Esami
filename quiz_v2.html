@@ -1016,9 +1016,18 @@ function showPracticeResults(serverScore, correctAnswers) {
     return { userDisplay, correctDisplay, qText: q.text, qPts: q.pts };
   });
 
-  // Recupera i punteggi per domanda dal server (scoredAnswers non disponibili qui — usiamo solo score totale)
+  const in30Practice = (TOTAL_PTS !== 30 && TOTAL_PTS > 0)
+    ? " <span style='font-size:0.65em;color:#777;font-weight:normal;'>≈ " + (Math.round(serverScore / TOTAL_PTS * 30 * 10) / 10) + " / 30</span>"
+    : "";
+  const nCorrectPractice = correctAnswers ? correctAnswers.filter(ca => ca && ca.type !== "free" && ca.scored_pts !== undefined && ca.scored_pts >= ca.max_pts).length : null;
+  const nScoredPractice  = correctAnswers ? correctAnswers.filter(ca => ca && ca.type !== "free").length : null;
+  const correctLinePractice = (nCorrectPractice !== null)
+    ? "<div style='font-size:0.9em;color:#555;margin-bottom:4px;'>" + nCorrectPractice + " domande corrette su " + nScoredPractice + "</div>"
+    : "";
+
   statusEl.innerHTML =
-    "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + serverScore + " / " + TOTAL_PTS + "</div>" +
+    "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" + serverScore + " / " + TOTAL_PTS + in30Practice + "</div>" +
+    correctLinePractice +
     "<div style='font-size:0.9em;color:#555;margin-bottom:24px;'>Modalità esercitazione</div>" +
     "<table style='width:100%;border-collapse:collapse;font-size:0.86em;'>" +
     "<thead><tr style='background:#1a1a1a;color:#fff;'>" +
@@ -1064,9 +1073,17 @@ async function doFinalize() {
       // Mostra risultati con risposte corrette ricevute dal server
       showPracticeResults(res.score, res.correct_answers);
     } else {
-      // Exam: mostra solo score confermato dal server
+      // Exam: mostra score confermato dal server
+      const examScore = res.score !== undefined ? res.score : "—";
+      const in30Exam = (TOTAL_PTS !== 30 && TOTAL_PTS > 0 && examScore !== "—")
+        ? " <span style='font-size:0.65em;color:#777;font-weight:normal;'>≈ " + (Math.round(examScore / TOTAL_PTS * 30 * 10) / 10) + " / 30</span>"
+        : "";
+      const correctLineExam = (res.n_correct !== undefined && res.n_scored !== undefined)
+        ? "<div style='font-size:0.9em;color:#555;margin-bottom:4px;'>" + res.n_correct + " domande corrette su " + res.n_scored + "</div>"
+        : "";
       statusEl.innerHTML = "<div style='font-size:2em;font-weight:bold;margin-bottom:8px;'>" +
-        (res.score !== undefined ? res.score : "—") + " / " + TOTAL_PTS + "</div>" +
+        examScore + " / " + TOTAL_PTS + in30Exam + "</div>" +
+        correctLineExam +
         "<div style='font-size:0.9em;color:#555;'>Punteggio registrato.</div>";
       doneEl.style.display = "block";
     }
