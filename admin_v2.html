@@ -262,6 +262,9 @@
   <div class="load-msg" id="loading-msg">Caricamento…</div>
 </div>
 
+<div id="test-banner" style="display:none;background:#b71c1c;color:#fff;text-align:center;padding:6px;font-size:0.85em;font-weight:600;letter-spacing:0.04em;">
+  🧪 AMBIENTE DI TEST — i dati non sono reali
+</div>
 <header id="site-header">
   <img src="logo_unisannio.png" alt="Università degli Studi del Sannio — DST">
 </header>
@@ -719,8 +722,12 @@
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
-const BUILD = "c7a6065";
+const SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
+const TEST_SCRIPT_URL = ""; // URL del deployment di test — lasciare vuoto finché non configurato
+const _isTestMode     = new URLSearchParams(window.location.search).has("test");
+const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
+if (_isTestMode) document.getElementById("test-banner").style.display = "block";
+const BUILD = "e51e656";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -753,7 +760,7 @@ let currentResultsData = null;  // ultima risposta getResults — usato per dett
 let selectedDetailRow  = -1;
 
 async function callScript(payload) {
-  const resp = await fetch(SCRIPT_URL, {
+  const resp = await fetch(ACTIVE_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload)

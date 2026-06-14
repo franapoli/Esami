@@ -122,6 +122,9 @@
 </header>
 
 <!-- COVER -->
+<div id="test-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#b71c1c;color:#fff;text-align:center;padding:6px;font-size:0.85em;font-weight:600;letter-spacing:0.04em;">
+  🧪 AMBIENTE DI TEST — i dati non sono reali
+</div>
 <div id="cover" style="display:none;">
   <h1 id="cover-title">Quiz</h1>
   <p class="subtitle" id="cover-subtitle"></p>
@@ -187,7 +190,11 @@
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
+const SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
+const TEST_SCRIPT_URL = ""; // URL del deployment di test — lasciare vuoto finché non configurato
+const _isTestMode     = new URLSearchParams(window.location.search).has("test");
+const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
+if (_isTestMode) document.getElementById("test-banner").style.display = "block";
 
 // ---- ID TRACCIA — letto da URL (?id=...) con fallback hardcoded ----
 const EXAM_ID = new URLSearchParams(window.location.search).get("id") || "vhl-2026-05-28";
@@ -259,7 +266,7 @@ function clearLocal() {
 
 // ---- HTTP ----
 function callScript(payload) {
-  return fetch(SCRIPT_URL, {
+  return fetch(ACTIVE_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload)
