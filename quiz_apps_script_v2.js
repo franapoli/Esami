@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.21.0"; // aggiornare ad ogni deploy
+const VERSION = "2.22.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1206,6 +1206,11 @@ function doPost(e) {
         }
       }
       const qIdx = parseInt(data.qIndex, 10);
+      // Protezione: qIndex valido (>=1) per non scrivere mai nelle colonne di metadati
+      // (Score, Totale, Durata...) che precedono la prima colonna risposta.
+      if (!Number.isInteger(qIdx) || qIdx < 1) {
+        return corsResponse({ status: "error", message: "qIndex non valido" });
+      }
       const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
       // Salva solo la risposta grezza — il punteggio è calcolato server-side in finalize
       sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
@@ -1232,13 +1237,22 @@ function doPost(e) {
         if (track.mode !== "practice" && existingRow[COL_TS_END - 1] !== "" && existingRow[COL_TS_END - 1] !== null) {
           return corsResponse({
             status: "ok", already: true,
-            score: existingRow[COL_SCORE - 1], total_pts: totalPts
+            score: existingRow[COL_SCORE - 1],
+            total_pts: Number(existingRow[COL_TOTALE - 1]) || totalPts
           });
         }
 
         // Punteggio ricalcolato SERVER-SIDE usando gli ID assegnati (COL_QIDS), mai score/pts dal client
         const allQ = loadAllQuestions();
         const assignedIds = parseQIds(existingRow[COL_QIDS - 1]);
+
+        // Denominatore (totale punti) coerente con le domande EFFETTIVAMENTE assegnate.
+        // Per tracce random, resolveEsame() ridisegna domande diverse ad ogni chiamata: usare
+        // resolved.total_pts qui darebbe un denominatore (e una conversione in /30) sbagliato.
+        // Priorità: COL_TOTALE salvato all'init (ciò che lo studente ha visto) → ricalcolo dagli ID → fallback.
+        const totalPtsResp = Number(existingRow[COL_TOTALE - 1])
+          || assignedIds.reduce((s, id) => s + (allQ[id] ? (Number(allQ[id].punti) || 1) : 0), 0)
+          || totalPts;
 
         let serverScore = 0;
         const scoredAnswers = [];
@@ -1290,7 +1304,7 @@ function doPost(e) {
           sheet.getRange(rowIndex, col + 1).setValue(item.pts);
         });
 
-        const response = { status: "ok", score: serverScore, total_pts: totalPts, overtime: overtime, n_correct: nCorrect, n_scored: nScored };
+        const response = { status: "ok", score: serverScore, total_pts: totalPtsResp, overtime: overtime, n_correct: nCorrect, n_scored: nScored };
         // Le risposte corrette si rivelano SOLO in practice e SOLO dopo la consegna
         if (track.mode === "practice") {
           const qForFeedback = assignedIds.map(qId => buildQuestionObj(allQ[qId], 0, true));

@@ -1169,8 +1169,9 @@ async function restartQuiz() {
   if (EXAM_MODE === "practice") {
     // Reset sul server: è il server a riassegnare le domande (set autoritativo)
     document.getElementById("loading-overlay").classList.remove("hidden");
+    let resetRes = null;
     try {
-      const resetRes = await callScript({ action: "resetPractice", examId: EXAM_ID,
+      resetRes = await callScript({ action: "resetPractice", examId: EXAM_ID,
                          matricola: studentMatricola, nominativo: studentNominativo, email: studentEmail });
       if (resetRes && resetRes.status === "ok" && Array.isArray(resetRes.questions)) {
         questions = resetRes.questions;
