@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.22.0"; // aggiornare ad ogni deploy
+const VERSION = "2.23.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -496,6 +496,32 @@ function addExtraMinutes(examId, scope, deltaMinutes) {
   return deltaMinutes;
 }
 
+// Ripresa d'emergenza (es. blackout): interruttore globale per esame.
+// Quando ON, uno studente con una riga NON consegnata può recuperare la sessione
+// dal server da qualsiasi dispositivo. Va acceso/spento manualmente dal docente.
+function getResumeAll(examId) {
+  const key  = "resume_allowed:" + examId + ":all";
+  const vals = getConfigSheet().getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === key) return String(vals[i][1]).trim() === "1";
+  }
+  return false;
+}
+
+function setResumeAll(examId, enabled) {
+  const key  = "resume_allowed:" + examId + ":all";
+  const cfg  = getConfigSheet();
+  const vals = cfg.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === key) {
+      cfg.getRange(i + 1, 2).setValue(enabled ? "1" : "");
+      return enabled;
+    }
+  }
+  cfg.appendRow([key, enabled ? "1" : ""]);
+  return enabled;
+}
+
 function getMetaSheet() {
   const ss = SpreadsheetApp.openById(getSheetResultsId());
   let meta = ss.getSheetByName("Esami");
@@ -613,6 +639,17 @@ function doPost(e) {
       if (minutes === 0) return corsResponse({ status: "ok", total: getExtraMinutesAll(examId), scope });
       const newTotal = addExtraMinutes(examId, scope, minutes);
       return corsResponse({ status: "ok", total: newTotal, scope, exam_id: examId });
+    }
+
+    // ----------------------------------------------------------------
+    // setResumeAll — accende/spegne la ripresa d'emergenza per tutto l'esame
+    // ----------------------------------------------------------------
+    if (data.action === "setResumeAll") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const examId = String(data.exam_id || "");
+      if (!examId) return corsResponse({ status: "error", message: "exam_id mancante" });
+      const enabled = setResumeAll(examId, !!data.enabled);
+      return corsResponse({ status: "ok", resume_all: enabled, exam_id: examId });
     }
 
     // ----------------------------------------------------------------
@@ -985,9 +1022,10 @@ function doPost(e) {
       const esame   = readEsame(examId);
       const traccia = esame ? readTraccia(esame.traccia_id) : null;
       const nQ      = traccia ? traccia.items.length : 20;
+      const resumeAll = getResumeAll(examId);
       const ss      = SpreadsheetApp.openById(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
-      if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
+      if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId), resume_all: resumeAll });
 
       const values = sheet.getDataRange().getValues();
       const rows   = [];
@@ -1011,7 +1049,7 @@ function doPost(e) {
           finalized:  row[COL_TS_END - 1] !== ""
         });
       }
-      return corsResponse({ status: "ok", rows, track: readMetaTrack(examId) });
+      return corsResponse({ status: "ok", rows, track: readMetaTrack(examId), resume_all: resumeAll });
     }
 
     // ----------------------------------------------------------------
@@ -1217,6 +1255,56 @@ function doPost(e) {
       // Restituisce extra tempo individuale (NON include "all", già gestito via getTrack)
       const extraInd = getExtraMinutesIndividual(track.exam_id, data.matricola);
       return corsResponse({ status: "ok", extra_minutes_individual: extraInd });
+    }
+
+    // ---- RESUME (ripresa d'emergenza, es. blackout) ----
+    // Consente di recuperare una sessione NON consegnata da qualsiasi dispositivo,
+    // SOLO se il docente ha acceso l'interruttore globale per questo esame.
+    // Non rivela mai le risposte corrette; rifiuta sessioni già finalizzate.
+    if (data.action === "resume") {
+      if (!getResumeAll(track.exam_id)) {
+        return corsResponse({ status: "error", message: "Ripresa non consentita" });
+      }
+      const rowIndex = findRow(sheet, data.matricola);
+      if (rowIndex === -1) return corsResponse({ status: "error", message: "Nessuna sessione da riprendere" });
+      const existingRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+      // Mai riaprire un esame già consegnato (vale anche durante la finestra globale)
+      if (track.mode !== "practice" && existingRow[COL_TS_END - 1] !== "" && existingRow[COL_TS_END - 1] !== null) {
+        return corsResponse({ status: "error", message: "Esame già consegnato" });
+      }
+      const allQ        = loadAllQuestions();
+      const assignedIds = parseQIds(existingRow[COL_QIDS - 1]);
+      const seed        = parseQIdsSeed(existingRow[COL_QIDS - 1]);
+      // Ricostruisce ESATTAMENTE le domande memorizzate (mai una nuova risoluzione: le random
+      // differirebbero), senza risposte corrette — come init.
+      const rQuestions = assignedIds.map((qId, i) => {
+        const q = allQ[qId];
+        if (!q) return { id: qId, error: "Domanda non trovata: " + qId, pts: 0, type: "mc", text: "", pos: i + 1 };
+        return buildQuestionObj(q, i + 1, false);
+      });
+      // Risposte già salvate (via update), riconvertite nel formato in-memory del client
+      const rAnswers = assignedIds.map((qId, i) => {
+        const raw  = existingRow[COL_ANS_FIRST - 1 + i * 2];
+        const type = allQ[qId] ? allQ[qId].tipo : "mc";
+        if (raw === "" || raw === null || raw === undefined) return null;
+        if (type === "mc") { const n = parseInt(raw, 10); return isNaN(n) ? null : n; }
+        if (type === "match" || type === "multi-fitb" || type === "cloze") {
+          try { return JSON.parse(raw); } catch(e) { return null; }
+        }
+        return String(raw); // fitb / free
+      });
+      const totalPtsResume = Number(existingRow[COL_TOTALE - 1])
+        || assignedIds.reduce((s, id) => s + (allQ[id] ? (Number(allQ[id].punti) || 1) : 0), 0)
+        || totalPts;
+      const tsStart = parseTs(existingRow[COL_TS_START - 1]);
+      return corsResponse({
+        status:       "ok",
+        questions:    rQuestions,
+        answers:      rAnswers,
+        seed:         seed,
+        total_pts:    totalPtsResume,
+        ts_start_iso: tsStart ? tsStart.toISOString() : null
+      });
     }
 
     // ---- FINALIZE ----

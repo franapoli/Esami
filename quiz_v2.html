@@ -472,9 +472,43 @@ async function initQuiz() {
         }
         authoritative = resetRes;
       } else {
-        document.getElementById("cover-error").textContent = res.finalized
-          ? "Hai già consegnato il quiz con questa matricola."
-          : "Questa matricola è già registrata per l'esame in corso.";
+        // Prova ripresa autorizzata dal docente
+        const resumeRes = await callScript({ action: "resume", examId: EXAM_ID, matricola });
+        if (resumeRes && resumeRes.status === "ok") {
+          questions = resumeRes.questions;
+          if (resumeRes.total_pts !== undefined) TOTAL_PTS = resumeRes.total_pts;
+          answers = Array.isArray(resumeRes.answers)
+            ? resumeRes.answers.map(a => (a === undefined ? null : a))
+            : new Array(questions.length).fill(null);
+          if (answers.length < questions.length) answers.length = questions.length;
+          studentNominativo = nominativo;
+          studentMatricola  = matricola;
+          studentEmail      = email;
+          startTime = resumeRes.ts_start_iso ? new Date(resumeRes.ts_start_iso) : new Date();
+          buildShuffleMap(resumeRes.seed);
+          saveLocal();
+          document.getElementById("cover").style.display = "none";
+          document.getElementById("thankyou").style.display = "none";
+          document.getElementById("quiz-wrapper").classList.add("active");
+          document.getElementById("student-info").innerHTML =
+            "<strong>" + nominativo + "</strong><br>" + matricola +
+            "<br><span style='font-size:0.85em;color:#888'>" + email + "</span>";
+          document.getElementById("practice-hint").style.display = "none";
+          buildGrid();
+          renderQuestion();
+          startTimer();
+          extraMinutesIndividualApplied = 0;
+          quizEnded = false;
+          if (_durationRefreshInterval) clearInterval(_durationRefreshInterval);
+          _durationRefreshInterval = setInterval(refreshDuration, 60 * 1000);
+          return;
+        }
+        document.getElementById("cover-error").textContent =
+          resumeRes && resumeRes.message === "Esame già consegnato"
+            ? "Hai già consegnato il quiz con questa matricola."
+            : res.finalized
+              ? "Hai già consegnato il quiz con questa matricola."
+              : "Questa matricola è già registrata per l'esame in corso.";
         btn.disabled = false;
         btn.textContent = "Inizia il quiz";
         return;
