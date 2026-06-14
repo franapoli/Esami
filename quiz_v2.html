@@ -191,7 +191,7 @@
 
 <script>
 const SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
-const TEST_SCRIPT_URL = ""; // URL del deployment di test — lasciare vuoto finché non configurato
+const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwc3Q4xywribKypXdhk9-_SyrkfHJYqibBKEwWGaJ5CfNerXCi7qrpzBb2jV26MU96dIQ/exec";
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
