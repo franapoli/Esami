@@ -727,7 +727,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwc3Q4xywribKyp
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "a6ee97f";
+const BUILD = "9c689e2";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -900,6 +900,19 @@ async function saveSheetConfig() {
       if (fId) document.getElementById("link-folder").href =
         "https://drive.google.com/drive/folders/" + fId;
       if (scriptUrl) document.getElementById("link-script").href = scriptUrl;
+      // Ricarica esami e tracce dal nuovo foglio
+      msg.textContent = "✓ Salvato — ricarico esami…";
+      try {
+        const eRes = await callScript({ action: "getAllEsami", password: adminPassword });
+        if (eRes.status === "ok") {
+          allEsami = eRes.esami || [];
+          currentEsame = null;
+          populateEsameSelect(allEsami);
+        }
+        _tracksPromise = null; // invalida cache tracce
+        _driveListLoaded = false; _driveListPromise = null; // invalida cache Drive
+        msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
+      } catch(e) { /* silenzioso — il salvataggio è andato a buon fine */ }
     } else {
       msg.style.color = "#b00"; msg.textContent = res.message || "Errore.";
     }
