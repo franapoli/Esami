@@ -371,6 +371,13 @@
             <label for="new-pwd">Password <span style="font-weight:normal;color:#aaa;">(vuoto = nessuna)</span></label>
             <input type="text" id="new-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
           </div>
+          <div class="field" style="min-width:140px;">
+            <label for="new-shuffle">Shuffle opzioni</label>
+            <select id="new-shuffle">
+              <option value="si">Abilitato (default)</option>
+              <option value="no">Disabilitato</option>
+            </select>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-sm btn-green" style="margin-top:0;" onclick="doCreateEsame()">Crea esame</button>
@@ -429,6 +436,14 @@
           <div class="field" style="flex:2;min-width:180px;">
             <label for="cfg-pwd">Password <span style="font-weight:normal;color:#aaa;">(solo esame)</span></label>
             <input type="text" id="cfg-pwd" placeholder="Nessuna" autocomplete="off" style="font-family:monospace;">
+          </div>
+          <div class="field" style="min-width:140px;">
+            <label for="cfg-shuffle">Shuffle opzioni</label>
+            <select id="cfg-shuffle">
+              <option value="si">Abilitato (default)</option>
+              <option value="no">Disabilitato</option>
+            </select>
+            <p class="hint">Disabilita per esami formali</p>
           </div>
         </div>
 
@@ -699,7 +714,7 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7PfS9K2K_qjGy7VtUo5XkPqfRxbEQrxBWbPwAbw7fZ_xGTAUJcP2V0SI52ru45ySHA/exec";
-const BUILD = "1b7ad07";
+const BUILD = "015b808";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1115,6 +1130,7 @@ function populateEsameEditForm(e) {
   document.getElementById("cfg-dur").value   = e.durata   || "90";
   document.getElementById("cfg-mode").value  = e.modalita || "exam";
   document.getElementById("cfg-pwd").value   = e.password || "";
+  document.getElementById("cfg-shuffle").value = e.shuffle === false ? "no" : "si";
 }
 
 async function setStatus(newStatus) {
@@ -1144,7 +1160,8 @@ async function saveTrack() {
       exam_date:      document.getElementById("cfg-date").value.trim(),
       duration:       document.getElementById("cfg-dur").value.trim(),
       mode:           document.getElementById("cfg-mode").value,
-      track_password: document.getElementById("cfg-pwd").value.trim()
+      track_password: document.getElementById("cfg-pwd").value.trim(),
+      shuffle:        document.getElementById("cfg-shuffle").value
     });
     if (res.status === "ok") {
       currentEsame.traccia_id = document.getElementById("cfg-traccia-ref").value;
@@ -1153,6 +1170,7 @@ async function saveTrack() {
       currentEsame.durata     = document.getElementById("cfg-dur").value.trim();
       currentEsame.modalita   = document.getElementById("cfg-mode").value;
       currentEsame.password   = document.getElementById("cfg-pwd").value.trim();
+      currentEsame.shuffle    = document.getElementById("cfg-shuffle").value !== "no";
       updateEsameInList(currentEsame);
       renderTrackStatus(currentEsame);
       msg.textContent = "✓ Modifiche salvate.";
@@ -2220,10 +2238,11 @@ async function doCreateEsame() {
 
   msg.style.color="#555"; msg.textContent="Creazione in corso…";
   try {
+    const shuffle = document.getElementById("new-shuffle").value;
     const res = await callScript({
       action:"createEsame", password:adminPassword,
       traccia_id:tracciaId, corso, exam_date:date,
-      duration:dur, mode, track_password:pwd
+      duration:dur, mode, track_password:pwd, shuffle
     });
     if (res.status !== "ok") throw new Error(res.message);
 

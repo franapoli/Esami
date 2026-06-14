@@ -206,6 +206,7 @@ let studentNominativo = "";
 let studentMatricola  = "";
 let studentEmail      = "";
 let shuffleMap        = [];
+let SHUFFLE_SEED      = null;   // null = shuffle disabilitato
 let matchSelected     = null; // {qIdx, rightOrigIdx, fromSlot: null|leftIdx}
 let startTime         = null;
 let timerInterval     = null;
@@ -239,6 +240,7 @@ function saveLocal() {
     answers,
     current,
     shuffleMap,
+    shuffleSeed: SHUFFLE_SEED,
     questions,   // set autoritativo assegnato dal server: necessario per ripresa coerente (tracce random)
     startTime: startTime ? startTime.toISOString() : null
   }));
@@ -389,8 +391,9 @@ window.addEventListener("load", async function() {
   }
   answers           = saved.answers || new Array(questions.length).fill(null);
   current           = saved.current || 0;
+  SHUFFLE_SEED      = saved.shuffleSeed !== undefined ? saved.shuffleSeed : null;
   shuffleMap        = saved.shuffleMap || null;
-  if (!shuffleMap) buildShuffleMap();
+  if (!shuffleMap) buildShuffleMap(SHUFFLE_SEED);
   startTime = saved.startTime ? new Date(saved.startTime) : new Date();
 
   document.getElementById("cover").style.display = "none";
@@ -496,7 +499,7 @@ async function initQuiz() {
     studentMatricola  = matricola;
     studentEmail      = email;
     startTime = new Date();
-    buildShuffleMap();
+    buildShuffleMap(authoritative.seed);  // null = shuffle off; number = seeded; undefined = legacy Math.random
     saveLocal();
     document.getElementById("cover").style.display = "none";
     document.getElementById("thankyou").style.display = "none";
@@ -562,19 +565,38 @@ function updateTimer() {
 }
 
 // ---- SHUFFLE ----
-function fisherYates(arr) {
+// PRNG seedato (Mulberry32) — usato quando il server fornisce un seed per riproducibilità
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function fisherYates(arr, rng) {
   const a = [...arr];
+  const rand = rng || Math.random.bind(Math);
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rand() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
-function buildShuffleMap() {
+function buildShuffleMap(seed) {
+  SHUFFLE_SEED = seed !== undefined ? seed : null;
+  if (seed === null) {
+    // Shuffle disabilitato: ordine originale per tutte le domande
+    shuffleMap = questions.map(() => null);
+    return;
+  }
+  const rng = seed != null ? mulberry32(seed) : null;
   shuffleMap = questions.map(q => {
-    if (q.type === "mc")    return fisherYates(q.options.map((_, i) => i));
-    if (q.type === "match") return fisherYates(q.right.map((_, i) => i));
+    if (q.type === "mc")    return fisherYates(q.options.map((_, i) => i), rng);
+    if (q.type === "match") return fisherYates(q.right.map((_, i) => i), rng);
+    if (rng) rng(); // consuma un passo RNG per mantenere la sequenza deterministica
     return null;
   });
 }
@@ -1160,7 +1182,7 @@ async function restartQuiz() {
     answers   = new Array(questions.length).fill(null);
     current   = 0;
     startTime = new Date();
-    buildShuffleMap();
+    buildShuffleMap(resetRes && resetRes.seed !== undefined ? resetRes.seed : undefined);
     saveLocal();
     document.getElementById("quiz-wrapper").classList.add("active");
     buildGrid();

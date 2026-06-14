@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.20.0"; // aggiornare ad ogni deploy
+const VERSION = "2.21.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -69,6 +69,7 @@ const E_CORSO    = 5;  // F  nome corso
 const E_MODALITA = 6;  // G  "exam" | "practice"
 const E_STATO    = 7;  // H  "open" | "closed"
 const E_PASSWORD = 8;  // I  password accesso (solo exam; vuota = nessuna)
+const E_SHUFFLE  = 9;  // J  "no" = shuffle disabilitato; vuoto/"si" = abilitato (default)
 
 // Colonne foglio "Esami" nel foglio risultati (specchio di esami) — 0-based
 const META_COLS = {
@@ -86,6 +87,16 @@ const META_COLS = {
 // ------------------------------------------------------------
 // Utilità
 // ------------------------------------------------------------
+
+// QIDs colonna 9: formato "q1,q2,q3;seed=12345" (il seed è facoltativo — assente nei vecchi dati)
+function parseQIds(raw) {
+  return String(raw || "").split(";")[0].split(",").map(s => s.trim()).filter(Boolean);
+}
+function parseQIdsSeed(raw) {
+  const seedPart = String(raw || "").split(";").find(p => p.startsWith("seed="));
+  return seedPart ? parseInt(seedPart.slice(5), 10) : null;
+}
+
 function formatTs(isoStr) {
   if (!isoStr) return "";
   try {
@@ -162,7 +173,7 @@ function getEsamiSheet() {
   let sheet = ss.getSheetByName("esami");
   if (!sheet) {
     sheet = ss.insertSheet("esami");
-    const headers = ["EsameID", "TracciaID", "Nome", "Data", "Durata (min)", "Corso", "Modalità", "Stato", "Password"];
+    const headers = ["EsameID", "TracciaID", "Nome", "Data", "Durata (min)", "Corso", "Modalità", "Stato", "Password", "Shuffle"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -236,6 +247,7 @@ function readEsame(examId) {
       modalita:   String(row[E_MODALITA]) || "exam",
       stato:      String(row[E_STATO])    || "closed",
       password:   String(row[E_PASSWORD] || "").trim(),
+      shuffle:    String(row[E_SHUFFLE] || "").trim().toLowerCase() !== "no",
       rowIndex:   i + 1
     };
   }
@@ -405,14 +417,15 @@ function resolveEsame(examId) {
   const questions = _resolveItems(traccia.items);
   return {
     track: {
-      exam_id:    esame.exam_id,
-      exam_date:  esame.data,
-      duration:   esame.durata,
-      mode:       esame.modalita,
-      status:     esame.stato,
-      corso:      esame.corso,
-      traccia_id: esame.traccia_id,  // usato internamente da ensureMetaTrack
-      _password:  esame.password     // rimosso dal doPost prima di inviare al client
+      exam_id:         esame.exam_id,
+      exam_date:       esame.data,
+      duration:        esame.durata,
+      mode:            esame.modalita,
+      status:          esame.stato,
+      corso:           esame.corso,
+      traccia_id:      esame.traccia_id,  // usato internamente da ensureMetaTrack
+      _password:       esame.password,    // rimosso dal doPost prima di inviare al client
+      shuffle_options: esame.shuffle      // true (default) | false
     },
     questions,
     n_questions: questions.length,
@@ -888,7 +901,8 @@ function doPost(e) {
         data.corso          || "",
         data.mode           || "exam",
         "closed",
-        data.track_password || ""
+        data.track_password || "",
+        data.shuffle === false || data.shuffle === "no" ? "no" : ""
       ]);
       return corsResponse({ status: "ok", exam_id: examId });
     }
@@ -917,7 +931,8 @@ function doPost(e) {
           corso:      String(row[E_CORSO]),
           modalita:   String(row[E_MODALITA]) || "exam",
           stato:      String(row[E_STATO])    || "closed",
-          password:   String(row[E_PASSWORD] || "").trim()
+          password:   String(row[E_PASSWORD] || "").trim(),
+          shuffle:    String(row[E_SHUFFLE] || "").trim().toLowerCase() !== "no"
         });
       }
       return corsResponse({ status: "ok", esami, version: VERSION });
@@ -940,6 +955,7 @@ function doPost(e) {
         if (data.mode           !== undefined) sheet.getRange(row, E_MODALITA + 1).setValue(data.mode);
         if (data.status         !== undefined) sheet.getRange(row, E_STATO    + 1).setValue(data.status);
         if (data.track_password !== undefined) sheet.getRange(row, E_PASSWORD + 1).setValue(data.track_password);
+        if (data.shuffle        !== undefined) sheet.getRange(row, E_SHUFFLE  + 1).setValue(data.shuffle === false || data.shuffle === "no" ? "no" : "");
         // Sincronizza foglio Esami nel foglio risultati
         const meta  = getMetaSheet();
         const mvals = meta.getDataRange().getValues();
@@ -977,8 +993,8 @@ function doPost(e) {
       const rows   = [];
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
-        const qids = String(row[COL_QIDS - 1] || "");
-        const rowNQ = qids ? qids.split(",").filter(x => x.trim()).length : nQ;
+        const qids = parseQIds(row[COL_QIDS - 1]);
+        const rowNQ = qids.length || nQ;
         let answered = 0;
         for (let q = 0; q < rowNQ; q++) {
           if (row[COL_ANS_FIRST - 1 + q * 2] !== "") answered++;
@@ -1018,8 +1034,8 @@ function doPost(e) {
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         if (row[COL_TS_END - 1] === "") continue;
-        const qids = String(row[COL_QIDS - 1] || "");
-        const rowNQ = qids ? qids.split(",").filter(x => x.trim()).length : nQ;
+        const qids = parseQIds(row[COL_QIDS - 1]);
+        const rowNQ = qids.length || nQ;
         const pts = [], answers = [];
         for (let q = 0; q < rowNQ; q++) {
           answers.push(String(row[COL_ANS_FIRST - 1 + q * 2] ?? ""));
@@ -1136,13 +1152,15 @@ function doPost(e) {
       // Le domande sono assegnate dal SERVER (resolved.questions), mai dal client
       const assigned = resolved.questions;
       const qIds     = assigned.map(q => q.id);
+      const seed     = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
+      const qidsCell = seed !== null ? qIds.join(",") + ";seed=" + seed : qIds.join(",");
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
                    "", totalPts, formatTs(new Date().toISOString()), "", "",
-                   qIds.join(",")];
+                   qidsCell];
       for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
       sheet.appendRow(row);
       sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
-      return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts });
+      return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts, seed });
     }
 
     // ---- INIT ----
@@ -1160,15 +1178,17 @@ function doPost(e) {
         // resolved.questions è la risoluzione server-side (senza risposte corrette).
         const assigned = resolved.questions;
         const qIds     = assigned.map(q => q.id);
+        const seed     = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
+        const qidsCell = seed !== null ? qIds.join(",") + ";seed=" + seed : qIds.join(",");
         // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
         const row = [String(data.matricola), data.nominativo || "", data.email || "",
                      "", totalPts, formatTs(new Date().toISOString()), "", "",
-                     qIds.join(",")];
+                     qidsCell];
         for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
         sheet.appendRow(row);
         sheet.getRange(sheet.getLastRow(), COL_MATRICOLA).setNumberFormat("@");
         // Restituisce le domande autoritative: il client DEVE renderizzare esattamente queste
-        return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts });
+        return corsResponse({ status: "ok", questions: assigned, total_pts: totalPts, seed });
       } finally {
         try { lock.releaseLock(); } catch(e) {}
       }
@@ -1218,7 +1238,7 @@ function doPost(e) {
 
         // Punteggio ricalcolato SERVER-SIDE usando gli ID assegnati (COL_QIDS), mai score/pts dal client
         const allQ = loadAllQuestions();
-        const assignedIds = String(existingRow[COL_QIDS - 1] || "").split(",").map(s => s.trim()).filter(Boolean);
+        const assignedIds = parseQIds(existingRow[COL_QIDS - 1]);
 
         let serverScore = 0;
         const scoredAnswers = [];
