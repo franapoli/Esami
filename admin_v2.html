@@ -727,7 +727,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "95712c8";
+const BUILD = "c84c316";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1613,7 +1613,7 @@ async function showStudentDetail(rowIdx) {
   }
 
   const qMap = Object.fromEntries(allQuestions.map(q => [q.id, q]));
-  const qids = r.qids ? r.qids.split(",").map(x => x.trim()).filter(Boolean) : [];
+  const qids = Array.isArray(r.qids) ? r.qids : (r.qids ? String(r.qids).split(";")[0].split(",").map(x => x.trim()).filter(Boolean) : []);
   const nome  = escHtml(String(r.nominativo || r.matricola));
   const score = Number(r.score) || 0;
   const totale = (currentResultsData.rows[0]?.pts || []).reduce((s, _, qi) =>
