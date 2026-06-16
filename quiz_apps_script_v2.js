@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.2"; // aggiornare ad ogni deploy
+const VERSION = "2.24.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -108,15 +108,14 @@ function parseQIdsSeed(raw) {
   return seedPart ? parseInt(seedPart.slice(5), 10) : null;
 }
 
-function formatTs(val) {
-  if (!val) return "";
+function formatTs(isoStr) {
+  if (!isoStr) return "";
   try {
-    const d = (val instanceof Date) ? val : (parseTs(String(val)) || new Date(val));
-    if (!d || isNaN(d)) return "";
+    const d = new Date(isoStr);
     const pad = n => String(n).padStart(2, "0");
     return pad(d.getDate()) + "/" + pad(d.getMonth()+1) + "/" + d.getFullYear()
       + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-  } catch(e) { return ""; }
+  } catch(e) { return isoStr; }
 }
 
 // Inverso di formatTs: "DD/MM/YYYY HH:mm:ss" → Date (o null)
