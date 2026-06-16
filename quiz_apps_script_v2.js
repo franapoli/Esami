@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.23.1"; // aggiornare ad ogni deploy
+const VERSION = "2.24.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -88,9 +88,20 @@ const META_COLS = {
 // Utilità
 // ------------------------------------------------------------
 
-// QIDs colonna 9: formato "q1,q2,q3;seed=12345" (il seed è facoltativo — assente nei vecchi dati)
+// QIDs colonna 9: formato "q1:2,q2:1,q3:3;seed=12345"
+// Il suffisso ":punti" è opzionale — assente nei dati precedenti alla v2.24.
+// Il seed è opzionale — assente nei dati precedenti alla v2.23.
 function parseQIds(raw) {
-  return String(raw || "").split(";")[0].split(",").map(s => s.trim()).filter(Boolean);
+  return String(raw || "").split(";")[0].split(",").map(s => s.trim().split(":")[0]).filter(Boolean);
+}
+// Restituisce [{id, punti}] — punti è null se non codificato (usa il default della domanda).
+function parseQIdsPunti(raw) {
+  return String(raw || "").split(";")[0].split(",").map(s => {
+    const parts = s.trim().split(":");
+    const id = parts[0];
+    const punti = parts.length > 1 ? Number(parts[1]) : null;
+    return { id, punti };
+  }).filter(p => p.id);
 }
 function parseQIdsSeed(raw) {
   const seedPart = String(raw || "").split(";").find(p => p.startsWith("seed="));
@@ -375,10 +386,15 @@ function shuffleArray(arr) {
 // Risolve le domande di una traccia.
 // withCorrect=false (default, per studenti): omette risposte corrette.
 // withCorrect=true (solo interno, per scoring server-side): include risposte corrette.
+// Restituisce { questions, effectivePuntiMap } dove effectivePuntiMap mappa qId → punti effettivi.
+// Per slot fixed: item.punti ?? q.punti.
+// Per slot random con item.punti: usa come filtro E come punteggio.
+// Per slot random senza item.punti: inferisce dal pool (tutti uguali → quel valore; misti → massimo).
 function _resolveItems(items, withCorrect) {
-  const allQ      = loadAllQuestions();
-  const questions = [];
-  const usedIds   = new Set();
+  const allQ            = loadAllQuestions();
+  const questions       = [];
+  const effectivePuntiMap = {};
+  const usedIds         = new Set();
   (items || []).forEach(item => {
     if (item.type === "fixed") {
       usedIds.add(item.id);
@@ -387,25 +403,43 @@ function _resolveItems(items, withCorrect) {
         questions.push({ id: item.id, error: "Domanda non trovata: " + item.id, pts: 0, type: "mc", text: "", pos: questions.length + 1 });
         return;
       }
-      questions.push(buildQuestionObj(q, questions.length + 1, withCorrect));
+      const ep = (item.punti !== undefined && item.punti !== null) ? item.punti : q.punti;
+      effectivePuntiMap[item.id] = ep;
+      const qObj = buildQuestionObj(q, questions.length + 1, withCorrect);
+      qObj.pts = ep;
+      questions.push(qObj);
     } else if (item.type === "random") {
       const candidates = Object.values(allQ).filter(q => {
         if (usedIds.has(q.id)) return false;
-        if ((q.stato || "verificato") === "bozza") return false; // le bozze non vengono assegnate
+        if ((q.stato || "verificato") === "bozza") return false;
         if (item.categoria && q.categoria !== item.categoria) return false;
         if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
         if (item.tag) {
           const qTags = String(q.tags || "").split(",").map(t => t.trim());
           if (!qTags.includes(item.tag)) return false;
         }
-        if (item.punti !== undefined && q.punti !== item.punti) return false;
+        if (item.punti !== undefined && item.punti !== null && q.punti !== item.punti) return false;
         return true;
       });
       const picked = shuffleArray(candidates)[0];
-      if (picked) { usedIds.add(picked.id); questions.push(buildQuestionObj(picked, questions.length + 1, withCorrect)); }
+      if (picked) {
+        usedIds.add(picked.id);
+        let ep;
+        if (item.punti !== undefined && item.punti !== null) {
+          ep = item.punti;
+        } else {
+          const poolPunti = candidates.map(c => Number(c.punti) || 1);
+          const allSame   = poolPunti.length > 0 && poolPunti.every(p => p === poolPunti[0]);
+          ep = allSame ? poolPunti[0] : Math.max(...poolPunti);
+        }
+        effectivePuntiMap[picked.id] = ep;
+        const qObj = buildQuestionObj(picked, questions.length + 1, withCorrect);
+        qObj.pts = ep;
+        questions.push(qObj);
+      }
     }
   });
-  return questions;
+  return { questions, effectivePuntiMap };
 }
 
 // Risolve un esame (legge esame → trova traccia → risolve domande)
@@ -414,7 +448,7 @@ function resolveEsame(examId) {
   if (!esame) return null;
   const traccia = readTraccia(esame.traccia_id);
   if (!traccia) return null;
-  const questions = _resolveItems(traccia.items);
+  const { questions, effectivePuntiMap } = _resolveItems(traccia.items);
   return {
     track: {
       exam_id:         esame.exam_id,
@@ -428,6 +462,7 @@ function resolveEsame(examId) {
       shuffle_options: esame.shuffle      // true (default) | false
     },
     questions,
+    effectivePuntiMap,
     n_questions: questions.length,
     total_pts:   questions.reduce((s, q) => s + (q.pts || 0), 0)
   };
@@ -1072,8 +1107,10 @@ function doPost(e) {
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         if (row[COL_TS_END - 1] === "") continue;
-        const qids = parseQIds(row[COL_QIDS - 1]);
-        const rowNQ = qids.length || nQ;
+        const qidsPuntiRow = parseQIdsPunti(row[COL_QIDS - 1]);
+        const qids   = qidsPuntiRow.map(x => x.id);
+        const qpunti = qidsPuntiRow.map(x => x.punti);
+        const rowNQ  = qids.length || nQ;
         const pts = [], answers = [];
         for (let q = 0; q < rowNQ; q++) {
           answers.push(String(row[COL_ANS_FIRST - 1 + q * 2] ?? ""));
@@ -1088,10 +1125,45 @@ function doPost(e) {
           elapsed:    String(row[COL_ELAPSED - 1] || ""),
           pts,
           answers,
-          qids
+          qids,
+          qpunti
         });
       }
       return corsResponse({ status: "ok", rows, track: readMetaTrack(examId) });
+    }
+
+    // ----------------------------------------------------------------
+    // getQuestionStats — statistiche per domanda (admin)
+    // Legge tutti i tab del foglio Risultati e aggrega correct/wrong/skipped per domanda.
+    // ----------------------------------------------------------------
+    if (data.action === "getQuestionStats") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const ss     = SpreadsheetApp.openById(getSheetResultsId());
+      const sheets = ss.getSheets();
+      const SKIP   = new Set(["_config", "Esami"]);
+      const stats  = {}; // qId → { asked, correct, wrong, skipped }
+      for (const sheet of sheets) {
+        if (SKIP.has(sheet.getName())) continue;
+        const values = sheet.getDataRange().getValues();
+        for (let i = 1; i < values.length; i++) {
+          const row = values[i];
+          if (row[COL_TS_END - 1] === "" || row[COL_TS_END - 1] === null) continue;
+          const qpRow = parseQIdsPunti(row[COL_QIDS - 1]);
+          qpRow.forEach(({ id }, qi) => {
+            if (!id) return;
+            if (!stats[id]) stats[id] = { asked: 0, correct: 0, wrong: 0, skipped: 0 };
+            const ans = String(row[COL_ANS_FIRST - 1 + qi * 2] ?? "");
+            const pts = Number(row[COL_ANS_FIRST - 1 + qi * 2 + 1]) || 0;
+            stats[id].asked++;
+            if (pts > 0)      stats[id].correct++;
+            else if (ans !== "") stats[id].wrong++;
+            else                stats[id].skipped++;
+          });
+        }
+      }
+      return corsResponse({ status: "ok", stats });
     }
 
     // ----------------------------------------------------------------
@@ -1188,10 +1260,12 @@ function doPost(e) {
       const rowIndex = findRow(sheet, data.matricola);
       if (rowIndex !== -1) sheet.deleteRow(rowIndex);
       // Le domande sono assegnate dal SERVER (resolved.questions), mai dal client
-      const assigned = resolved.questions;
-      const qIds     = assigned.map(q => q.id);
-      const seed     = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
-      const qidsCell = seed !== null ? qIds.join(",") + ";seed=" + seed : qIds.join(",");
+      const assigned          = resolved.questions;
+      const epMap             = resolved.effectivePuntiMap || {};
+      const qIds              = assigned.map(q => q.id);
+      const seed              = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
+      const qidsCellParts     = qIds.map(id => epMap[id] !== undefined ? id + ":" + epMap[id] : id);
+      const qidsCell          = qidsCellParts.join(",") + (seed !== null ? ";seed=" + seed : "");
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
                    "", totalPts, formatTs(new Date().toISOString()), "", "",
                    qidsCell];
@@ -1214,10 +1288,12 @@ function doPost(e) {
         }
         // SICUREZZA: le domande sono assegnate dal SERVER, mai accettate dal client.
         // resolved.questions è la risoluzione server-side (senza risposte corrette).
-        const assigned = resolved.questions;
-        const qIds     = assigned.map(q => q.id);
-        const seed     = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
-        const qidsCell = seed !== null ? qIds.join(",") + ";seed=" + seed : qIds.join(",");
+        const assigned      = resolved.questions;
+        const epMap         = resolved.effectivePuntiMap || {};
+        const qIds          = assigned.map(q => q.id);
+        const seed          = track.shuffle_options !== false ? Math.floor(Math.random() * 2147483647) : null;
+        const qidsCellParts = qIds.map(id => epMap[id] !== undefined ? id + ":" + epMap[id] : id);
+        const qidsCell      = qidsCellParts.join(",") + (seed !== null ? ";seed=" + seed : "");
         // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
         const row = [String(data.matricola), data.nominativo || "", data.email || "",
                      "", totalPts, formatTs(new Date().toISOString()), "", "",
@@ -1331,20 +1407,24 @@ function doPost(e) {
         }
 
         // Punteggio ricalcolato SERVER-SIDE usando gli ID assegnati (COL_QIDS), mai score/pts dal client
-        const allQ = loadAllQuestions();
-        const assignedIds = parseQIds(existingRow[COL_QIDS - 1]);
+        const allQ      = loadAllQuestions();
+        const qidsPunti = parseQIdsPunti(existingRow[COL_QIDS - 1]);
+        const assignedIds = qidsPunti.map(x => x.id);
 
         // Denominatore (totale punti) coerente con le domande EFFETTIVAMENTE assegnate.
         // Per tracce random, resolveEsame() ridisegna domande diverse ad ogni chiamata: usare
         // resolved.total_pts qui darebbe un denominatore (e una conversione in /30) sbagliato.
         // Priorità: COL_TOTALE salvato all'init (ciò che lo studente ha visto) → ricalcolo dagli ID → fallback.
         const totalPtsResp = Number(existingRow[COL_TOTALE - 1])
-          || assignedIds.reduce((s, id) => s + (allQ[id] ? (Number(allQ[id].punti) || 1) : 0), 0)
+          || qidsPunti.reduce((s, { id, punti }) => {
+               const q = allQ[id];
+               return s + (q ? (punti !== null ? punti : (Number(q.punti) || 1)) : 0);
+             }, 0)
           || totalPts;
 
         let serverScore = 0;
         const scoredAnswers = [];
-        assignedIds.forEach((qId, i) => {
+        qidsPunti.forEach(({ id: qId, punti: ep }, i) => {
           // Usa la risposta inviata se presente, altrimenti quella già salvata da update
           let ans;
           if (data.answers && data.answers[i] !== undefined) {
@@ -1352,15 +1432,21 @@ function doPost(e) {
           } else {
             ans = existingRow[COL_ANS_FIRST - 1 + i * 2] ?? "";
           }
-          const pts = scoreAnswer(allQ[qId], ans);
+          // Applica i punti effettivi della traccia sovrascrivendo il default della domanda
+          const qRaw = allQ[qId];
+          const q    = (qRaw && ep !== null) ? Object.assign({}, qRaw, { punti: ep }) : qRaw;
+          const pts  = scoreAnswer(q, ans);
           serverScore += pts;
           scoredAnswers.push({ ans, pts });
         });
 
         const nScored  = assignedIds.filter(qId => allQ[qId] && allQ[qId].tipo !== "free").length;
         const nCorrect = scoredAnswers.filter((sa, i) => {
-          const q = allQ[assignedIds[i]];
-          return q && q.tipo !== "free" && sa.pts >= (Number(q.punti) || 1);
+          const { id: qId, punti: ep } = qidsPunti[i];
+          const qRaw = allQ[qId];
+          if (!qRaw || qRaw.tipo === "free") return false;
+          const maxPts = ep !== null ? ep : (Number(qRaw.punti) || 1);
+          return sa.pts >= maxPts;
         }).length;
 
         // Tempo calcolato SERVER-SIDE: inizio dal foglio (scritto all'init), fine = adesso.
@@ -1400,7 +1486,8 @@ function doPost(e) {
             id: q.id, correct: q.correct, type: q.type,
             options: q.options, right: q.right, boxes: q.boxes, dropdowns: q.dropdowns,
             scored_pts: scoredAnswers[idx].pts,
-            max_pts: Number(allQ[assignedIds[idx]]?.punti) || 1
+            max_pts: (qidsPunti[idx]?.punti !== null ? qidsPunti[idx]?.punti : null)
+                     ?? (Number(allQ[assignedIds[idx]]?.punti) || 1)
           }));
         }
         return corsResponse(response);

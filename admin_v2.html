@@ -173,6 +173,11 @@
   .q-row-body { flex: 1; font-size: 0.84em; line-height: 1.45; }
   .q-row-meta { font-size: 0.75em; color: #888; margin-top: 3px; }
   .q-row-pts  { font-size: 0.78em; color: #555; flex-shrink: 0; white-space: nowrap; }
+  .stat-badge { font-size:0.72em; padding:1px 6px; border-radius:3px; flex-shrink:0; white-space:nowrap; cursor:default; }
+  .stat-never { background:#eee; color:#999; }
+  .stat-easy  { background:#d4edda; color:#155724; }
+  .stat-med   { background:#fff3cd; color:#856404; }
+  .stat-hard  { background:#f8d7da; color:#721c24; }
   .stato-badge { display:inline-block; font-size:0.72em; padding:1px 7px; border-radius:2px;
                  flex-shrink:0; white-space:nowrap; cursor:pointer; user-select:none; }
   .stato-bozza      { background:#fff3cd; color:#856404; border:1px solid #ffe08a; }
@@ -630,6 +635,7 @@
               <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <span style="font-size:0.82em;color:#888;" id="q-count"></span>
                 <button class="btn btn-sm btn-outline" onclick="addRandomItem()" style="margin-top:0;">🎲 Aggiungi casuale</button>
+                <button id="btn-stats" class="btn btn-sm btn-outline" onclick="loadQuestionStats()" style="margin-top:0;">📊 Statistiche</button>
               </div>
             </div>
             <div id="q-browser" style="max-height:480px;overflow-y:auto;"></div>
@@ -727,7 +733,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "c84c316";
+const BUILD = "f0eff92";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1627,7 +1633,8 @@ async function showStudentDetail(rowIdx) {
     const q   = qMap[qid];
     const ans = r.answers ? r.answers[qi] : "";
     const pt  = r.pts[qi] ?? 0;
-    const maxPt = q ? (q.punti || 1) : 1;
+    const epPunti = r.qpunti?.[qi];
+    const maxPt = (epPunti !== null && epPunti !== undefined) ? epPunti : (q ? (q.punti || 1) : 1);
     const isFree = q && q.tipo === "free";
     const ptCls = isFree ? "" : (pt >= maxPt ? "detail-ans-ok" : pt > 0 ? "" : "detail-ans-ko");
 
@@ -1766,6 +1773,7 @@ let allQuestions        = null;  // array caricato una volta sola
 let _allQuestionsPromise = null; // fetch in-flight — evita doppi round-trip
 let trackItems     = [];    // [{type:"fixed",id} | {type:"random",categoria,sottocateg,tag}]
 let isEditingItems = true;  // false = sola lettura (traccia chiusa)
+let questionStats  = null;  // {qid: {asked,correct,wrong,skipped}} caricato on-demand
 
 // Carica allQuestions una sola volta; le chiamate successive attendono la stessa promise.
 // Può essere invocata senza await per un pre-fetch in background.
@@ -1780,6 +1788,21 @@ function ensureQuestionsLoaded() {
     })
     .finally(() => { _allQuestionsPromise = null; });
   return _allQuestionsPromise;
+}
+
+async function loadQuestionStats() {
+  const btn = document.getElementById("btn-stats");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Caricamento…"; }
+  try {
+    const res = await callScript({ action: "getQuestionStats", password: adminPassword });
+    if (res.status !== "ok") throw new Error(res.message || "getQuestionStats error");
+    questionStats = res.stats || {};
+    renderQBrowser();
+    if (btn) { btn.textContent = "📊 Aggiorna statistiche"; btn.disabled = false; }
+  } catch(e) {
+    if (btn) { btn.textContent = "📊 Statistiche"; btn.disabled = false; }
+    showToast("Errore statistiche: " + e.message, "error");
+  }
 }
 
 // ---- INIT ----
@@ -2093,6 +2116,15 @@ function setFiltersFromItem(item) {
 }
 
 // ---- BROWSER DOMANDE ----
+function statBadgeHtml(qid) {
+  if (!questionStats) return "";
+  const s = questionStats[qid];
+  if (!s || s.asked === 0) return `<span class="stat-badge stat-never" title="Mai usata">—</span>`;
+  const pct = Math.round(s.correct / s.asked * 100);
+  const cls = pct >= 70 ? "stat-easy" : pct >= 30 ? "stat-med" : "stat-hard";
+  return `<span class="stat-badge ${cls}" title="Chiesta ${s.asked}x: ${s.correct} corrette, ${s.wrong} errate, ${s.skipped} saltate">${pct}%</span>`;
+}
+
 function renderQBrowser() {
   const cat    = document.getElementById("f-cat").value;
   const subcat = document.getElementById("f-subcat").value;
@@ -2141,6 +2173,7 @@ function renderQBrowser() {
         </div>
       </div>
       <div class="q-row-pts">${q.punti} pt</div>
+      ${statBadgeHtml(q.id)}
       <span class="stato-badge stato-${qs}" onclick="event.stopPropagation();toggleStato('${q.id}')" title="Clicca per cambiare stato">${statoLabel}</span>
     </div>`;
   }).join("");
@@ -2178,6 +2211,13 @@ function addRandomItem() {
   if (punti !== undefined) item.punti     = punti;
   item._count = count; // solo per display locale, mai salvato
   trackItems.push(item);
+  renderItemsList();
+}
+
+function setItemPunti(idx, val, defaultPunti) {
+  const v = parseFloat(val);
+  if (!isNaN(v) && v > 0 && v !== defaultPunti) trackItems[idx].punti = v;
+  else delete trackItems[idx].punti;
   renderItemsList();
 }
 
@@ -2232,12 +2272,17 @@ function renderItemsList() {
     if (item.type === "fixed") {
       const q = qMap[item.id];
       if (!q) return `<div class="sel-row"><span class="sel-num">${i+1}.</span><span class="sel-text" style="color:#b00;">ID non trovato: ${escHtml(item.id)}</span>${arrows}</div>`;
-      totalPt += q.punti;
+      const ep = item.punti !== undefined ? item.punti : q.punti;
+      totalPt += ep;
       const shortText = q.testo.length > 90 ? q.testo.substring(0, 90) + "…" : q.testo;
+      const ptsOverride = item.punti !== undefined && item.punti !== q.punti;
       return `<div class="sel-row" style="cursor:pointer;" onclick="previewQuestion('${item.id}',event)" title="Anteprima">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text">${escHtml(shortText)}</span>
-        <span class="sel-pts">${q.punti} pt</span>
+        <span class="sel-pts" style="${ptsOverride ? 'color:#b06000;font-weight:600;' : ''}" title="default domanda: ${q.punti} pt">
+          <input type="number" min="0.5" step="0.5" style="width:44px;font-size:0.85em;text-align:right;border:1px solid #ccc;padding:1px 3px;background:transparent;"
+            value="${ep}" onclick="event.stopPropagation()"
+            onchange="setItemPunti(${i},this.value,${q.punti})"> pt</span>
         <button class="prev-btn" onclick="event.stopPropagation();setFiltersFromItem(trackItems[${i}])" title="Mostra origine nel database">🔍</button>
         ${arrows}
       </div>`;
@@ -2257,12 +2302,16 @@ function renderItemsList() {
       if (count === 0) {
         ptsDisplay = "— pt";
         totalPt += 0;
+      } else if (item.punti !== undefined) {
+        ptsDisplay = item.punti + " pt";
+        totalPt += item.punti;
       } else if (uniquePts.length === 1) {
         ptsDisplay = uniquePts[0] + " pt";
         totalPt += uniquePts[0];
       } else {
-        ptsDisplay = "⚠️ pt variabile";
-        totalPt += Math.round(matches.reduce((s,q) => s + q.punti, 0) / count);
+        const maxPts = Math.max(...uniquePts);
+        ptsDisplay = `<span style="color:#b06000;" title="Pool eterogeneo — il server userà il massimo">⚠ ${maxPts} pt</span>`;
+        totalPt += maxPts;
       }
       return `<div class="sel-row" style="background:#fffbf0;cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Filtra nel database">
         <span class="sel-num">${i+1}.</span>
