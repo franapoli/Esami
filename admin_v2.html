@@ -733,7 +733,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "f0eff92";
+const BUILD = "9af95c4";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2221,6 +2221,13 @@ function setItemPunti(idx, val, defaultPunti) {
   renderItemsList();
 }
 
+function setItemPuntiRandom(idx, val) {
+  const v = parseFloat(val);
+  if (!isNaN(v) && v > 0) trackItems[idx].punti = v;
+  else delete trackItems[idx].punti;
+  renderItemsList();
+}
+
 function removeItem(idx) {
   trackItems.splice(idx, 1);
   renderItemsList();
@@ -2298,26 +2305,30 @@ function renderItemsList() {
       const count   = matches.length;
       const countStr = count + " disponibili";
       const uniquePts = [...new Set(matches.map(q => q.punti))];
-      let ptsDisplay;
-      if (count === 0) {
-        ptsDisplay = "— pt";
-        totalPt += 0;
-      } else if (item.punti !== undefined) {
-        ptsDisplay = item.punti + " pt";
-        totalPt += item.punti;
-      } else if (uniquePts.length === 1) {
-        ptsDisplay = uniquePts[0] + " pt";
-        totalPt += uniquePts[0];
-      } else {
-        const maxPts = Math.max(...uniquePts);
-        ptsDisplay = `<span style="color:#b06000;" title="Pool eterogeneo — il server userà il massimo">⚠ ${maxPts} pt</span>`;
-        totalPt += maxPts;
+      let inferredPts = null;
+      let ptsWarning  = "";
+      if (count > 0 && item.punti === undefined) {
+        if (uniquePts.length === 1) {
+          inferredPts = uniquePts[0];
+        } else if (uniquePts.length > 1) {
+          inferredPts = Math.max(...uniquePts);
+          ptsWarning  = ` title="Pool eterogeneo — imposta un punteggio esplicito"`;
+        }
       }
+      const effectivePts = item.punti !== undefined ? item.punti : inferredPts;
+      totalPt += effectivePts || 0;
+      const ptsInput = isEditingItems
+        ? `<span class="sel-pts" style="${item.punti === undefined && uniquePts.length > 1 ? 'color:#b06000;font-weight:600;' : ''}">
+            <input type="number" min="0.5" step="0.5" style="width:44px;font-size:0.85em;text-align:right;border:1px solid #ccc;padding:1px 3px;background:transparent;"
+              value="${effectivePts !== null ? effectivePts : ''}" placeholder="pt"
+              onclick="event.stopPropagation()"
+              onchange="setItemPuntiRandom(${i},this.value)"> pt${item.punti === undefined && uniquePts.length > 1 ? ' ⚠' : ''}</span>`
+        : `<span class="sel-pts"${ptsWarning}>${effectivePts !== null ? effectivePts + ' pt' : '— pt'}${item.punti === undefined && uniquePts.length > 1 ? ' ⚠' : ''}</span>`;
       return `<div class="sel-row" style="background:#fffbf0;cursor:pointer;" onclick="setFiltersFromItem(trackItems[${i}])" title="Filtra nel database">
         <span class="sel-num">${i+1}.</span>
         <span class="sel-text" style="font-style:italic;color:#7b5e00;">🎲 ${escHtml(desc)}</span>
         <span class="sel-pts rule-count${count===0?" zero":""}">${countStr}</span>
-        <span class="sel-pts">${ptsDisplay}</span>
+        ${ptsInput}
         ${arrows}
       </div>`;
     }
