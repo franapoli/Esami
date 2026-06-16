@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.0"; // aggiornare ad ogni deploy
+const VERSION = "2.24.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1267,7 +1267,7 @@ function doPost(e) {
       const qidsCellParts     = qIds.map(id => epMap[id] !== undefined ? id + ":" + epMap[id] : id);
       const qidsCell          = qidsCellParts.join(",") + (seed !== null ? ";seed=" + seed : "");
       const row = [String(data.matricola), data.nominativo || "", data.email || "",
-                   "", totalPts, formatTs(new Date().toISOString()), "", "",
+                   "", totalPts, new Date(), "", "",
                    qidsCell];
       for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
       sheet.appendRow(row);
@@ -1296,7 +1296,7 @@ function doPost(e) {
         const qidsCell      = qidsCellParts.join(",") + (seed !== null ? ";seed=" + seed : "");
         // Colonne fisse: Matricola, Nominativo, Email, Score, Totale, Inizio, Fine, Durata, QIDs
         const row = [String(data.matricola), data.nominativo || "", data.email || "",
-                     "", totalPts, formatTs(new Date().toISOString()), "", "",
+                     "", totalPts, new Date(), "", "",
                      qidsCell];
         for (let i = 0; i < assigned.length; i++) { row.push(""); row.push(""); }
         sheet.appendRow(row);
@@ -1470,7 +1470,7 @@ function doPost(e) {
         sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || existingRow[COL_NOMINATIVO - 1] || "");
         sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || existingRow[COL_EMAIL - 1] || "");
         sheet.getRange(rowIndex, COL_SCORE).setValue(serverScore);            // score server-side
-        sheet.getRange(rowIndex, COL_TS_END).setValue(formatTs(serverEnd.toISOString())); // fine server-side
+        sheet.getRange(rowIndex, COL_TS_END).setValue(serverEnd); // fine server-side
         sheet.getRange(rowIndex, COL_ELAPSED).setValue(elapsedStr);
         scoredAnswers.forEach((item, i) => {
           const col = COL_ANS_FIRST + i * 2;
