@@ -733,7 +733,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "0817355";
+const BUILD = "59db566";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1884,15 +1884,15 @@ function setDomandeMode(mode, keepItems = false) {
 
 function duplicateEsame() {
   if (!currentEsame) return;
+  const traccia_id = currentEsame.traccia_id || "";
   currentEsame = null;
-  document.getElementById("esame-select").value = "";
+  document.getElementById("esame-select").value  = "";
   document.getElementById("new-corso").value     = "";
   document.getElementById("new-date").value      = "";
   document.getElementById("new-dur").value       = "90";
   document.getElementById("new-mode").value      = "exam";
   document.getElementById("new-pwd").value       = "";
-  // pre-seleziona la stessa traccia
-  if (currentEsame) document.getElementById("new-traccia-ref").value = currentEsame.traccia_id || "";
+  document.getElementById("new-traccia-ref").value = traccia_id;
   updateAdminTab();
 }
 
