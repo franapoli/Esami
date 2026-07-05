@@ -319,9 +319,7 @@
       <button class="btn btn-outline btn-ph" onclick="createNewSheet('results')">+ Nuovo</button>
       <span class="ph-sep">|</span>
       <span class="ph-label">Apps Script:</span>
-      <input type="text" id="cfg-script-url" placeholder="URL deployment Apps Script"
-        style="min-width:160px;max-width:280px;" onchange="saveSheetConfig()">
-      <a id="link-script" href="#" target="_blank" style="color:#888;text-decoration:none;flex-shrink:0;" title="Apri editor Apps Script">↗</a>
+      <a id="link-script" href="#" target="_blank" style="color:#888;text-decoration:none;flex-shrink:0;" title="Apri editor Apps Script">↗ Apri editor</a>
       <span id="cfg-msg" style="font-size:0.78em;white-space:nowrap;flex-shrink:0;"></span>
     </div>
     <!-- Campi nascosti per ID correnti -->
@@ -737,7 +735,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "2d50f14";
+const BUILD = "d72b55f";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -872,7 +870,6 @@ async function loadSheetConfig() {
       document.getElementById("link-folder").href = res.folder_url;
     }
     if (res.script_editor_url) {
-      document.getElementById("cfg-script-url").value = res.script_editor_url;
       document.getElementById("link-script").href = res.script_editor_url;
     }
   } catch(e) { /* silenzioso — non blocca il login */ }
@@ -893,13 +890,11 @@ async function saveSheetConfig() {
   const qsId = extractSheetId(document.getElementById("cfg-qs-url").value.trim());
   const rsId = extractSheetId(document.getElementById("cfg-rs-url").value.trim());
   const fId        = extractFolderId(document.getElementById("cfg-folder-url").value.trim());
-  const scriptUrl  = document.getElementById("cfg-script-url").value.trim();
   msg.style.color = "#555"; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setConfig", password: adminPassword,
-      questions_id: qsId, results_id: rsId, folder_id: fId,
-      script_editor_url: scriptUrl
+      questions_id: qsId, results_id: rsId, folder_id: fId
     });
     if (res.status === "ok") {
       msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
@@ -909,7 +904,6 @@ async function saveSheetConfig() {
         "https://docs.google.com/spreadsheets/d/" + rsId + "/edit";
       if (fId) document.getElementById("link-folder").href =
         "https://drive.google.com/drive/folders/" + fId;
-      if (scriptUrl) document.getElementById("link-script").href = scriptUrl;
       // Ricarica esami e tracce dal nuovo foglio
       msg.textContent = "✓ Salvato — ricarico esami…";
       try {
