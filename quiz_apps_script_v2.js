@@ -851,6 +851,7 @@ function doPost(e) {
           data:       dataStr,
           durata:     Number(row[E_DURATA]) || 0,
           modalita:   modalita,
+          traccia_id: traccia_id,
           track_name: track_name
         });
       }
