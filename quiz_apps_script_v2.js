@@ -838,12 +838,20 @@ function doPost(e) {
         const rawDate = row[E_DATA];
         const dataStr = rawDate instanceof Date && !isNaN(rawDate)
           ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate);
+        const modalita   = String(row[E_MODALITA]).trim() || "exam";
+        const traccia_id = String(row[E_TRACCIA]).trim();
+        let track_name   = "";
+        if (modalita === "practice" && traccia_id) {
+          const tr = readTraccia(traccia_id);
+          if (tr) track_name = tr.nome || "";
+        }
         exams.push({
-          exam_id:  id,
-          corso:    String(row[E_CORSO]).trim(),
-          data:     dataStr,
-          durata:   Number(row[E_DURATA]) || 0,
-          modalita: String(row[E_MODALITA]).trim() || "exam"
+          exam_id:    id,
+          corso:      String(row[E_CORSO]).trim(),
+          data:       dataStr,
+          durata:     Number(row[E_DURATA]) || 0,
+          modalita:   modalita,
+          track_name: track_name
         });
       }
       exams.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
