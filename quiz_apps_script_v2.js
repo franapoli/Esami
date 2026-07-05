@@ -457,6 +457,7 @@ function resolveEsame(examId) {
       mode:            esame.modalita,
       status:          esame.stato,
       corso:           esame.corso,
+      track_name:      traccia.nome,      // nome traccia (per esercitazioni)
       traccia_id:      esame.traccia_id,  // usato internamente da ensureMetaTrack
       _password:       esame.password,    // rimosso dal doPost prima di inviare al client
       shuffle_options: esame.shuffle      // true (default) | false

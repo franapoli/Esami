@@ -737,7 +737,7 @@ const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnH
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "8dc056d";
+const BUILD = "c027e53";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1060,10 +1060,13 @@ function populateEsameSelect(esami) {
     const opt  = document.createElement("option");
     opt.value  = e.exam_id;
     const icon = e.stato === "open" ? "▶ " : "■ ";
-    const mode = e.modalita === "practice" ? " [esercitazione]" : " [esame]";
+    const isPractice = e.modalita === "practice";
+    const mode = isPractice ? " [esercitazione]" : " [esame]";
     const t    = allTracks.find(t => t.track_id === e.traccia_id);
-    const name = e.nome && e.nome.trim() ? e.nome : (t ? t.nome : e.traccia_id);
-    opt.textContent = icon + (e.corso ? e.corso + " — " : "") + name + (e.data ? " · " + formatDateIt(e.data) : "") + mode;
+    const trackName = t ? t.nome : e.traccia_id;
+    const name = e.nome && e.nome.trim() ? e.nome : trackName;
+    const suffix = isPractice ? "" : (e.data ? " · " + formatDateIt(e.data) : "");
+    opt.textContent = icon + (e.corso ? e.corso + " — " : "") + (isPractice ? trackName : name) + suffix + mode;
     sel.appendChild(opt);
   });
 }
