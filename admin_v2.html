@@ -278,6 +278,22 @@
   <img src="logo_unisannio.png" alt="Università degli Studi del Sannio — DST">
 </header>
 
+<div id="setup-panel" style="display:none;">
+  <h1>Configurazione iniziale</h1>
+  <p class="subtitle">Inserisci l'URL del deployment Apps Script per continuare.</p>
+  <label for="setup-script-url">URL deployment Apps Script</label>
+  <input type="text" id="setup-script-url" placeholder="https://script.google.com/macros/s/.../exec"
+    style="width:100%;padding:8px 10px;border:1px solid #bbb;font-size:0.9em;font-family:monospace;margin-bottom:8px;">
+  <label for="setup-folder-id" style="margin-top:8px;">ID cartella Drive (opzionale)</label>
+  <input type="text" id="setup-folder-id" placeholder="ID o URL cartella Drive"
+    style="width:100%;padding:8px 10px;border:1px solid #bbb;font-size:0.9em;font-family:monospace;margin-bottom:4px;">
+  <p style="font-size:0.78em;color:#888;margin-bottom:16px;">
+    Aggiorna <code>config.json</code> nel repository per rendere permanente questa configurazione.
+  </p>
+  <button class="btn" onclick="applySetup()">Continua</button>
+  <div id="setup-error" class="error-msg"></div>
+</div>
+
 <div id="login-panel">
   <h1>Pannello Amministratore</h1>
   <p class="subtitle">QuizForge v2 — Applicazioni di Bioinformatica</p>
@@ -730,12 +746,32 @@
 </div>
 
 <script>
-const SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbwc3Q4xywribKypXdhk9-_SyrkfHJYqibBKEwWGaJ5CfNerXCi7qrpzBb2jV26MU96dIQ/exec";
 const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnHlThdzpJYU4CWz2IB9GDrrLdXLVXwG4ezGToFZEVVXfb2_VJHkoyNnw/exec";
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
-const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
+let ACTIVE_URL        = _isTestMode ? TEST_SCRIPT_URL : "";
+let _configFolderId   = "";
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
-const BUILD = "fdb7e6c";
+
+async function loadConfig() {
+  try {
+    const r = await fetch('./config.json?_=' + Date.now());
+    const cfg = await r.json();
+    if (!_isTestMode && cfg.script_url) ACTIVE_URL = cfg.script_url;
+    if (cfg.drive_folder_id) _configFolderId = cfg.drive_folder_id;
+    return cfg;
+  } catch(e) { return {}; }
+}
+
+function applySetup() {
+  const url = document.getElementById("setup-script-url").value.trim();
+  if (!url) { document.getElementById("setup-error").textContent = "Inserisci l\'URL."; return; }
+  ACTIVE_URL = url;
+  const fid = document.getElementById("setup-folder-id").value.trim();
+  if (fid) _configFolderId = fid;
+  document.getElementById("setup-panel").style.display = "none";
+  document.getElementById("login-panel").style.display = "block";
+}
+const BUILD = "7b6f9d6";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -868,6 +904,10 @@ async function loadSheetConfig() {
     if (res.folder_url) {
       document.getElementById("cfg-folder-url").value = res.folder_url;
       document.getElementById("link-folder").href = res.folder_url;
+    } else if (_configFolderId) {
+      const folderUrl = "https://drive.google.com/drive/folders/" + _configFolderId;
+      document.getElementById("cfg-folder-url").value = folderUrl;
+      document.getElementById("link-folder").href = folderUrl;
     }
     if (res.script_editor_url) {
       document.getElementById("link-script").href = res.script_editor_url;
@@ -2406,6 +2446,16 @@ async function doCreateEsame() {
     updateAdminTab();
   } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
 }
+
+// ---- AVVIO PAGINA ----
+(async () => {
+  const cfg = await loadConfig();
+  if (!ACTIVE_URL) {
+    if (cfg.drive_folder_id) document.getElementById("setup-folder-id").value = cfg.drive_folder_id;
+    document.getElementById("setup-panel").style.display = "block";
+    document.getElementById("login-panel").style.display = "none";
+  }
+})();
 </script>
 </body>
 </html>

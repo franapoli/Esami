@@ -121,10 +121,18 @@
 </div>
 
 <script>
-const SCRIPT_URL      = "https://script.google.com/macros/s/AKfycbwc3Q4xywribKypXdhk9-_SyrkfHJYqibBKEwWGaJ5CfNerXCi7qrpzBb2jV26MU96dIQ/exec";
 const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnHlThdzpJYU4CWz2IB9GDrrLdXLVXwG4ezGToFZEVVXfb2_VJHkoyNnw/exec";
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
-const ACTIVE_URL      = (_isTestMode && TEST_SCRIPT_URL) ? TEST_SCRIPT_URL : SCRIPT_URL;
+let ACTIVE_URL        = _isTestMode ? TEST_SCRIPT_URL : "";
+
+async function loadConfig() {
+  try {
+    const r = await fetch('./config.json?_=' + Date.now());
+    const cfg = await r.json();
+    if (!_isTestMode && cfg.script_url) ACTIVE_URL = cfg.script_url;
+    return cfg;
+  } catch(e) { return {}; }
+}
 
 const MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
               "luglio","agosto","settembre","ottobre","novembre","dicembre"];
@@ -253,7 +261,16 @@ function goToExam() {
   }
 }
 
-loadExams();
+(async () => {
+  const cfg = await loadConfig();
+  if (!ACTIVE_URL) {
+    document.getElementById("loading-state").style.display = "none";
+    document.getElementById("form-content").style.display = "block";
+    document.getElementById("msg-error").textContent = "Configurazione mancante: aggiungi script_url in config.json.";
+    return;
+  }
+  loadExams();
+})();
 </script>
 </body>
 </html>
