@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.4"; // aggiornare ad ogni deploy
+const VERSION = "2.24.5"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -149,6 +149,17 @@ function letterToIndex(letter) {
   return idx >= 0 && idx < 26 ? idx : 0;
 }
 
+// Parsa Q_CORRETTA per multi-mc: accetta sia JSON array ["A","C"] sia CSV "A,C,D"
+function parseMultiCorretta(corretta) {
+  const s = String(corretta || "").trim();
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch(e) {}
+  return s.split(",").map(x => x.trim()).filter(Boolean);
+}
+
 // ------------------------------------------------------------
 // Repository domande
 // ------------------------------------------------------------
@@ -281,10 +292,7 @@ function buildQuestionObj(q, pos, withCorrect) {
     if (withCorrect) obj.correct = letterToIndex(q.corretta);
   } else if (q.tipo === "multi-mc") {
     obj.options = q.options;
-    if (withCorrect) {
-      try { obj.correct = JSON.parse(q.corretta || "[]").map(l => letterToIndex(l)); }
-      catch(e) { obj.correct = []; }
-    }
+    if (withCorrect) obj.correct = parseMultiCorretta(q.corretta).map(l => letterToIndex(l));
   } else if (q.tipo === "fitb") {
     if (q.placeholder) obj.placeholder = q.placeholder;
     if (withCorrect) obj.correct = q.corretta;
@@ -337,7 +345,7 @@ function scoreAnswer(q, ans) {
   }
   if (q.tipo === "multi-mc") {
     try {
-      const correct = new Set(JSON.parse(q.corretta || "[]").map(l => letterToIndex(l)));
+      const correct = new Set(parseMultiCorretta(q.corretta).map(l => letterToIndex(l)));
       const given   = new Set((typeof ans === "string" ? JSON.parse(ans || "[]") : (ans || [])).map(x => parseInt(x, 10)));
       const n = correct.size;
       if (n === 0) return 0;
