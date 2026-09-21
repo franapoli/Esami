@@ -663,7 +663,7 @@ function buildShuffleMap(seed) {
   }
   const rng = seed != null ? mulberry32(seed) : null;
   shuffleMap = questions.map(q => {
-    if (q.type === "mc")    return fisherYates(q.options.map((_, i) => i), rng);
+    if (q.type === "mc" || q.type === "multi-mc") return fisherYates((q.options || []).map((_, i) => i), rng);
     if (q.type === "match") return fisherYates(q.right.map((_, i) => i), rng);
     if (rng) rng(); // consuma un passo RNG per mantenere la sequenza deterministica
     return null;
