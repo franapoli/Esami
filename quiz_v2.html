@@ -768,7 +768,6 @@ function renderQuestion() {
   document.getElementById("progress-label").textContent = "Domanda " + (current + 1) + " di " + total;
   document.getElementById("progress-bar").style.width = (((current + 1) / total) * 100) + "%";
 
-  console.log("[DBG] renderQuestion", current, "type:", q.type, "options:", q.options);
   let html = "<div class='q-number'>Domanda " + (q.pos || current + 1) +
              " <span class='q-points'>[" + q.pts + " pt]</span>" +
              (q.id ? "<span class='q-id'>" + q.id + "</span>" : "") + "</div>";
@@ -779,7 +778,7 @@ function renderQuestion() {
   if (q.type !== "cloze" && !isTableFitb) html += "<div class='q-text'>" + q.text + "</div>";
 
   if (q.type === "mc") {
-    const order = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : q.options.map((_, i) => i);
+    const order = (shuffleMap && shuffleMap[current] && shuffleMap[current].length) ? shuffleMap[current] : q.options.map((_, i) => i);
     order.forEach(origIdx => {
       const sel = answers[current] === origIdx ? " selected" : "";
       html += "<div class='option" + sel + "' onclick='selectOption(" + origIdx + ")'>" +
@@ -788,7 +787,7 @@ function renderQuestion() {
     });
   } else if (q.type === "multi-mc") {
     const opts  = q.options || [];
-    const order = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : opts.map((_, i) => i);
+    const order = (shuffleMap && shuffleMap[current] && shuffleMap[current].length) ? shuffleMap[current] : opts.map((_, i) => i);
     const selSet = new Set(Array.isArray(answers[current]) ? answers[current] : []);
     html += "<p style='font-size:0.82em;color:#777;margin-bottom:10px;'>Seleziona tutte le risposte corrette.</p>";
     order.forEach(origIdx => {
