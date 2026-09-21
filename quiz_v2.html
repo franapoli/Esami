@@ -768,6 +768,7 @@ function renderQuestion() {
   document.getElementById("progress-label").textContent = "Domanda " + (current + 1) + " di " + total;
   document.getElementById("progress-bar").style.width = (((current + 1) / total) * 100) + "%";
 
+  console.log("[DBG] renderQuestion", current, "type:", q.type, "options:", q.options);
   let html = "<div class='q-number'>Domanda " + (q.pos || current + 1) +
              " <span class='q-points'>[" + q.pts + " pt]</span>" +
              (q.id ? "<span class='q-id'>" + q.id + "</span>" : "") + "</div>";
