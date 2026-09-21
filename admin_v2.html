@@ -10,7 +10,7 @@
   #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; }
   #site-header img { height: 52px; display: block; }
 
-  #login-panel { max-width: 420px; margin: 60px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
+  #login-panel, #setup-panel { max-width: 420px; margin: 60px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
   h1 { font-size: 1.3em; font-weight: bold; margin-bottom: 6px; }
   .subtitle { color: #555; font-size: 0.9em; margin-bottom: 28px; }
   label { display: block; font-size: 0.88em; color: #333; margin-bottom: 4px; margin-top: 14px; }
@@ -762,16 +762,34 @@ async function loadConfig() {
   } catch(e) { return {}; }
 }
 
-function applySetup() {
+async function applySetup() {
   const url = document.getElementById("setup-script-url").value.trim();
-  if (!url) { document.getElementById("setup-error").textContent = "Inserisci l\'URL."; return; }
+  const errEl = document.getElementById("setup-error");
+  const btn = document.querySelector("#setup-panel .btn");
+  if (!url) { errEl.textContent = "Inserisci l\'URL."; return; }
+  errEl.textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Verifica in corso…";
+  try {
+    const r = await fetch(url, { method: "GET" });
+    const text = await r.text();
+    const json = JSON.parse(text);
+    if (json.status !== "ok") throw new Error(json.message || "risposta inattesa");
+  } catch(e) {
+    errEl.textContent = "URL non valido o script non raggiungibile: " + (e.message || "impossibile contattare il server");
+    btn.disabled = false;
+    btn.textContent = "Continua";
+    return;
+  }
   ACTIVE_URL = url;
   const fid = document.getElementById("setup-folder-id").value.trim();
   if (fid) _configFolderId = fid;
+  btn.disabled = false;
+  btn.textContent = "Continua";
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "7b6f9d6";
+const BUILD = "6ff5070";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1602,6 +1620,14 @@ function formatCorrectHtml(q) {
       const opts = Array.isArray(q.options) ? q.options : [];
       return `<span class="detail-ans-ok">${escHtml(String(opts[idx] || q.corretta))}</span>`;
     }
+    if (q.tipo === "multi-mc") {
+      const letters = JSON.parse(q.corretta || "[]");
+      const opts = Array.isArray(q.options) ? q.options : [];
+      return letters.map(l => {
+        const idx = letterToIndexAdmin(l);
+        return `<span class="detail-ans-ok">${escHtml(String(opts[idx] || l))}</span>`;
+      }).join(" + ");
+    }
     if (q.tipo === "fitb") {
       return `<span class="detail-ans-ok">${escHtml(String(q.corretta))}</span>`;
     }
@@ -1756,7 +1782,7 @@ function previewQuestion(id, event) {
 
   document.getElementById("preview-meta-top").textContent =
     escHtml(q.categoria) + (q.sottocateg ? " › " + escHtml(q.sottocateg) : "") +
-    " · " + (({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)) +
+    " · " + (({mc:"scelta multipla","multi-mc":"scelta multipla (più risposte)",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)) +
     " · " + q.punti + " pt";
 
   // multi-fitb tabella: {{N}} nel testo → mostra risposte corrette inline nella tabella
@@ -1766,11 +1792,23 @@ function previewQuestion(id, event) {
   if (q.tipo === "mc") {
     const correct = String(q.corretta).toUpperCase().charCodeAt(0) - 65; // A=0, B=1, …
     body += q.options.map((opt, i) => {
-      const letter = String.fromCharCode(65 + i); // A, B, C, D, E, …
+      const letter = String.fromCharCode(65 + i);
       return `<div class="prev-opt${i === correct ? " correct" : ""}">
         <span class="prev-opt-label">${letter}</span>
         <span>${escHtml(opt)}</span>
         ${i === correct ? '<span style="margin-left:auto;color:#2e7d32;font-size:0.85em;">✓ corretta</span>' : ""}
+      </div>`;
+    }).join("");
+  } else if (q.tipo === "multi-mc") {
+    let correctSet;
+    try { correctSet = new Set(JSON.parse(q.corretta || "[]").map(l => l.toUpperCase().charCodeAt(0) - 65)); }
+    catch(e) { correctSet = new Set(); }
+    body += q.options.map((opt, i) => {
+      const letter = String.fromCharCode(65 + i);
+      return `<div class="prev-opt${correctSet.has(i) ? " correct" : ""}">
+        <span class="prev-opt-label">${letter}</span>
+        <span>${escHtml(opt)}</span>
+        ${correctSet.has(i) ? '<span style="margin-left:auto;color:#2e7d32;font-size:0.85em;">✓ corretta</span>' : ""}
       </div>`;
     }).join("");
   } else if (q.tipo === "multi-fitb" && isTableFitb) {
@@ -2235,7 +2273,7 @@ function renderQBrowser() {
       <div class="q-row-body">
         <div>${escHtml(shortText)}</div>
         <div class="q-row-meta">
-          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${({mc:"scelta multipla",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)}
+          ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""} &nbsp;·&nbsp; ${({mc:"scelta multipla","multi-mc":"scelta multipla (più risposte)",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)}
           ${(q.tags || "").split(",").map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-chip">${escHtml(t)}</span>`).join("")}
         </div>
       </div>
@@ -2305,7 +2343,7 @@ function moveItem(idx, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= trackItems.length) return;
   [trackItems[idx], trackItems[newIdx]] = [trackItems[newIdx], trackItems[idx]];
-  renderItemsList();
+  setTimeout(renderItemsList, 0);
 }
 
 
@@ -2338,8 +2376,8 @@ function renderItemsList() {
   let totalPt = 0;
   const rows = trackItems.map((item, i) => {
     const arrows = isEditingItems ? `<div class="sel-arrows">
-      <button onclick="moveItem(${i},-1)" ${i === 0 ? "disabled" : ""}>▲</button>
-      <button onclick="moveItem(${i}, 1)" ${i === trackItems.length - 1 ? "disabled" : ""}>▼</button>
+      <button onclick="event.stopPropagation();moveItem(${i},-1)" ${i === 0 ? "disabled" : ""}>▲</button>
+      <button onclick="event.stopPropagation();moveItem(${i}, 1)" ${i === trackItems.length - 1 ? "disabled" : ""}>▼</button>
     </div>
     <button class="sel-remove" onclick="removeItem(${i})">✕</button>` : "";
 
@@ -2450,7 +2488,8 @@ async function doCreateEsame() {
 // ---- AVVIO PAGINA ----
 (async () => {
   const cfg = await loadConfig();
-  if (!ACTIVE_URL) {
+  const forceSetup = new URLSearchParams(window.location.search).has("setup");
+  if (!ACTIVE_URL || forceSetup) {
     if (cfg.drive_folder_id) document.getElementById("setup-folder-id").value = cfg.drive_folder_id;
     document.getElementById("setup-panel").style.display = "block";
     document.getElementById("login-panel").style.display = "none";

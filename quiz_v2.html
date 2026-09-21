@@ -56,7 +56,8 @@
   .option { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
   .option:hover { background: #f5f5f0; }
   .option.selected { background: #e8e8e0; border-color: #999; }
-  .option input[type=radio] { margin-top: 3px; flex-shrink: 0; }
+  .option input[type=radio], .option input[type=checkbox] { margin-top: 3px; flex-shrink: 0; }
+  .option.partial { background: #fffbe6; border-color: #e6c200; }
   .option-label { font-size: 0.95em; line-height: 1.5; }
   .fitb-input { width: 100%; padding: 9px 12px; border: 1px solid #bbb; font-size: 1em; font-family: monospace; margin-top: 4px; }
   .fitb-hint { font-size: 0.82em; color: #777; margin-top: 6px; }
@@ -784,6 +785,16 @@ function renderQuestion() {
               "<input type='radio' name='q'" + (answers[current] === origIdx ? " checked" : "") + " readonly>" +
               "<span class='option-label'>" + q.options[origIdx] + "</span></div>";
     });
+  } else if (q.type === "multi-mc") {
+    const order   = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : q.options.map((_, i) => i);
+    const selSet  = new Set(Array.isArray(answers[current]) ? answers[current] : []);
+    html += "<p style='font-size:0.82em;color:#777;margin-bottom:10px;'>Seleziona tutte le risposte corrette.</p>";
+    order.forEach(origIdx => {
+      const sel = selSet.has(origIdx) ? " selected" : "";
+      html += "<div class='option" + sel + "' onclick='toggleOption(" + origIdx + ")'>" +
+              "<input type='checkbox'" + (selSet.has(origIdx) ? " checked" : "") + " readonly>" +
+              "<span class='option-label'>" + q.options[origIdx] + "</span></div>";
+    });
   } else if (q.type === "fitb") {
     const val = answers[current] !== null ? answers[current] : "";
     const ph  = q.placeholder || "";
@@ -823,6 +834,13 @@ function renderQuestion() {
 }
 
 function selectOption(i) { answers[current] = i; saveLocal(); renderQuestion(); }
+function toggleOption(i) {
+  if (!Array.isArray(answers[current])) answers[current] = [];
+  const idx = answers[current].indexOf(i);
+  if (idx === -1) answers[current].push(i); else answers[current].splice(idx, 1);
+  if (answers[current].length === 0) answers[current] = null;
+  saveLocal(); renderQuestion();
+}
 function saveText(val)    { answers[current] = val; saveLocal(); }
 
 // ---- MATCH ----
@@ -999,7 +1017,7 @@ async function saveProgress(qIndex, value) {
     let ans;
     if (q.type === "mc") {
       ans = (value !== null && value !== undefined) ? String(value) : "";
-    } else if (q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
+    } else if (q.type === "multi-mc" || q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
       ans = JSON.stringify(value || []);
     } else {
       ans = String(value || "");
@@ -1027,6 +1045,7 @@ function confirmSubmit() {
   const answered = answers.filter((a, i) => {
     if (a === null) return false;
     const q = questions[i];
+    if (q.type === "multi-mc")   return Array.isArray(a) && a.length > 0;
     if (q.type === "match")      return Array.isArray(a) && !a.includes(null);
     if (q.type === "multi-fitb") return Array.isArray(a) && a.some(v => v !== "");
     if (q.type === "cloze")      return Array.isArray(a) && a.some(v => v !== null);
@@ -1057,7 +1076,7 @@ async function showResults() {
   const rawAnswers = questions.map((q, i) => {
     const value = answers[i];
     let ans;
-    if (q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
+    if (q.type === "multi-mc" || q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
       ans = JSON.stringify(value || []);
     } else if (q.type === "mc") {
       ans = (value !== null && value !== undefined) ? String(value) : "";
@@ -1099,6 +1118,11 @@ function showPracticeResults(serverScore, correctAnswers) {
     if (q.type === "mc") {
       userDisplay = (userAns !== null && userAns !== undefined && q.options) ? (q.options[userAns] || "—") : "—";
       correctDisplay = (ca && ca.correct !== undefined && q.options) ? (q.options[ca.correct] || "—") : "—";
+    } else if (q.type === "multi-mc") {
+      userDisplay = (Array.isArray(userAns) && q.options)
+        ? (userAns.map(i => q.options[i] || "?").join(", ") || "—") : "—";
+      correctDisplay = (ca && Array.isArray(ca.correct) && q.options)
+        ? ca.correct.map(i => q.options[i] || "?").join(", ") : "—";
     } else if (q.type === "fitb") {
       userDisplay    = userAns || "—";
       correctDisplay = ca ? (ca.correct || "—") : "—";

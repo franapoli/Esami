@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.2"; // aggiornare ad ogni deploy
+const VERSION = "2.24.4"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -46,7 +46,7 @@ const Q_CATEGORIA     = 2;  // C
 const Q_SOTTOCATEG    = 3;  // D
 const Q_TAGS          = 4;  // E  tag separati da virgola (es. "blast,phylogeny")
 const Q_STATO         = 5;  // F  "bozza" | "verificato"
-const Q_TIPO          = 6;  // G  "mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
+const Q_TIPO          = 6;  // G  "mc" | "multi-mc" | "fitb" | "match" | "free" | "multi-fitb" | "cloze"
 const Q_TESTO         = 7;  // H
 const Q_OPTIONS       = 8;  // I  JSON array di opzioni (mc/match); vuoto per fitb/free/cloze/multi-fitb
 const Q_CORRETTA      = 9;  // J  lettera A-Z (mc), testo esatto (fitb), JSON array destra (match)
@@ -279,6 +279,12 @@ function buildQuestionObj(q, pos, withCorrect) {
   if (q.tipo === "mc") {
     obj.options = q.options;
     if (withCorrect) obj.correct = letterToIndex(q.corretta);
+  } else if (q.tipo === "multi-mc") {
+    obj.options = q.options;
+    if (withCorrect) {
+      try { obj.correct = JSON.parse(q.corretta || "[]").map(l => letterToIndex(l)); }
+      catch(e) { obj.correct = []; }
+    }
   } else if (q.tipo === "fitb") {
     if (q.placeholder) obj.placeholder = q.placeholder;
     if (withCorrect) obj.correct = q.corretta;
@@ -329,6 +335,18 @@ function scoreAnswer(q, ans) {
     const correct = letterToIndex(q.corretta);
     return (parseInt(ans, 10) === correct) ? q.punti : 0;
   }
+  if (q.tipo === "multi-mc") {
+    try {
+      const correct = new Set(JSON.parse(q.corretta || "[]").map(l => letterToIndex(l)));
+      const given   = new Set((typeof ans === "string" ? JSON.parse(ans || "[]") : (ans || [])).map(x => parseInt(x, 10)));
+      const n = correct.size;
+      if (n === 0) return 0;
+      let right = 0, wrong = 0;
+      correct.forEach(i => { if (given.has(i)) right++; });
+      given.forEach(i  => { if (!correct.has(i)) wrong++; });
+      return Math.max(0, Math.round((right - wrong) / n * q.punti * 100) / 100);
+    } catch(e) { return 0; }
+  }
   if (q.tipo === "fitb") {
     return (normalizeText(ans) === normalizeText(q.corretta)) ? q.punti : 0;
   }
@@ -353,11 +371,13 @@ function scoreAnswer(q, ans) {
       const d = JSON.parse(q.data || "{}");
       const boxes = d.boxes || [];
       const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
-      let pts = 0;
+      let earned = 0, total = 0;
       boxes.forEach((b, i) => {
-        if (normalizeText(given[i]) === normalizeText(b.correct)) pts += (b.pts || 0);
+        total += (b.pts || 0);
+        if (normalizeText(given[i]) === normalizeText(String(b.correct ?? ""))) earned += (b.pts || 0);
       });
-      return pts;
+      if (total === 0) return 0;
+      return Math.round((earned / total) * q.punti);
     } catch(e) { return 0; }
   }
   if (q.tipo === "cloze") {
