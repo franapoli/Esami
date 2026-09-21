@@ -786,14 +786,15 @@ function renderQuestion() {
               "<span class='option-label'>" + q.options[origIdx] + "</span></div>";
     });
   } else if (q.type === "multi-mc") {
-    const order   = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : q.options.map((_, i) => i);
-    const selSet  = new Set(Array.isArray(answers[current]) ? answers[current] : []);
+    const opts  = q.options || [];
+    const order = (shuffleMap && shuffleMap[current]) ? shuffleMap[current] : opts.map((_, i) => i);
+    const selSet = new Set(Array.isArray(answers[current]) ? answers[current] : []);
     html += "<p style='font-size:0.82em;color:#777;margin-bottom:10px;'>Seleziona tutte le risposte corrette.</p>";
     order.forEach(origIdx => {
       const sel = selSet.has(origIdx) ? " selected" : "";
       html += "<div class='option" + sel + "' onclick='toggleOption(" + origIdx + ")'>" +
               "<input type='checkbox'" + (selSet.has(origIdx) ? " checked" : "") + " readonly>" +
-              "<span class='option-label'>" + q.options[origIdx] + "</span></div>";
+              "<span class='option-label'>" + opts[origIdx] + "</span></div>";
     });
   } else if (q.type === "fitb") {
     const val = answers[current] !== null ? answers[current] : "";
