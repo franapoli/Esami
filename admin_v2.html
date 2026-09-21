@@ -606,6 +606,7 @@
           <!-- Azioni salva items traccia -->
           <div id="actions-edit" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="btn btn-sm" onclick="saveTrackItems()">Salva domande traccia</button>
+            <button class="btn btn-sm btn-outline" onclick="exportTraccia()" title="Scarica traccia + correttore come HTML">Esporta ↓</button>
             <span id="save-items-msg" style="font-size:0.85em;"></span>
           </div>
           <div id="items-esami-warn" style="display:none;margin-top:10px;padding:8px 12px;background:#fff8e1;border:1px solid #ffe082;font-size:0.82em;color:#7a5300;"></div>
@@ -789,7 +790,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "6ff5070";
+const BUILD = "2c6c50c";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2023,6 +2024,146 @@ async function saveTrackItems() {
   } catch(e) {
     msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
   }
+}
+
+// ---- EXPORT TRACCIA ----
+
+function exportTraccia() {
+  if (!currentTraccia || trackItems.length === 0) {
+    alert("Seleziona una traccia con almeno una domanda per esportare."); return;
+  }
+  const qMap = allQuestions ? Object.fromEntries(allQuestions.map(q => [q.id, q])) : {};
+  const nome  = currentTraccia.nome || currentTraccia.track_id;
+  const questions = trackItems
+    .filter(item => item.type === "fixed")
+    .map((item, i) => ({ q: qMap[item.id], num: i + 1, ep: item.punti }))
+    .filter(x => x.q);
+
+  if (questions.length === 0) {
+    alert("Nessuna domanda fissa trovata (gli slot casuali non sono esportabili)."); return;
+  }
+
+  const css = `
+    body{font-family:Georgia,serif;max-width:760px;margin:40px auto;padding:0 24px;color:#111;font-size:14px;}
+    h1{font-size:1.4em;margin-bottom:4px;}
+    .subtitle{color:#555;font-size:0.88em;margin-bottom:32px;}
+    .question{margin-bottom:32px;page-break-inside:avoid;}
+    .q-header{font-weight:bold;margin-bottom:8px;}
+    .q-pts{font-weight:normal;color:#777;font-size:0.88em;margin-left:8px;}
+    .q-text{margin-bottom:10px;line-height:1.55;}
+    .option{display:flex;gap:10px;margin-bottom:5px;align-items:flex-start;}
+    .opt-label{font-weight:bold;min-width:18px;flex-shrink:0;}
+    .correct{color:#1a5c1a;font-weight:bold;}
+    .correct .opt-label::after{content:" ✓";}
+    .wrong{color:#999;}
+    .blank{display:inline-block;border-bottom:1px solid #333;min-width:120px;height:1.2em;margin:0 4px;}
+    .answer-box{border:1px solid #ccc;min-height:60px;margin-top:4px;padding:6px;}
+    .match-table{border-collapse:collapse;margin-top:4px;}
+    .match-table td{padding:4px 10px;border:1px solid #ccc;}
+    .match-arrow{color:#aaa;padding:0 6px;}
+    .key-answer{color:#1a5c1a;font-size:0.9em;margin-top:6px;font-style:italic;}
+    @media print{body{margin:20px;}.question{page-break-inside:avoid;}}
+  `;
+
+  function renderQ(item, withKey) {
+    const { q, num, ep } = item;
+    const pts   = ep !== undefined ? ep : q.punti;
+    const testo = q.testo || "";
+    let body    = `<div class="q-header">Domanda ${num}<span class="q-pts">[${pts} pt]</span></div>`;
+
+    // testo: cloze con {{N}} e multi-fitb con {{N}} sono già inline → mostra così com'è
+    body += `<div class="q-text">${testo}</div>`;
+
+    const tipo = q.tipo;
+    const opts = Array.isArray(q.options) ? q.options : [];
+
+    if (tipo === "mc") {
+      const correctIdx = q.corretta ? (q.corretta.toUpperCase().charCodeAt(0) - 65) : -1;
+      opts.forEach((o, i) => {
+        const letter = String.fromCharCode(65 + i);
+        const cls = withKey ? (i === correctIdx ? " correct" : " wrong") : "";
+        body += `<div class="option${cls}"><span class="opt-label">${letter}.</span><span>${escHtml(o)}</span></div>`;
+      });
+    } else if (tipo === "multi-mc") {
+      let correctSet = new Set();
+      try { correctSet = new Set(JSON.parse(q.corretta || "[]").map(l => l.toUpperCase().charCodeAt(0) - 65)); } catch(e){}
+      opts.forEach((o, i) => {
+        const letter = String.fromCharCode(65 + i);
+        const cls = withKey ? (correctSet.has(i) ? " correct" : " wrong") : "";
+        body += `<div class="option${cls}"><span class="opt-label">${letter}.</span><span>${escHtml(o)}</span></div>`;
+      });
+      if (!withKey) body += `<div style="font-size:0.82em;color:#777;margin-top:4px;">Seleziona tutte le risposte corrette.</div>`;
+    } else if (tipo === "fitb") {
+      if (withKey) {
+        body += `<div class="key-answer">Risposta: <strong>${escHtml(q.corretta || "")}</strong></div>`;
+      } else {
+        body += `<div>Risposta: <span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>`;
+      }
+    } else if (tipo === "match") {
+      const right = (() => { try { return JSON.parse(q.corretta || "[]"); } catch(e) { return []; } })();
+      body += `<table class="match-table">`;
+      opts.forEach((l, i) => {
+        if (withKey) {
+          body += `<tr><td>${escHtml(l)}</td><td class="match-arrow">→</td><td class="correct">${escHtml(right[i] || "")}</td></tr>`;
+        } else {
+          const allRight = [...new Set(right)].sort();
+          body += `<tr><td>${escHtml(l)}</td><td class="match-arrow">→</td><td style="min-width:120px;">&nbsp;</td></tr>`;
+        }
+      });
+      body += `</table>`;
+      if (!withKey) {
+        const allRight = [...new Set(right)].sort();
+        body += `<div style="margin-top:8px;font-size:0.88em;color:#555;">Opzioni destra: ${allRight.map(r => escHtml(r)).join(" &nbsp;·&nbsp; ")}</div>`;
+      }
+    } else if (tipo === "free") {
+      body += withKey
+        ? `<div class="key-answer">(Valutazione manuale)</div>`
+        : `<div class="answer-box"></div>`;
+    } else if (tipo === "multi-fitb") {
+      let d = {}; try { d = JSON.parse(q.data || "{}"); } catch(e) {}
+      const boxes = d.boxes || [];
+      if (withKey) {
+        boxes.forEach(b => {
+          body += `<div class="key-answer">${b.label ? escHtml(b.label) + ": " : ""}<strong>${escHtml(String(b.correct ?? ""))}</strong></div>`;
+        });
+      }
+      // in esame: il testo già contiene {{N}} → nessun extra
+    } else if (tipo === "cloze") {
+      let d = {}; try { d = JSON.parse(q.data || "{}"); } catch(e) {}
+      if (withKey) {
+        (d.dropdowns || []).forEach((dd, i) => {
+          const ans = (dd.options || [])[dd.correct ?? 0] || "";
+          body += `<div class="key-answer">Blank ${i + 1}: <strong>${escHtml(ans)}</strong></div>`;
+        });
+      }
+    }
+    return `<div class="question">${body}</div>`;
+  }
+
+  function buildHtml(title, subtitle, withKey) {
+    const questionsHtml = questions.map(item => renderQ(item, withKey)).join("\n");
+    return `<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><title>${escHtml(title)}</title>
+<style>${css}</style></head>
+<body>
+<h1>${escHtml(title)}</h1>
+<p class="subtitle">${escHtml(subtitle)}</p>
+${questionsHtml}
+</body></html>`;
+  }
+
+  const safeName = nome.replace(/[^a-z0-9_\-]/gi, "_");
+  function download(content, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([content], { type: "text/html;charset=utf-8" }));
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  download(buildHtml(nome, "Traccia — " + questions.length + " domande", false), safeName + "_traccia.html");
+  setTimeout(() => download(buildHtml(nome + " — Correttore", "Correttore — risposta corretta evidenziata", true), safeName + "_correttore.html"), 400);
 }
 
 // ---- CROSSREF TRACCE → ESAMI ----
