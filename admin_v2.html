@@ -583,6 +583,7 @@
           </div>
           <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
             <button class="btn btn-sm" style="margin-top:0;" onclick="saveTracciaNome()">Salva nome</button>
+            <button class="btn btn-sm btn-outline" style="margin-top:0;" onclick="duplicateTraccia()">Duplica</button>
             <span id="save-traccia-nome-msg" style="font-size:0.85em;"></span>
           </div>
         </div>
@@ -790,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "8f088cc";
+const BUILD = "ffa2c9d";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1997,16 +1998,22 @@ function setDomandeMode(mode, keepItems = false) {
 
 function duplicateEsame() {
   if (!currentEsame) return;
-  const traccia_id = currentEsame.traccia_id || "";
+  const src = currentEsame;
   currentEsame = null;
-  document.getElementById("esame-select").value  = "";
-  document.getElementById("new-corso").value     = "";
-  document.getElementById("new-date").value      = "";
-  document.getElementById("new-dur").value       = "90";
-  document.getElementById("new-mode").value      = "exam";
-  document.getElementById("new-pwd").value       = "";
-  document.getElementById("new-traccia-ref").value = traccia_id;
+  document.getElementById("esame-select").value     = "";
+  document.getElementById("new-traccia-ref").value  = src.traccia_id || "";
+  document.getElementById("new-corso").value        = src.corso      || "";
+  document.getElementById("new-dur").value          = src.durata     || "90";
+  document.getElementById("new-mode").value         = src.modalita   || "exam";
+  document.getElementById("new-pwd").value          = src.password   || "";
+  document.getElementById("new-shuffle").value      = src.shuffle === false ? "no" : "si";
+  // La data resta vuota: un duplicato serve per una sessione diversa, e doCreateEsame
+  // la esige, così non si crea per sbaglio un esame con la data dell'originale.
+  document.getElementById("new-date").value         = "";
   updateAdminTab();
+  const msg = document.getElementById("create-msg");
+  msg.style.color = "#555";
+  msg.textContent = "Copia di " + src.exam_id + " — scegli la data e crea.";
 }
 
 // Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
@@ -2267,6 +2274,28 @@ async function saveTracciaNome() {
     populateTracciaSelects();
     document.getElementById("traccia-select").value = currentTraccia.track_id;
     msg.style.color="#2e7d32"; msg.textContent="✓ Salvato";
+  } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
+}
+
+async function duplicateTraccia() {
+  if (!currentTraccia) return;
+  const msg = document.getElementById("save-traccia-nome-msg");
+  // Duplica gli item come sono nell'editor, cioè quelli che l'utente sta vedendo.
+  const items = cleanItemsForSave(trackItems);
+  const nome  = "Copia di " + (currentTraccia.nome || currentTraccia.track_id);
+  msg.style.color="#555"; msg.textContent="Duplicazione…";
+  try {
+    const res = await callScript({ action:"createTrack", password:adminPassword, nome, items });
+    if (res.status !== "ok") throw new Error(res.message);
+    const newT = { track_id: res.track_id, nome, items };
+    allTracks.push(newT);
+    currentTraccia = newT;
+    populateTracciaSelects();
+    document.getElementById("traccia-select").value = res.track_id;
+    trackItems = JSON.parse(JSON.stringify(items));
+    updateDomandeTab();
+    renderCrossref();
+    msg.style.color="#2e7d32"; msg.textContent="✓ Duplicata: " + res.track_id;
   } catch(e) { msg.style.color="#b00"; msg.textContent="Errore: "+e.message; }
 }
 
@@ -2622,7 +2651,8 @@ async function doCreateEsame() {
     if (res.status !== "ok") throw new Error(res.message);
 
     const newE = { exam_id:res.exam_id, traccia_id:tracciaId, corso,
-                   exam_date:date, duration:dur, mode, status:"closed", password:pwd };
+                   data:date, durata:dur, modalita:mode, stato:"closed",
+                   password:pwd, shuffle: shuffle !== "no" };
     allEsami.push(newE);
     populateEsameSelect(allEsami);
     renderCrossref();
