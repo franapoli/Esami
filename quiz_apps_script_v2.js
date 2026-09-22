@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.5"; // aggiornare ad ogni deploy
+const VERSION = "2.24.6"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -371,7 +371,7 @@ function scoreAnswer(q, ans) {
         const chosenIdx = parseInt(given[i], 10);
         if (!isNaN(chosenIdx) && String(right[chosenIdx] ?? "").trim() === String(r).trim()) ok++;
       });
-      return right.length ? Math.round((ok / right.length) * q.punti) : 0;
+      return right.length ? Math.round((ok / right.length) * q.punti * 100) / 100 : 0;
     } catch(e) { return 0; }
   }
   if (q.tipo === "multi-fitb") {
@@ -385,7 +385,7 @@ function scoreAnswer(q, ans) {
         if (normalizeText(given[i]) === normalizeText(String(b.correct ?? ""))) earned += (b.pts || 0);
       });
       if (total === 0) return 0;
-      return Math.round((earned / total) * q.punti);
+      return Math.round((earned / total) * q.punti * 100) / 100;
     } catch(e) { return 0; }
   }
   if (q.tipo === "cloze") {
@@ -395,7 +395,7 @@ function scoreAnswer(q, ans) {
       const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
       let ok = 0;
       dropdowns.forEach((dd, i) => { if (parseInt(given[i], 10) === (dd.correct ?? 0)) ok++; });
-      return dropdowns.length ? Math.round((ok / dropdowns.length) * q.punti) : 0;
+      return dropdowns.length ? Math.round((ok / dropdowns.length) * q.punti * 100) / 100 : 0;
     } catch(e) { return 0; }
   }
   if (q.tipo === "free") return 0; // valutazione manuale
