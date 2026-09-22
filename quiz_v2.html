@@ -1139,7 +1139,7 @@ function showPracticeResults(serverScore, correctAnswers) {
       userDisplay = Array.isArray(userAns) && q.boxes
         ? q.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (userAns[j] || "—")).join(", ") : "—";
       correctDisplay = (ca && ca.boxes)
-        ? ca.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (b.correct || "")).join(", ") : "—";
+        ? ca.boxes.map((b, j) => (b.label ? b.label + ": " : "") + (b.correct ?? "")).join(", ") : "—";
     } else if (q.type === "cloze") {
       userDisplay = Array.isArray(userAns) && q.dropdowns
         ? q.dropdowns.map((dd, j) => dd.options[userAns[j]] || "—").join(" / ") : "—";

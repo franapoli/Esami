@@ -790,7 +790,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "25fe497";
+const BUILD = "8f088cc";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1825,7 +1825,7 @@ function previewQuestion(id, event) {
       const boxes = d.boxes || [];
       const filled = q.testo.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
         const i = parseInt(idx);
-        const c = escHtml(String((boxes[i] && boxes[i].correct) || "?"));
+        const c = escHtml(String((boxes[i] || {}).correct ?? "?"));
         return `<span class="dp-correct">${c}</span>`;
       });
       body += `<div class="prev-text">${filled}</div>`;
@@ -1836,7 +1836,7 @@ function previewQuestion(id, event) {
       const boxes = d.boxes || [];
       body += boxes.map((b, i) => {
         const lbl = escHtml(String(b.label || (i + 1)));
-        const c   = escHtml(String(b.correct || ""));
+        const c   = escHtml(String(b.correct ?? ""));
         return `<div class="prev-fitb" style="display:flex;gap:8px;align-items:center;">
           <span style="color:#555;min-width:60px;">${lbl}:</span>
           <span style="color:#2e7d32;font-weight:bold;">${c}</span>
