@@ -394,7 +394,7 @@
             </select>
           </div>
           <div class="field" style="flex:2;min-width:180px;">
-            <label for="new-pwd">Password <span style="font-weight:normal;color:#aaa;">(vuoto = nessuna)</span></label>
+            <label for="new-pwd">Password <span style="font-weight:normal;color:#aaa;">(generata; svuota per nessuna)</span></label>
             <input type="text" id="new-pwd" placeholder="Nessuna password" autocomplete="off" style="font-family:monospace;">
           </div>
           <div class="field" style="min-width:140px;">
@@ -791,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "23fa5b8";
+const BUILD = "f38fae1";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1190,7 +1190,13 @@ function updateAdminTab() {
   const isNew = (currentEsame === null);
   const has   = !!currentEsame;
   document.getElementById("track-card").style.display        = "block";
-  document.getElementById("new-track-form").style.display    = isNew ? "block" : "none";
+  const nuovoForm = document.getElementById("new-track-form");
+  // La password si genera solo entrando nel form, non a ogni updateAdminTab: switchTab lo
+  // richiama tornando sul tab, e rigenerarla vanificherebbe lo svuotamento del campo,
+  // che è il modo per creare un esame senza protezione.
+  const appenaAperto = isNew && nuovoForm.style.display === "none";
+  nuovoForm.style.display = isNew ? "block" : "none";
+  if (appenaAperto) document.getElementById("new-pwd").value = randomTrackPassword();
   document.getElementById("esame-status-card").style.display = has   ? "block" : "none";
   populateTracciaSelects();
   if (!has) return;
@@ -2017,15 +2023,14 @@ function duplicateEsame() {
   document.getElementById("new-dur").value          = src.durata     || "90";
   document.getElementById("new-mode").value         = src.modalita   || "exam";
   document.getElementById("new-shuffle").value      = src.shuffle === false ? "no" : "si";
-  // La password non si copia: è il controllo d'accesso della singola sessione, e riusarla
-  // lascerebbe entrare chi ha sostenuto l'esame originale. Se ne genera una nuova invece
-  // di lasciare il campo vuoto, che significherebbe esame senza password.
-  document.getElementById("new-pwd").value          = randomTrackPassword();
+  // Data e password non si copiano: la password è il controllo d'accesso della singola
+  // sessione, e riusarla lascerebbe entrare chi ha sostenuto l'esame originale.
+  // Aprendo il form, updateAdminTab ne genera una nuova.
   document.getElementById("new-date").value         = "";
   updateAdminTab();
   const msg = document.getElementById("create-msg");
   msg.style.color = "#555";
-  msg.textContent = "Copia di " + src.exam_id + " — password nuova generata, scegli la data.";
+  msg.textContent = "Copia di " + src.exam_id + " — scegli la data.";
 }
 
 // Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
