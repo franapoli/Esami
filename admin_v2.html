@@ -791,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "ffa2c9d";
+const BUILD = "6684745";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2005,15 +2005,17 @@ function duplicateEsame() {
   document.getElementById("new-corso").value        = src.corso      || "";
   document.getElementById("new-dur").value          = src.durata     || "90";
   document.getElementById("new-mode").value         = src.modalita   || "exam";
-  document.getElementById("new-pwd").value          = src.password   || "";
   document.getElementById("new-shuffle").value      = src.shuffle === false ? "no" : "si";
-  // La data resta vuota: un duplicato serve per una sessione diversa, e doCreateEsame
-  // la esige, così non si crea per sbaglio un esame con la data dell'originale.
+  // Data e password NON si copiano. La data perché il duplicato serve per una sessione
+  // diversa; la password perché è il controllo d'accesso di quella sessione: riusarla
+  // lascerebbe entrare chi ha sostenuto l'esame originale.
   document.getElementById("new-date").value         = "";
+  document.getElementById("new-pwd").value          = "";
   updateAdminTab();
   const msg = document.getElementById("create-msg");
   msg.style.color = "#555";
-  msg.textContent = "Copia di " + src.exam_id + " — scegli la data e crea.";
+  msg.textContent = "Copia di " + src.exam_id + " — imposta data" +
+    (src.password ? " e password (l'originale ne aveva una, non viene copiata)" : "") + ".";
 }
 
 // Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
