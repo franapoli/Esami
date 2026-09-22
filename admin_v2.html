@@ -791,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "6684745";
+const BUILD = "23fa5b8";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1996,6 +1996,17 @@ function setDomandeMode(mode, keepItems = false) {
   updateDomandeTab();
 }
 
+// Password d'accesso per una nuova sessione. Esclude O/0 e I/1: lo studente la
+// ricopia a mano da una slide, e quelle coppie sono indistinguibili.
+function randomTrackPassword() {
+  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 = potenza di 2, nessun bias nel modulo
+  const buf = new Uint32Array(5);
+  crypto.getRandomValues(buf);
+  let pwd = "";
+  for (let i = 0; i < buf.length; i++) pwd += alfabeto[buf[i] % alfabeto.length];
+  return pwd;
+}
+
 function duplicateEsame() {
   if (!currentEsame) return;
   const src = currentEsame;
@@ -2006,16 +2017,15 @@ function duplicateEsame() {
   document.getElementById("new-dur").value          = src.durata     || "90";
   document.getElementById("new-mode").value         = src.modalita   || "exam";
   document.getElementById("new-shuffle").value      = src.shuffle === false ? "no" : "si";
-  // Data e password NON si copiano. La data perché il duplicato serve per una sessione
-  // diversa; la password perché è il controllo d'accesso di quella sessione: riusarla
-  // lascerebbe entrare chi ha sostenuto l'esame originale.
+  // La password non si copia: è il controllo d'accesso della singola sessione, e riusarla
+  // lascerebbe entrare chi ha sostenuto l'esame originale. Se ne genera una nuova invece
+  // di lasciare il campo vuoto, che significherebbe esame senza password.
+  document.getElementById("new-pwd").value          = randomTrackPassword();
   document.getElementById("new-date").value         = "";
-  document.getElementById("new-pwd").value          = "";
   updateAdminTab();
   const msg = document.getElementById("create-msg");
   msg.style.color = "#555";
-  msg.textContent = "Copia di " + src.exam_id + " — imposta data" +
-    (src.password ? " e password (l'originale ne aveva una, non viene copiata)" : "") + ".";
+  msg.textContent = "Copia di " + src.exam_id + " — password nuova generata, scegli la data.";
 }
 
 // Rimuove campi interni (_count ecc.) che non devono essere salvati nel foglio
