@@ -169,6 +169,20 @@
   .q-row.used { opacity: 0.45; }
   .q-row.used .add-btn { cursor: not-allowed; }
 
+  .banco-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:14px 18px; }
+  .banco-toolbar input[type=search] { flex:1; min-width:240px; padding:7px 10px; border:1px solid #bbb; font:inherit; font-size:0.92em; }
+  .banco-toolbar select { width:auto; padding:6px 8px; border:1px solid #bbb; font:inherit; font-size:0.86em; background:#fff; }
+  #banco-count { font-size:0.8em; color:#888; }
+  .banco-layout { display:flex; gap:18px; align-items:flex-start; }
+  .banco-list { flex:0 0 42%; padding:0; max-height:calc(100vh - 230px); overflow-y:auto; outline:none; }
+  .banco-detail { flex:1; min-width:0; position:sticky; top:12px; max-height:calc(100vh - 230px); overflow-y:auto; }
+  .banco-empty { padding:16px; color:#aaa; font-size:0.85em; font-style:italic; }
+  .banco-uso { font-size:0.84em; color:#444; line-height:1.7; margin-top:16px; padding-top:12px; border-top:1px solid #eee; }
+  .banco-uso .aperto { color:#b00; font-weight:600; }
+  @media (max-width: 900px) {
+    .banco-layout { flex-direction:column; }
+    .banco-list, .banco-detail { flex:none; width:100%; max-height:none; position:static; }
+  }
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
   .q-row:hover { background: #f8f8f4; }
@@ -357,6 +371,7 @@
     <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
     <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
     <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Tracce</button>
+    <button class="tab"        id="tab-banco"     onclick="switchTab('banco')">Domande</button>
   </div>
 
   <!-- TAB: ESAME -->
@@ -668,6 +683,37 @@
     </div>
   </div>
 
+  <!-- TAB: DOMANDE (banco domande, sola lettura) -->
+  <div class="tab-panel" id="panel-banco">
+    <div id="banco-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Caricamento in corso…
+    </div>
+    <div id="banco-content" style="display:none;">
+      <div class="card banco-toolbar">
+        <input type="search" id="banco-q" placeholder="Cerca in testo, opzioni, soluzioni, ID, tag…  (↑ ↓ per scorrere)"
+               oninput="renderBanco()" onkeydown="bancoKey(event)" autocomplete="off">
+        <select id="banco-tipo"  onchange="renderBanco()"><option value="">Tutti i tipi</option></select>
+        <select id="banco-cat"   onchange="renderBanco()"><option value="">Tutte le categorie</option></select>
+        <select id="banco-stato" onchange="renderBanco()">
+          <option value="">Ogni stato</option>
+          <option value="verificato">Verificate</option>
+          <option value="bozza">Bozze</option>
+        </select>
+        <select id="banco-uso" onchange="renderBanco()">
+          <option value="">Uso: tutte</option>
+          <option value="fissa">Fisse in qualche traccia</option>
+          <option value="mai">Mai fisse in una traccia</option>
+        </select>
+        <span id="banco-count"></span>
+        <button class="btn btn-sm" style="margin-top:0;margin-left:auto;" onclick="reloadBanco()">↻ Ricarica dal foglio</button>
+      </div>
+      <div class="banco-layout">
+        <div class="card banco-list" id="banco-list" tabindex="0" onkeydown="bancoKey(event)"></div>
+        <div class="card banco-detail" id="banco-detail"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: RISULTATI -->
   <div class="tab-panel" id="panel-risultati">
     <div id="risultati-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
@@ -791,7 +837,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "36a428a";
+const BUILD = "dbcd3cf";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -906,17 +952,18 @@ function renderImagesAdmin(html) {
   });
 }
 
-// Domande che uno slot casuale può estrarre: stesso filtro di resolveEsame nello script,
-// bozze escluse.
+// Se uno slot casuale può estrarre q: stesso filtro di resolveEsame nello script, bozze escluse.
+function slotAccepts(item, q) {
+  if ((q.stato || "verificato") === "bozza") return false;
+  if (item.categoria  && q.categoria  !== item.categoria)  return false;
+  if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
+  if (item.tag && !String(q.tags || "").split(",").map(t => t.trim()).includes(item.tag)) return false;
+  if (item.punti !== undefined && item.punti !== null && q.punti !== item.punti) return false;
+  return true;
+}
+
 function randomSlotPool(item) {
-  return (allQuestions || []).filter(q => {
-    if ((q.stato || "verificato") === "bozza") return false;
-    if (item.categoria  && q.categoria  !== item.categoria)  return false;
-    if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
-    if (item.tag && !String(q.tags || "").split(",").map(t => t.trim()).includes(item.tag)) return false;
-    if (item.punti !== undefined && item.punti !== null && q.punti !== item.punti) return false;
-    return true;
-  });
+  return (allQuestions || []).filter(q => slotAccepts(item, q));
 }
 
 // Controlla le immagini di tutte le domande che la traccia può assegnare, slot casuali
@@ -1277,6 +1324,7 @@ function switchTab(name) {
   if (name === "monitor")   { updateMonitorTab(); startAutoRefresh(); }
   else if (name === "risultati") { updateRisultatiTab(); }
   else if (name === "domande")   { initDomandeTab(); }
+  else if (name === "banco")     { initBancoTab(); }
   else { updateAdminTab(); }
 }
 
@@ -1897,6 +1945,26 @@ function previewQuestion(id, event) {
     " · " + (({mc:"scelta multipla","multi-mc":"scelta multipla (più risposte)",fitb:"risposta libera",match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"}[q.tipo] || q.tipo)) +
     " · " + q.punti + " pt";
 
+  document.getElementById("preview-body").innerHTML = renderImagesAdmin(questionBodyHtml(q));
+  const imgIds = imageIdsIn(q.testo);
+  if (imgIds.some(id => typeof adminImages[id] !== "string")) {
+    fetchAdminImages(imgIds).then(added => {
+      if (added && document.getElementById("preview-overlay").classList.contains("open")
+          && document.getElementById("preview-meta").textContent.includes(q.id)) previewQuestion(id);
+    }).catch(() => {});
+  }
+  const qs = q.stato || "verificato";
+  document.getElementById("preview-meta").innerHTML =
+    `ID: <code>${escHtml(q.id)}</code>` +
+    (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
+    ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span>`;
+
+  document.getElementById("preview-overlay").classList.add("open");
+}
+
+// Corpo leggibile di una domanda (testo, opzioni, soluzione), senza immagini risolte:
+// chi lo inserisce nel DOM lo passa a renderImagesAdmin.
+function questionBodyHtml(q) {
   // multi-fitb tabella: {{N}} nel testo → mostra risposte corrette inline nella tabella
   const isTableFitb = q.tipo === "multi-fitb" && /\{\{\d+\}\}/.test(q.testo || "");
   let body = isTableFitb ? "" : `<div class="prev-text">${q.testo}</div>`;
@@ -1962,21 +2030,7 @@ function previewQuestion(id, event) {
     if (q.placeholder) body += `<div style="font-size:0.82em;color:#aaa;">Placeholder: ${escHtml(q.placeholder)}</div>`;
   }
 
-  document.getElementById("preview-body").innerHTML = renderImagesAdmin(body);
-  const imgIds = imageIdsIn(q.testo);
-  if (imgIds.some(id => typeof adminImages[id] !== "string")) {
-    fetchAdminImages(imgIds).then(added => {
-      if (added && document.getElementById("preview-overlay").classList.contains("open")
-          && document.getElementById("preview-meta").textContent.includes(q.id)) previewQuestion(id);
-    }).catch(() => {});
-  }
-  const qs = q.stato || "verificato";
-  document.getElementById("preview-meta").innerHTML =
-    `ID: <code>${escHtml(q.id)}</code>` +
-    (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
-    ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span>`;
-
-  document.getElementById("preview-overlay").classList.add("open");
+  return body;
 }
 
 function closePreview(event) {
@@ -2024,6 +2078,224 @@ async function loadQuestionStats() {
   } catch(e) {
     if (btn) { btn.textContent = "📊 Statistiche"; btn.disabled = false; }
     showToast("Errore statistiche: " + e.message, "error");
+  }
+}
+
+// ---- TAB DOMANDE (banco domande, sola lettura) ----
+const TIPO_LABEL = {mc:"scelta multipla","multi-mc":"scelta multipla (più risposte)",fitb:"risposta libera",
+                    match:"corrispondenza",free:"testo libero","multi-fitb":"caselle multiple",cloze:"completamento"};
+const BANCO_MAX_ROWS = 300;       // oltre, l'elenco diventa pesante da ridisegnare a ogni tasto
+let bancoSelected   = null;
+let _bancoFiltered  = [];
+let _bancoIndex     = null;       // id → testo normalizzato su cui cercare
+let _bancoIndexFor  = null;       // l'array allQuestions per cui l'indice è valido
+
+// Minuscolo e senza accenti: "perche" trova "perché"
+function normSearch(s) {
+  return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// Il testo delle domande è HTML: per anteprime e ricerca servono solo le parole.
+// Prima via i tag, poi decodifica delle entità (&lt; → <), che escHtml rifarà in uscita.
+const _entityDecoder = document.createElement("textarea");
+function plainText(s) {
+  _entityDecoder.innerHTML = String(s || "").replace(/<[^>]*>/g, " ");
+  return _entityDecoder.value
+    .replace(/\[img:[^\]]*\]/g, " [immagine] ")
+    .replace(/\{\{\d+\}\}/g, " ___ ")
+    .replace(/\s+/g, " ").trim();
+}
+
+// Valori (non chiavi) del JSON di Q_DATA: caselle, soluzioni, opzioni dei dropdown
+function dataValues(raw) {
+  const out = [];
+  const walk = v => {
+    if (v === null || v === undefined) return;
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (typeof v === "object") Object.values(v).forEach(walk);
+    else out.push(String(v));
+  };
+  try { walk(typeof raw === "string" ? JSON.parse(raw || "null") : raw); } catch(e) {}
+  return out;
+}
+
+function bancoIndex() {
+  if (_bancoIndex && _bancoIndexFor === allQuestions) return _bancoIndex;
+  _bancoIndex = new Map(allQuestions.map(q => {
+    const parts = [q.id, q.categoria, q.sottocateg, q.tags, TIPO_LABEL[q.tipo] || q.tipo,
+                   plainText(q.testo), q.placeholder, ...(Array.isArray(q.options) ? q.options : []),
+                   ...dataValues(q.data)];
+    // Per mc/multi-mc la soluzione è una lettera: indicizzarla farebbe corrispondere quasi tutto
+    if (q.tipo === "fitb" || q.tipo === "match") parts.push(q.corretta);
+    return [q.id, normSearch(parts.filter(Boolean).join(" \n "))];
+  }));
+  _bancoIndexFor = allQuestions;
+  return _bancoIndex;
+}
+
+function bancoFixedUsage() {
+  const used = {};
+  allTracks.forEach(t => (t.items || []).forEach(it => {
+    if (it.type === "fixed") (used[it.id] = used[it.id] || []).push(t);
+  }));
+  return used;
+}
+
+async function initBancoTab() {
+  const loading = document.getElementById("banco-loading");
+  const content = document.getElementById("banco-content");
+  if (!allQuestions || !_tracksLoaded) {
+    loading.textContent = "Caricamento in corso…";
+    loading.style.display = "block"; content.style.display = "none";
+    try {
+      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded()]);
+    } catch(e) {
+      loading.textContent = "Errore: " + e.message;
+      return;
+    }
+  }
+  loading.style.display = "none"; content.style.display = "block";
+  populateBancoFilters();
+  renderBanco();
+}
+
+// Le domande si caricano una volta per sessione: dopo modifiche fatte nel foglio serve ricaricarle
+async function reloadBanco() {
+  allQuestions = null;
+  document.getElementById("banco-count").textContent = "Ricarico…";
+  try {
+    await ensureQuestionsLoaded();
+  } catch(e) {
+    const c = document.getElementById("banco-count");
+    c.style.color = "#b00"; c.textContent = "Errore nel ricaricare: " + e.message;
+    return;
+  }
+  document.getElementById("banco-count").style.color = "";
+  populateBancoFilters();
+  renderBanco();
+  renderQBrowser(); // il browser del tab Tracce usa lo stesso allQuestions
+}
+
+function populateBancoFilters() {
+  const fill = (id, values, label) => {
+    const el = document.getElementById(id), prev = el.value;
+    el.innerHTML = el.options[0].outerHTML + values.map(v =>
+      `<option value="${escHtml(v)}">${escHtml(label(v))}</option>`).join("");
+    el.value = values.includes(prev) ? prev : "";
+  };
+  const tipiPresenti = new Set(allQuestions.map(q => q.tipo));
+  const tipi = Object.keys(TIPO_LABEL).filter(t => tipiPresenti.has(t))
+    .concat([...tipiPresenti].filter(t => !TIPO_LABEL[t]));
+  fill("banco-tipo", tipi, t => TIPO_LABEL[t] || t);
+  const cats = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
+  fill("banco-cat", cats, c => c);
+}
+
+function renderBanco() {
+  if (!allQuestions) return;
+  const terms = normSearch(document.getElementById("banco-q").value).split(/\s+/).filter(Boolean);
+  const tipo  = document.getElementById("banco-tipo").value;
+  const cat   = document.getElementById("banco-cat").value;
+  const stato = document.getElementById("banco-stato").value;
+  const uso   = document.getElementById("banco-uso").value;
+  const index = bancoIndex();
+  const fixed = bancoFixedUsage();
+
+  _bancoFiltered = allQuestions.filter(q => {
+    if (tipo  && q.tipo !== tipo) return false;
+    if (cat   && q.categoria !== cat) return false;
+    if (stato && (q.stato || "verificato") !== stato) return false;
+    if (uso === "fissa" && !fixed[q.id]) return false;
+    if (uso === "mai"   &&  fixed[q.id]) return false;
+    const text = index.get(q.id);
+    return terms.every(t => text.includes(t));
+  });
+
+  const n = _bancoFiltered.length;
+  document.getElementById("banco-count").textContent =
+    (n === allQuestions.length ? n + " domande" : n + " di " + allQuestions.length) +
+    (n > BANCO_MAX_ROWS ? " — mostrate le prime " + BANCO_MAX_ROWS + ", affina la ricerca" : "");
+
+  if (!_bancoFiltered.some(q => q.id === bancoSelected)) bancoSelected = n ? _bancoFiltered[0].id : null;
+
+  const list = document.getElementById("banco-list");
+  if (!n) {
+    list.innerHTML = '<div class="banco-empty">Nessuna domanda corrisponde.</div>';
+  } else {
+    list.innerHTML = _bancoFiltered.slice(0, BANCO_MAX_ROWS).map(q => {
+      const txt = plainText(q.testo);
+      const snippet = txt.length > 140 ? txt.slice(0, 140) + "…" : txt;
+      const qs = q.stato || "verificato";
+      const nTracce = (fixed[q.id] || []).length;
+      return `<div class="q-row${q.id === bancoSelected ? " selected" : ""}" data-id="${q.id}" onclick="selectBanco('${q.id}')">
+        <div class="q-row-body">
+          <div>${escHtml(snippet) || "<em style='color:#aaa'>(testo vuoto)</em>"}</div>
+          <div class="q-row-meta">${escHtml(q.id)} &nbsp;·&nbsp; ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}
+            &nbsp;·&nbsp; ${escHtml(TIPO_LABEL[q.tipo] || q.tipo)}${nTracce ? ` &nbsp;·&nbsp; in ${nTracce} tracc${nTracce > 1 ? "e" : "ia"}` : ""}</div>
+        </div>
+        <div class="q-row-pts">${q.punti} pt</div>
+        <span class="stato-badge stato-${qs}" style="cursor:default;">${qs === "bozza" ? "✎ bozza" : "✓"}</span>
+      </div>`;
+    }).join("");
+  }
+  renderBancoDetail();
+}
+
+function selectBanco(id) {
+  bancoSelected = id;
+  document.querySelectorAll("#banco-list .q-row.selected").forEach(r => r.classList.remove("selected"));
+  const row = document.querySelector(`#banco-list .q-row[data-id="${id}"]`);
+  if (row) { row.classList.add("selected"); row.scrollIntoView({ block: "nearest" }); }
+  renderBancoDetail();
+}
+
+// ↑/↓ scorrono i risultati sia dal campo di ricerca sia dall'elenco
+function bancoKey(e) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const visible = _bancoFiltered.slice(0, BANCO_MAX_ROWS);
+  if (!visible.length) return;
+  e.preventDefault();
+  const i = visible.findIndex(q => q.id === bancoSelected);
+  const next = e.key === "ArrowDown" ? Math.min(i + 1, visible.length - 1) : Math.max(i - 1, 0);
+  selectBanco(visible[next].id);
+}
+
+function bancoUsageHtml(q) {
+  const fixedIn  = allTracks.filter(t => (t.items || []).some(it => it.type === "fixed" && it.id === q.id));
+  const randomIn = allTracks.filter(t => !fixedIn.includes(t) &&
+                     (t.items || []).some(it => it.type === "random" && slotAccepts(it, q)));
+  const trackLine = t => {
+    const es = allEsami.filter(e => e.traccia_id === t.track_id);
+    const aperti = es.filter(e => e.stato === "open").length;
+    return `<strong>${escHtml(t.nome || t.track_id)}</strong> — ` +
+      (es.length ? es.length + (es.length > 1 ? " esami" : " esame") : "nessun esame") +
+      (aperti ? `, <span class="aperto">${aperti} apert${aperti > 1 ? "i" : "o"}</span>` : "");
+  };
+  let html = '<div class="banco-uso">';
+  if (!fixedIn.length && !randomIn.length) html += "Non usata in nessuna traccia.";
+  if (fixedIn.length)  html += "<div>Fissa in: " + fixedIn.map(trackLine).join("; ") + "</div>";
+  if (randomIn.length) html += "<div>Estraibile dagli slot casuali di: " + randomIn.map(trackLine).join("; ") + "</div>";
+  return html + "</div>";
+}
+
+function renderBancoDetail() {
+  const el = document.getElementById("banco-detail");
+  const q = bancoSelected && allQuestions && allQuestions.find(x => x.id === bancoSelected);
+  if (!q) { el.innerHTML = '<div class="banco-empty">Seleziona una domanda dall\'elenco.</div>'; return; }
+  const qs = q.stato || "verificato";
+  el.innerHTML =
+    `<div class="prev-meta" style="margin:0 0 14px;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
+      ` &nbsp;·&nbsp; ${escHtml(TIPO_LABEL[q.tipo] || q.tipo)} &nbsp;·&nbsp; ${q.punti} pt</div>` +
+    renderImagesAdmin(questionBodyHtml(q)) +
+    `<div class="prev-meta">ID: <code>${escHtml(q.id)}</code>` +
+      (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
+      ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span></div>` +
+    bancoUsageHtml(q);
+  const imgIds = imageIdsIn(q.testo);
+  if (imgIds.some(id => typeof adminImages[id] !== "string")) {
+    fetchAdminImages(imgIds).then(changed => {
+      if (changed && bancoSelected === q.id && activeTab === "banco") renderBancoDetail();
+    }).catch(() => {});
   }
 }
 
@@ -2500,6 +2772,7 @@ async function toggleStato(id) {
     if (res.status === "ok") {
       q.stato = nuovoStato;
       renderQBrowser();
+      if (activeTab === "banco") renderBanco();
       // aggiorna anche il badge nel preview se aperto
       const overlay = document.getElementById("preview-overlay");
       if (overlay.classList.contains("open")) previewQuestion(id, null);
