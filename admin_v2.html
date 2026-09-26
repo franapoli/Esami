@@ -183,6 +183,34 @@
     .banco-layout { flex-direction:column; }
     .banco-list, .banco-detail { flex:none; width:100%; max-height:none; position:static; }
   }
+  .banco-detail-actions { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .banco-detail-actions .btn { margin-top:0; }
+  .banco-flash { font-size:0.84em; color:#2e7d32; }
+  .be-head { display:flex; align-items:baseline; gap:10px; margin-bottom:12px; }
+  .be-note { font-size:0.82em; padding:8px 10px; margin-bottom:14px; background:#f6f6f6; color:#555; line-height:1.5; }
+  .be-note.aperto { background:#fdecea; color:#b00; }
+  .be-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px 14px; margin-bottom:12px; }
+  .be-grid .wide { grid-column:1 / -1; }
+  .be-field { display:flex; flex-direction:column; gap:4px; font-size:0.8em; color:#555; margin-bottom:12px; }
+  .be-grid .be-field { margin-bottom:0; }
+  .be-field small { color:#999; }
+  .be-field textarea { width:100%; box-sizing:border-box; font-family:monospace; font-size:0.9em; padding:8px 10px;
+                       border:1px solid #bbb; resize:vertical; line-height:1.5; }
+  .be-field textarea[readonly] { background:#f6f6f6; color:#777; }
+  .be-opt { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .be-opt input[type=text] { flex:1; padding:6px 8px; }
+  .be-letter { font-weight:bold; width:14px; font-size:0.85em; }
+  .be-mini { background:none; border:1px solid #ddd; cursor:pointer; padding:2px 7px; font-size:0.72em; color:#666; }
+  .be-mini:disabled { opacity:.3; cursor:default; }
+  .be-errors { color:#b00; font-size:0.84em; margin:10px 0 0; line-height:1.6; }
+  .be-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; }
+  .be-actions .btn { margin-top:0; }
+  .be-actions .btn:disabled { opacity:.4; cursor:not-allowed; }
+  #be-msg { font-size:0.84em; }
+  .be-preview-title { margin-top:22px; padding-top:12px; border-top:1px solid #eee; font-size:0.74em; color:#999;
+                      text-transform:uppercase; letter-spacing:.06em; }
+  .be-preview { margin-top:10px; }
+  @media (max-width: 900px) { .be-grid { grid-template-columns:1fr; } }
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
   .q-row:hover { background: #f8f8f4; }
@@ -837,7 +865,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "dbcd3cf";
+const BUILD = "781f9d6";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -939,10 +967,13 @@ function imageProblem(id) {
   return "file non trovato o non accessibile — controlla l'ID";
 }
 
-function renderImagesAdmin(html) {
+// pending: ID che il server non può ancora servire perché nessuna domanda salvata li cita
+function renderImagesAdmin(html, pending) {
   return String(html).replace(/\[img:([^\]\s]+)\]/g, (all, ref) => {
     const id = extractDriveId(ref);
     if (!id) return `<span style="color:#b00;">${all} (riferimento non valido)</span>`;
+    if (pending && pending.has(id))
+      return `<span style="display:block;color:#888;margin:8px 0;">[immagine ${escHtml(id)}: visibile in anteprima dopo il salvataggio]</span>`;
     const uri = adminImages[id];
     if (typeof uri === "string" && uri.startsWith("data:image/"))
       return `<img src="${uri}" alt="" style="display:block;max-width:100%;height:auto;margin:10px auto;">`;
@@ -2161,6 +2192,10 @@ async function initBancoTab() {
 
 // Le domande si caricano una volta per sessione: dopo modifiche fatte nel foglio serve ricaricarle
 async function reloadBanco() {
+  if (bancoEdit) {
+    if (bancoEditDirty() && !confirm("Ricaricando perdi le modifiche non salvate a " + bancoEdit.id + ". Continuare?")) return;
+    bancoEdit = null;
+  }
   allQuestions = null;
   document.getElementById("banco-count").textContent = "Ricarico…";
   try {
@@ -2191,7 +2226,8 @@ function populateBancoFilters() {
   fill("banco-cat", cats, c => c);
 }
 
-function renderBanco() {
+// keepSelection: non spostare la selezione anche se i filtri la escludono (dopo un salvataggio)
+function renderBanco(keepSelection) {
   if (!allQuestions) return;
   const terms = normSearch(document.getElementById("banco-q").value).split(/\s+/).filter(Boolean);
   const tipo  = document.getElementById("banco-tipo").value;
@@ -2216,7 +2252,10 @@ function renderBanco() {
     (n === allQuestions.length ? n + " domande" : n + " di " + allQuestions.length) +
     (n > BANCO_MAX_ROWS ? " — mostrate le prime " + BANCO_MAX_ROWS + ", affina la ricerca" : "");
 
-  if (!_bancoFiltered.some(q => q.id === bancoSelected)) bancoSelected = n ? _bancoFiltered[0].id : null;
+  // Con l'editor aperto la selezione non si sposta mai: cercare non deve far perdere la bozza
+  if (!bancoEdit && !keepSelection && !_bancoFiltered.some(q => q.id === bancoSelected)) {
+    bancoSelected = n ? _bancoFiltered[0].id : null;
+  }
 
   const list = document.getElementById("banco-list");
   if (!n) {
@@ -2238,10 +2277,14 @@ function renderBanco() {
       </div>`;
     }).join("");
   }
-  renderBancoDetail();
+  if (!bancoEdit) renderBancoDetail();
 }
 
 function selectBanco(id) {
+  if (bancoEdit && id !== bancoEdit.id) {
+    if (bancoEditDirty() && !confirm("Ci sono modifiche non salvate a " + bancoEdit.id + ". Abbandonarle?")) return;
+    bancoEdit = null;
+  }
   bancoSelected = id;
   document.querySelectorAll("#banco-list .q-row.selected").forEach(r => r.classList.remove("selected"));
   const row = document.querySelector(`#banco-list .q-row[data-id="${id}"]`);
@@ -2283,7 +2326,13 @@ function renderBancoDetail() {
   const q = bancoSelected && allQuestions && allQuestions.find(x => x.id === bancoSelected);
   if (!q) { el.innerHTML = '<div class="banco-empty">Seleziona una domanda dall\'elenco.</div>'; return; }
   const qs = q.stato || "verificato";
+  const flash = bancoFlash && bancoFlash.id === q.id ? `<span class="banco-flash">${escHtml(bancoFlash.text)}</span>` : "";
+  bancoFlash = null;
   el.innerHTML =
+    `<div class="banco-detail-actions">
+       <button class="btn btn-sm" onclick="bancoEditStart()">${BANCO_TIPI_EDITABILI.includes(q.tipo) ? "Modifica" : "Modifica metadati"}</button>
+       ${flash}
+     </div>` +
     `<div class="prev-meta" style="margin:0 0 14px;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
       ` &nbsp;·&nbsp; ${escHtml(TIPO_LABEL[q.tipo] || q.tipo)} &nbsp;·&nbsp; ${q.punti} pt</div>` +
     renderImagesAdmin(questionBodyHtml(q)) +
@@ -2298,6 +2347,334 @@ function renderBancoDetail() {
     }).catch(() => {});
   }
 }
+
+// ---- EDITOR DOMANDE ----
+// Una modifica sovrascrive la domanda (updateQuestion) o la salva come domanda nuova e
+// indipendente (createQuestion). Niente versioni né legami fra le due.
+// match, multi-fitb e cloze: per ora solo metadati, il contenuto resta bloccato.
+const BANCO_TIPI_EDITABILI = ["mc", "multi-mc", "fitb", "free"];
+let bancoEdit  = null;   // { id, original (copia), draft, initialFp, busy, imgTried:Set }
+let bancoFlash = null;   // { id, text } messaggio da mostrare una volta nel dettaglio
+
+function escAttr(s) { return escHtml(s).replace(/"/g, "&quot;"); }
+
+function normTags(s) { return String(s || "").split(",").map(t => t.trim()).filter(Boolean).join(","); }
+
+// Stessa forma di questionFingerprint nello script
+function questionFingerprintAdmin(q) {
+  return JSON.stringify([q.corso, q.categoria, q.sottocateg, q.tags, q.stato, q.tipo, q.testo,
+                         q.options, q.corretta, Number(q.punti), q.placeholder, q.data]);
+}
+
+// Stesse regole di validateQuestion nello script, che resta l'autorità: qui servono per
+// mostrare gli errori mentre si scrive.
+function validateQuestionAdmin(q) {
+  const err = [];
+  if (!TIPO_LABEL[q.tipo]) err.push("Tipo non valido: " + q.tipo);
+  if (!q.testo) err.push("Il testo è vuoto.");
+  if (!isFinite(q.punti) || q.punti <= 0) err.push("I punti devono essere un numero maggiore di zero.");
+  if (q.tipo === "mc" || q.tipo === "multi-mc") {
+    if (q.options.length < 2) err.push("Servono almeno due opzioni.");
+    if (q.options.length > 26) err.push("Al massimo 26 opzioni (A–Z).");
+    if (q.options.some(o => !o)) err.push("Ci sono opzioni vuote.");
+    const letters = q.tipo === "mc" ? (q.corretta ? [q.corretta] : []) : parseMultiCorrettaAdmin(q.corretta);
+    const fuori = letters.filter(l => !/^[A-Z]$/.test(l) || l.charCodeAt(0) - 65 >= q.options.length);
+    if (!letters.length) err.push(q.tipo === "mc" ? "Indica la risposta corretta." : "Indica almeno una risposta corretta.");
+    else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
+  }
+  if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
+  return err;
+}
+
+// Bozza: opzioni e corrette per indice, così riordinare le opzioni si porta dietro la spunta
+function questionToDraft(q) {
+  const opts = Array.isArray(q.options) ? q.options.map(String) : [];
+  const idx  = l => String(l).trim().toUpperCase().charCodeAt(0) - 65;
+  let correct = [];
+  if (q.tipo === "mc") correct = [idx(q.corretta)];
+  if (q.tipo === "multi-mc") correct = parseMultiCorrettaAdmin(q.corretta).map(idx);
+  correct = correct.filter(i => i >= 0 && i < opts.length);
+  return {
+    corso: q.corso || "", categoria: q.categoria || "", sottocateg: q.sottocateg || "", tags: q.tags || "",
+    stato: q.stato || "verificato", tipo: q.tipo, testo: q.testo || "", punti: String(q.punti ?? ""),
+    options: opts.length ? opts : ["", ""], correct,
+    corretta: q.tipo === "fitb" ? (q.corretta || "") : "",
+    placeholder: q.placeholder || "", data: q.data || ""
+  };
+}
+
+function draftToQuestion(d, original) {
+  const q = {
+    corso: d.corso, categoria: d.categoria.trim(), sottocateg: d.sottocateg.trim(), tags: normTags(d.tags),
+    stato: d.stato, tipo: d.tipo, testo: d.testo.trim(), punti: Number(String(d.punti).replace(",", ".")),
+    options: [], corretta: "", placeholder: "", data: ""
+  };
+  if (!BANCO_TIPI_EDITABILI.includes(original.tipo)) {
+    // Contenuto bloccato: si riscrive identico all'originale
+    Object.assign(q, { tipo: original.tipo, testo: original.testo, options: original.options,
+                       corretta: original.corretta, placeholder: original.placeholder, data: original.data });
+  } else if (d.tipo === "mc" || d.tipo === "multi-mc") {
+    q.options = d.options.map(o => o.trim());
+    const letters = [...d.correct].sort((a, b) => a - b).map(i => String.fromCharCode(65 + i));
+    q.corretta = d.tipo === "mc" ? (letters[0] || "") : letters.join(",");
+  } else {
+    if (d.tipo === "fitb") q.corretta = d.corretta.trim();
+    q.placeholder = d.placeholder.trim();
+  }
+  return q;
+}
+
+function bancoEditDirty() {
+  return !!bancoEdit && questionFingerprintAdmin(draftToQuestion(bancoEdit.draft, bancoEdit.original)) !== bancoEdit.initialFp;
+}
+
+// Esami aperti che possono assegnare q, come fissa o da uno slot casuale
+function openExamsUsing(q) {
+  const tracce = new Set(allTracks.filter(t => (t.items || []).some(it =>
+    (it.type === "fixed" && it.id === q.id) || (it.type === "random" && slotAccepts(it, q)))).map(t => t.track_id));
+  return allEsami.filter(e => e.stato === "open" && tracce.has(e.traccia_id));
+}
+
+function bancoEditStart() {
+  const q = allQuestions.find(x => x.id === bancoSelected);
+  if (!q) return;
+  const original = JSON.parse(JSON.stringify(q));
+  const draft = questionToDraft(original);
+  bancoEdit = { id: q.id, original, draft, busy: false, imgTried: new Set(),
+                initialFp: questionFingerprintAdmin(draftToQuestion(draft, original)) };
+  renderBancoEditor();
+}
+
+function bancoEditCancel() {
+  if (bancoEditDirty() && !confirm("Abbandonare le modifiche non salvate?")) return;
+  bancoEdit = null;
+  renderBancoDetail();
+}
+
+function renderBancoEditor() {
+  const e = bancoEdit, d = e.draft, q = e.original;
+  const locked = !BANCO_TIPI_EDITABILI.includes(q.tipo);
+  const aperti = openExamsUsing(q);
+  const tracceIds = new Set(allTracks.filter(t => (t.items || []).some(it =>
+    (it.type === "fixed" && it.id === q.id) || (it.type === "random" && slotAccepts(it, q)))).map(t => t.track_id));
+  const chiusi = allEsami.filter(x => x.stato !== "open" && tracceIds.has(x.traccia_id));
+  let nota = "";
+  if (aperti.length) {
+    nota = `<div class="be-note aperto">In uso in ${aperti.length === 1 ? "un esame aperto" : aperti.length + " esami aperti"} ` +
+      `(${aperti.map(x => escHtml(x.exam_id)).join(", ")}). Chi ha già iniziato vede la versione vecchia ma alla ` +
+      `consegna viene corretto con quella nuova: cambiare opzioni o soluzione può falsare i voti.</div>`;
+  } else if (chiusi.length) {
+    nota = `<div class="be-note">Usata in ${chiusi.length === 1 ? "un esame chiuso" : chiusi.length + " esami chiusi"}. ` +
+      `I voti già assegnati non cambiano, ma il dettaglio dei risultati mostrerà la versione nuova. ` +
+      `Per conservare quella vecchia, usa "Salva come nuova domanda".</div>`;
+  }
+  const uniq = f => [...new Set(allQuestions.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
+  const tipiSel = locked ? [q.tipo] : BANCO_TIPI_EDITABILI;
+
+  document.getElementById("banco-detail").innerHTML = `
+    <div class="be-head"><strong>${locked ? "Modifica metadati" : "Modifica"}</strong> <code>${escHtml(q.id)}</code></div>
+    ${nota}
+    <div class="be-grid">
+      <label class="be-field">Tipo
+        <select id="be-tipo" ${locked ? "disabled" : ""} onchange="bancoEditTipo(this.value)">
+          ${tipiSel.map(t => `<option value="${t}" ${t === d.tipo ? "selected" : ""}>${escHtml(TIPO_LABEL[t] || t)}</option>`).join("")}
+        </select></label>
+      <label class="be-field">Punti
+        <input type="text" inputmode="decimal" value="${escAttr(d.punti)}" oninput="bancoEditSet('punti', this.value)"></label>
+      <label class="be-field">Stato
+        <select onchange="bancoEditSet('stato', this.value)">
+          <option value="verificato" ${d.stato === "verificato" ? "selected" : ""}>verificato</option>
+          <option value="bozza" ${d.stato === "bozza" ? "selected" : ""}>bozza</option>
+        </select></label>
+      <label class="be-field">Categoria
+        <input type="text" list="be-cats" value="${escAttr(d.categoria)}" oninput="bancoEditSet('categoria', this.value)"></label>
+      <label class="be-field">Sottocategoria
+        <input type="text" list="be-subcats" value="${escAttr(d.sottocateg)}" oninput="bancoEditSet('sottocateg', this.value)"></label>
+      <label class="be-field">Tag
+        <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
+    </div>
+    <label class="be-field">Testo
+      <textarea rows="6" ${locked ? "readonly" : ""} oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
+      <small>${locked ? "Testo e contenuto di questo tipo si modificheranno con l'editor dedicato."
+                      : "HTML ammesso · [img:ID o link Drive] per un'immagine"}</small></label>
+    <div id="be-tipo-fields"></div>
+    <div id="be-errors" class="be-errors"></div>
+    <div class="be-actions">
+      <button class="btn btn-sm btn-green" id="be-save" onclick="bancoSave(false)">Salva</button>
+      <button class="btn btn-sm" id="be-save-new" onclick="bancoSave(true)">Salva come nuova domanda</button>
+      <button class="btn btn-sm btn-outline" onclick="bancoEditCancel()">Annulla</button>
+      <span id="be-msg"></span>
+    </div>
+    <div class="be-preview-title">Anteprima</div>
+    <div id="be-preview" class="be-preview"></div>
+    <datalist id="be-cats">${uniq(x => x.categoria).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>
+    <datalist id="be-subcats">${uniq(x => x.sottocateg).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>`;
+  renderBancoEditTipo();
+  bancoEditRefresh();
+}
+
+function renderBancoEditTipo() {
+  const d = bancoEdit.draft, box = document.getElementById("be-tipo-fields");
+  if (!BANCO_TIPI_EDITABILI.includes(bancoEdit.original.tipo)) { box.innerHTML = ""; return; }
+  if (d.tipo === "mc" || d.tipo === "multi-mc") {
+    const multi = d.tipo === "multi-mc", n = d.options.length;
+    box.innerHTML = `<div class="be-field" style="margin-bottom:4px;">Opzioni <small>${multi ? "spunta tutte le corrette" : "seleziona la corretta"}</small></div>` +
+      d.options.map((o, i) => `<div class="be-opt">
+        <input type="${multi ? "checkbox" : "radio"}" name="be-correct" ${d.correct.includes(i) ? "checked" : ""}
+               onchange="bancoEditCorrect(${i}, this.checked)" title="Corretta">
+        <span class="be-letter">${String.fromCharCode(65 + i)}</span>
+        <input type="text" value="${escAttr(o)}" oninput="bancoEditOption(${i}, this.value)">
+        <button class="be-mini" onclick="bancoEditMove(${i}, -1)" ${i === 0 ? "disabled" : ""} title="Sposta su">▲</button>
+        <button class="be-mini" onclick="bancoEditMove(${i}, 1)" ${i === n - 1 ? "disabled" : ""} title="Sposta giù">▼</button>
+        <button class="be-mini" onclick="bancoEditRemove(${i})" ${n <= 2 ? "disabled" : ""} title="Elimina">✕</button>
+      </div>`).join("") +
+      `<button class="btn btn-sm btn-outline" style="margin-top:4px;" onclick="bancoEditAdd()" ${n >= 26 ? "disabled" : ""}>+ Aggiungi opzione</button>`;
+  } else {
+    box.innerHTML =
+      (d.tipo === "fitb" ? `<label class="be-field">Risposta corretta
+          <input type="text" value="${escAttr(d.corretta)}" oninput="bancoEditSet('corretta', this.value)">
+          <small>Il confronto ignora spazi e maiuscole: "Homo sapiens" accetta anche "homosapiens".</small></label>`
+        : `<div class="be-note">Risposta aperta: non viene corretta automaticamente.</div>`) +
+      `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo</small>
+         <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
+  }
+}
+
+function bancoEditSet(field, value) { bancoEdit.draft[field] = value; bancoEditRefresh(); }
+
+function bancoEditTipo(tipo) {
+  const d = bancoEdit.draft;
+  d.tipo = tipo;
+  if (tipo === "mc" && d.correct.length > 1) d.correct = [d.correct[0]];
+  renderBancoEditTipo();
+  bancoEditRefresh();
+}
+
+function bancoEditCorrect(i, checked) {
+  const d = bancoEdit.draft;
+  if (d.tipo === "mc") d.correct = [i];
+  else d.correct = checked ? [...new Set([...d.correct, i])] : d.correct.filter(x => x !== i);
+  bancoEditRefresh();
+}
+
+// Senza ridisegnare le opzioni: il campo che si sta scrivendo non perde il focus
+function bancoEditOption(i, value) { bancoEdit.draft.options[i] = value; bancoEditRefresh(); }
+
+function bancoEditMove(i, dir) {
+  const d = bancoEdit.draft, j = i + dir;
+  [d.options[i], d.options[j]] = [d.options[j], d.options[i]];
+  d.correct = d.correct.map(x => x === i ? j : x === j ? i : x);
+  renderBancoEditTipo();
+  bancoEditRefresh();
+}
+
+function bancoEditRemove(i) {
+  const d = bancoEdit.draft;
+  d.options.splice(i, 1);
+  d.correct = d.correct.filter(x => x !== i).map(x => x > i ? x - 1 : x);
+  renderBancoEditTipo();
+  bancoEditRefresh();
+}
+
+function bancoEditAdd() {
+  bancoEdit.draft.options.push("");
+  renderBancoEditTipo();
+  const inputs = document.querySelectorAll("#be-tipo-fields .be-opt input[type=text]");
+  if (inputs.length) inputs[inputs.length - 1].focus();
+  bancoEditRefresh();
+}
+
+function bancoEditRefresh() {
+  const e = bancoEdit;
+  if (!e) return;
+  const q = draftToQuestion(e.draft, e.original);
+  const errs = validateQuestionAdmin(q);
+  const dirty = questionFingerprintAdmin(q) !== e.initialFp;
+  document.getElementById("be-errors").innerHTML = errs.map(x => `<div>• ${escHtml(x)}</div>`).join("");
+  document.getElementById("be-save").disabled     = e.busy || !!errs.length || !dirty;
+  document.getElementById("be-save-new").disabled = e.busy || !!errs.length;
+
+  // getImagesAdmin serve solo immagini già citate nel banco: una nuova si vede dopo il salvataggio
+  const salvate = new Set(allQuestions.flatMap(x => imageIdsIn(x.testo)));
+  const ids = imageIdsIn(q.testo);
+  const nuove = new Set(ids.filter(id => !salvate.has(id)));
+  document.getElementById("be-preview").innerHTML = renderImagesAdmin(questionBodyHtml({ ...q, id: e.id }), nuove);
+
+  // Una richiesta per immagine a sessione di modifica, non una a ogni tasto
+  const daProvare = ids.filter(id => salvate.has(id) && typeof adminImages[id] !== "string" && !e.imgTried.has(id));
+  if (daProvare.length) {
+    daProvare.forEach(id => e.imgTried.add(id));
+    fetchAdminImages(daProvare).then(changed => { if (changed && bancoEdit === e) bancoEditRefresh(); }).catch(() => {});
+  }
+}
+
+async function bancoSave(asNew) {
+  const e = bancoEdit;
+  if (!e || e.busy) return;
+  const q = draftToQuestion(e.draft, e.original);
+  if (validateQuestionAdmin(q).length) return;
+  if (!asNew) {
+    const aperti = openExamsUsing(e.original);
+    if (aperti.length && !confirm(
+        "Questa domanda è in uso in " + aperti.length + (aperti.length === 1 ? " esame aperto" : " esami aperti") +
+        " (" + aperti.map(x => x.exam_id).join(", ") + ").\n\n" +
+        "Chi ha già iniziato vede la versione vecchia, ma alla consegna verrà corretto con quella nuova.\n\n" +
+        "Sovrascrivere comunque?")) return;
+  }
+  const msg = document.getElementById("be-msg");
+  e.busy = true; bancoEditRefresh();
+  msg.style.color = "#555"; msg.textContent = "Salvataggio…";
+  try {
+    const res = await callScript(asNew
+      ? { action: "createQuestion", password: adminPassword, question: q }
+      : { action: "updateQuestion", password: adminPassword, id: e.id, question: q, expected: e.original });
+    if (bancoEdit !== e) return;
+    if (res.status === "ok") {
+      const fresh = res.question;
+      if (asNew) allQuestions.push(fresh);
+      else allQuestions[allQuestions.findIndex(x => x.id === e.id)] = fresh;
+      _bancoIndex = null;
+      bancoEdit = null;
+      bancoSelected = fresh.id;
+      bancoFlash = { id: fresh.id, text: asNew ? "✓ Creata come nuova domanda " + fresh.id + " (l'originale è invariata)" : "✓ Salvata" };
+      populateBancoFilters();
+      renderBanco(true);   // ridisegna anche il dettaglio, col messaggio di conferma
+      const row = document.querySelector(`#banco-list .q-row[data-id="${fresh.id}"]`);
+      if (row) row.scrollIntoView({ block: "nearest" });
+      renderQBrowser();
+      return;
+    }
+    if (res.status === "conflict") {
+      e.conflict = res.question;
+      msg.style.color = "#b00";
+      msg.innerHTML = "Nel frattempo la domanda è stata modificata nel foglio: non ho sovrascritto nulla. " +
+        `<button class="be-mini" onclick="bancoEditReopen()">Riapri dalla versione attuale</button> ` +
+        "(la tua bozza andrà persa: copiala prima, se ti serve)";
+    } else if (res.status === "invalid") {
+      msg.style.color = "#b00"; msg.textContent = "Il server ha rifiutato: " + (res.errors || []).join(" ");
+    } else {
+      msg.style.color = "#b00"; msg.textContent = "Errore: " + (res.message || res.status);
+    }
+  } catch(err) {
+    if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Errore di rete: " + err.message; }
+  } finally {
+    if (bancoEdit === e) { e.busy = false; bancoEditRefresh(); }
+  }
+}
+
+function bancoEditReopen() {
+  const fresh = bancoEdit && bancoEdit.conflict;
+  if (!fresh) return;
+  allQuestions[allQuestions.findIndex(x => x.id === fresh.id)] = fresh;
+  _bancoIndex = null;
+  bancoEdit = null;
+  renderBanco(true);
+  bancoEditStart();
+}
+
+window.addEventListener("beforeunload", ev => {
+  if (bancoEditDirty()) { ev.preventDefault(); ev.returnValue = ""; }
+});
 
 // ---- INIT ----
 async function initDomandeTab() {

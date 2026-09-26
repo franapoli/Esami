@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.25.1"; // aggiornare ad ogni deploy
+const VERSION = "2.26.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -291,26 +291,108 @@ function loadAllQuestions() {
   const values = sheet.getDataRange().getValues();
   const map = {};
   for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const id = String(row[Q_ID]).trim();
+    const id = String(values[i][Q_ID]).trim();
     if (!id) continue;
-    map[id] = {
-      id,
-      corso:        String(row[Q_CORSO]),
-      categoria:    String(row[Q_CATEGORIA]),
-      sottocateg:   String(row[Q_SOTTOCATEG]),
-      tipo:         String(row[Q_TIPO]).trim() || "mc",
-      testo:        String(row[Q_TESTO]),
-      options:      (() => { try { const v = String(row[Q_OPTIONS] || ""); return v.trim() ? JSON.parse(v) : []; } catch(e) { return []; } })(),
-      corretta:     String(row[Q_CORRETTA]).trim(),
-      punti:        Number(row[Q_PUNTI]) || 1,
-      placeholder:  String(row[Q_PLACEHOLDER]).trim(),
-      tags:         String(row[Q_TAGS] || "").trim(),
-      data:         String(row[Q_DATA] || "").trim(),
-      stato:        String(row[Q_STATO] || "verificato").trim() || "verificato"
-    };
+    map[id] = rowToQuestion(values[i]);
   }
   return map;
+}
+
+// Una riga del foglio domande come oggetto. Unica fonte della forma: la usano la lettura,
+// il controllo di concorrenza di updateQuestion e la risposta dei salvataggi.
+function rowToQuestion(row) {
+  return {
+    id:           String(row[Q_ID]).trim(),
+    corso:        String(row[Q_CORSO]),
+    categoria:    String(row[Q_CATEGORIA]),
+    sottocateg:   String(row[Q_SOTTOCATEG]),
+    tipo:         String(row[Q_TIPO]).trim() || "mc",
+    testo:        String(row[Q_TESTO]),
+    options:      (() => { try { const v = String(row[Q_OPTIONS] || ""); return v.trim() ? JSON.parse(v) : []; } catch(e) { return []; } })(),
+    corretta:     String(row[Q_CORRETTA]).trim(),
+    punti:        Number(row[Q_PUNTI]) || 1,
+    placeholder:  String(row[Q_PLACEHOLDER]).trim(),
+    tags:         String(row[Q_TAGS] || "").trim(),
+    data:         String(row[Q_DATA] || "").trim(),
+    stato:        String(row[Q_STATO] || "verificato").trim() || "verificato"
+  };
+}
+
+// ---- SCRITTURA DOMANDE (editor admin) ----
+const TIPI_DOMANDA = ["mc", "multi-mc", "fitb", "free", "match", "multi-fitb", "cloze"];
+
+// Confronto di concorrenza: tutti i campi salvati tranne l'ID
+function questionFingerprint(q) {
+  q = q || {};
+  return JSON.stringify([q.corso, q.categoria, q.sottocateg, q.tags, q.stato, q.tipo, q.testo,
+                         q.options, q.corretta, Number(q.punti), q.placeholder, q.data]);
+}
+
+// Porta la domanda inviata dal client alla forma canonica del foglio
+function normalizeIncomingQuestion(d) {
+  d = d || {};
+  const s = v => (v === null || v === undefined) ? "" : String(v);
+  const q = {
+    corso:       s(d.corso),
+    categoria:   s(d.categoria).trim(),
+    sottocateg:  s(d.sottocateg).trim(),
+    tags:        s(d.tags).split(",").map(t => t.trim()).filter(Boolean).join(","),
+    stato:       d.stato === "bozza" ? "bozza" : "verificato",
+    tipo:        s(d.tipo).trim(),
+    testo:       s(d.testo).trim(),
+    options:     Array.isArray(d.options) ? d.options.map(o => s(o).trim()) : [],
+    corretta:    s(d.corretta).trim(),
+    punti:       Number(d.punti),
+    placeholder: s(d.placeholder).trim(),
+    data:        s(d.data).trim()
+  };
+  if (q.tipo === "mc") q.corretta = q.corretta.toUpperCase();
+  if (q.tipo === "multi-mc") {
+    const set = {};
+    parseMultiCorretta(q.corretta).forEach(l => set[String(l).trim().toUpperCase()] = true);
+    q.corretta = Object.keys(set).sort().join(",");
+  }
+  return q;
+}
+
+// Stesse regole di validateQuestionAdmin in admin_v2.html (lì servono per gli errori in diretta).
+// match, multi-fitb e cloze: per ora solo i campi comuni, il contenuto lo modificherà l'editor dedicato.
+function validateQuestion(q) {
+  const err = [];
+  if (TIPI_DOMANDA.indexOf(q.tipo) === -1) err.push("Tipo non valido: " + q.tipo);
+  if (!q.testo) err.push("Il testo è vuoto.");
+  if (!isFinite(q.punti) || q.punti <= 0) err.push("I punti devono essere un numero maggiore di zero.");
+  if (q.tipo === "mc" || q.tipo === "multi-mc") {
+    if (q.options.length < 2) err.push("Servono almeno due opzioni.");
+    if (q.options.length > 26) err.push("Al massimo 26 opzioni (A–Z).");
+    if (q.options.some(o => !o)) err.push("Ci sono opzioni vuote.");
+    const letters = q.tipo === "mc" ? (q.corretta ? [q.corretta] : []) : parseMultiCorretta(q.corretta);
+    const fuori = letters.filter(l => !/^[A-Z]$/.test(l) || l.charCodeAt(0) - 65 >= q.options.length);
+    if (!letters.length) err.push(q.tipo === "mc" ? "Indica la risposta corretta." : "Indica almeno una risposta corretta.");
+    else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
+  }
+  if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
+  return err;
+}
+
+// Sheets interpreta ciò che riceve: "1/2" diventa una data, "0012" un numero, e un testo che
+// inizia con = + - @ una formula. Le colonne di testo vanno in formato testo, e l'apostrofo
+// iniziale (che Sheets non memorizza nel valore) neutralizza le formule.
+function sheetText(v) {
+  const s = (v === null || v === undefined) ? "" : String(v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+function writeQuestionRow(sheet, rowIndex, q) {
+  const testoCols = [q.corso, q.categoria, q.sottocateg, q.tags, q.stato, q.tipo, q.testo,
+                     JSON.stringify(q.options), q.corretta].map(sheetText);     // B..J
+  const r1 = sheet.getRange(rowIndex, Q_CORSO + 1, 1, testoCols.length);
+  r1.setNumberFormat("@");
+  r1.setValues([testoCols]);
+  sheet.getRange(rowIndex, Q_PUNTI + 1).setValue(q.punti);                     // K
+  const r2 = sheet.getRange(rowIndex, Q_PLACEHOLDER + 1, 1, 2);                // L..M
+  r2.setNumberFormat("@");
+  r2.setValues([[sheetText(q.placeholder), sheetText(q.data)]]);
 }
 
 // Legge la traccia (template domande) — solo id, nome, items
@@ -1035,6 +1117,58 @@ function doPost(e) {
       Object.values(allQ).forEach(q => imageIdsInText(q.testo).forEach(id => known[id] = true));
       const ids = (Array.isArray(data.ids) ? data.ids : []).map(String).filter(id => known[id]);
       return corsResponse({ status: "ok", images: loadImagesData(ids) });
+    }
+
+    // updateQuestion — sovrascrive una domanda dall'editor admin. data.expected è la domanda
+    // come l'admin l'ha aperta: se nel frattempo la riga è cambiata (per esempio a mano nel
+    // foglio) risponde "conflict" con la versione attuale invece di sovrascriverla.
+    if (data.action === "updateQuestion") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const q = normalizeIncomingQuestion(data.question);
+      const errors = validateQuestion(q);
+      if (errors.length) return corsResponse({ status: "invalid", errors: errors });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const sheet  = getQuestionsSheet();
+        const values = sheet.getDataRange().getValues();
+        let rowIndex = -1;
+        for (let i = 1; i < values.length; i++) {
+          if (String(values[i][Q_ID]).trim() === String(data.id)) { rowIndex = i + 1; break; }
+        }
+        if (rowIndex === -1) return corsResponse({ status: "error", message: "Domanda non trovata: " + data.id });
+        const current = rowToQuestion(values[rowIndex - 1]);
+        if (questionFingerprint(current) !== questionFingerprint(data.expected)) {
+          return corsResponse({ status: "conflict", question: current });
+        }
+        writeQuestionRow(sheet, rowIndex, q);
+        return corsResponse({ status: "ok", question: rowToQuestion(sheet.getRange(rowIndex, 1, 1, Q_DATA + 1).getValues()[0]) });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
+      }
+    }
+
+    // createQuestion — "salva come nuova" dall'editor: nuova riga con ID nuovo, validata.
+    // Diversa da addQuestion, che non valida e scrive i valori così come arrivano.
+    if (data.action === "createQuestion") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const q = normalizeIncomingQuestion(data.question);
+      const errors = validateQuestion(q);
+      if (errors.length) return corsResponse({ status: "invalid", errors: errors });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const sheet = getQuestionsSheet();
+        const allQ  = loadAllQuestions();
+        let newId;
+        do { newId = generateQuestionId(); } while (allQ[newId]);
+        sheet.appendRow([newId]);
+        const rowIndex = sheet.getLastRow();
+        writeQuestionRow(sheet, rowIndex, q);
+        return corsResponse({ status: "ok", question: rowToQuestion(sheet.getRange(rowIndex, 1, 1, Q_DATA + 1).getValues()[0]) });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
+      }
     }
 
     // ----------------------------------------------------------------
