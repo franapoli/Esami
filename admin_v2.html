@@ -791,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "f38fae1";
+const BUILD = "1d9abec";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -858,6 +858,50 @@ function formatDateIt(dateStr) {
 
 function escHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---- IMMAGINI ----
+// [img:X] nel testo, X = ID Drive o link di condivisione. extractDriveId è duplicata
+// identica nello script e in quiz_v2.html.
+const adminImages = {}; // id → dataURI | null
+
+function extractDriveId(ref) {
+  const s = String(ref || "").trim();
+  const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+function imageIdsIn(text) {
+  const ids = [];
+  String(text || "").replace(/\[img:([^\]\s]+)\]/g, (_, ref) => {
+    const id = extractDriveId(ref);
+    if (id && !ids.includes(id)) ids.push(id);
+    return "";
+  });
+  return ids;
+}
+
+function renderImagesAdmin(html) {
+  return String(html).replace(/\[img:([^\]\s]+)\]/g, (all, ref) => {
+    const id = extractDriveId(ref);
+    if (!id) return `<span style="color:#b00;">${all} (riferimento non valido)</span>`;
+    const uri = adminImages[id];
+    if (typeof uri === "string" && uri.startsWith("data:image/"))
+      return `<img src="${uri}" alt="" style="display:block;max-width:100%;height:auto;margin:10px auto;">`;
+    if (uri === null) return `<span style="color:#b00;">[immagine ${escHtml(id)} non disponibile: file assente, non immagine o oltre 1,5 MB]</span>`;
+    return `<span style="color:#888;">caricamento immagine…</span>`;
+  });
+}
+
+// Scarica le immagini non ancora in cache. true se ne ha aggiunte.
+async function fetchAdminImages(ids) {
+  const missing = ids.filter(id => !(id in adminImages));
+  if (!missing.length) return false;
+  const res = await callScript({ action: "getImagesAdmin", password: adminPassword, ids: missing });
+  if (!res || res.status !== "ok") return false;
+  missing.forEach(id => { adminImages[id] = (res.images || {})[id] ?? null; });
+  return true;
 }
 
 // ---- LOGIN ----
@@ -1867,7 +1911,14 @@ function previewQuestion(id, event) {
     if (q.placeholder) body += `<div style="font-size:0.82em;color:#aaa;">Placeholder: ${escHtml(q.placeholder)}</div>`;
   }
 
-  document.getElementById("preview-body").innerHTML = body;
+  document.getElementById("preview-body").innerHTML = renderImagesAdmin(body);
+  const imgIds = imageIdsIn(q.testo);
+  if (imgIds.some(id => !(id in adminImages))) {
+    fetchAdminImages(imgIds).then(added => {
+      if (added && document.getElementById("preview-overlay").classList.contains("open")
+          && document.getElementById("preview-meta").textContent.includes(q.id)) previewQuestion(id);
+    }).catch(() => {});
+  }
   const qs = q.stato || "verificato";
   document.getElementById("preview-meta").innerHTML =
     `ID: <code>${escHtml(q.id)}</code>` +
@@ -2059,7 +2110,7 @@ async function saveTrackItems() {
 
 // ---- EXPORT TRACCIA ----
 
-function exportTraccia() {
+async function exportTraccia() {
   if (!currentTraccia || trackItems.length === 0) {
     alert("Seleziona una traccia con almeno una domanda per esportare."); return;
   }
@@ -2074,6 +2125,12 @@ function exportTraccia() {
     alert("Nessuna domanda fissa trovata (gli slot casuali non sono esportabili)."); return;
   }
 
+  // Le immagini finiscono incorporate nei file, così restano leggibili e stampabili offline
+  const imgIds = [...new Set(questions.flatMap(x => imageIdsIn(x.q.testo)))];
+  if (imgIds.length) {
+    try { await fetchAdminImages(imgIds); } catch(e) {}
+  }
+
   const css = `
     body{font-family:Georgia,serif;max-width:760px;margin:40px auto;padding:0 24px;color:#111;font-size:14px;}
     h1{font-size:1.4em;margin-bottom:4px;}
@@ -2082,6 +2139,7 @@ function exportTraccia() {
     .q-header{font-weight:bold;margin-bottom:8px;}
     .q-pts{font-weight:normal;color:#777;font-size:0.88em;margin-left:8px;}
     .q-text{margin-bottom:10px;line-height:1.55;}
+    .q-text img{max-width:100%;page-break-inside:avoid;}
     .option{display:flex;gap:10px;margin-bottom:5px;align-items:flex-start;}
     .opt-label{font-weight:bold;min-width:18px;flex-shrink:0;}
     .correct{color:#1a5c1a;font-weight:bold;}
@@ -2103,7 +2161,7 @@ function exportTraccia() {
     let body    = `<div class="q-header">Domanda ${num}<span class="q-pts">[${pts} pt]</span></div>`;
 
     // testo: cloze con {{N}} e multi-fitb con {{N}} sono già inline → mostra così com'è
-    body += `<div class="q-text">${testo}</div>`;
+    body += `<div class="q-text">${renderImagesAdmin(testo)}</div>`;
 
     const tipo = q.tipo;
     const opts = Array.isArray(q.options) ? q.options : [];

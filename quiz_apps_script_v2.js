@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.24.6"; // aggiornare ad ogni deploy
+const VERSION = "2.25.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -158,6 +158,76 @@ function parseMultiCorretta(corretta) {
     if (Array.isArray(parsed)) return parsed.map(String);
   } catch(e) {}
   return s.split(",").map(x => x.trim()).filter(Boolean);
+}
+
+// ---- IMMAGINI ----
+// Nel testo di una domanda, [img:X] inserisce un'immagine dal Drive. X è l'ID del file
+// oppure il suo link di condivisione. Le immagini restano private: le legge lo script
+// (che gira come proprietario) e le restituisce in base64 solo tramite getImages.
+// extractDriveId è duplicata identica in quiz_v2.html e admin_v2.html.
+const IMG_PLACEHOLDER_RE = /\[img:([^\]\s]+)\]/g;
+const IMG_MAX_BYTES      = 1500000;
+const IMG_CACHE_TTL      = 3600;
+const IMG_CACHE_CHUNK    = 90000;   // CacheService accetta al massimo 100KB per valore
+
+function extractDriveId(ref) {
+  const s = String(ref || "").trim();
+  const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+function imageIdsInText(text) {
+  const ids = [];
+  String(text || "").replace(IMG_PLACEHOLDER_RE, (_, ref) => {
+    const id = extractDriveId(ref);
+    if (id && ids.indexOf(id) === -1) ids.push(id);
+    return "";
+  });
+  return ids;
+}
+
+function cachePutChunked(cache, key, str) {
+  const n = Math.ceil(str.length / IMG_CACHE_CHUNK);
+  const map = {};
+  map[key + ":n"] = String(n);
+  for (let i = 0; i < n; i++) map[key + ":" + i] = str.substr(i * IMG_CACHE_CHUNK, IMG_CACHE_CHUNK);
+  try { cache.putAll(map, IMG_CACHE_TTL); } catch(e) {}
+}
+
+function cacheGetChunked(cache, key) {
+  const n = parseInt(cache.get(key + ":n"), 10);
+  if (!n) return null;
+  const keys = [];
+  for (let i = 0; i < n; i++) keys.push(key + ":" + i);
+  const got = cache.getAll(keys);
+  let s = "";
+  for (let i = 0; i < keys.length; i++) {
+    if (got[keys[i]] == null) return null;
+    s += got[keys[i]];
+  }
+  return s;
+}
+
+// Restituisce { id: dataURI | null }. null = file assente, non immagine o troppo grande.
+// La cache evita che trenta studenti che iniziano insieme rileggano gli stessi file dal Drive.
+function loadImagesData(ids) {
+  const cache = CacheService.getScriptCache();
+  const out = {};
+  ids.forEach(id => {
+    const cached = cacheGetChunked(cache, "img:" + id);
+    if (cached) { out[id] = cached; return; }
+    try {
+      const blob = DriveApp.getFileById(id).getBlob();
+      const mime = String(blob.getContentType() || "");
+      const bytes = blob.getBytes();
+      if (mime.indexOf("image/") !== 0 || bytes.length > IMG_MAX_BYTES) { out[id] = null; return; }
+      const uri = "data:" + mime + ";base64," + Utilities.base64Encode(bytes);
+      cachePutChunked(cache, "img:" + id, uri);
+      out[id] = uri;
+    } catch(e) { out[id] = null; }
+  });
+  return out;
 }
 
 // ------------------------------------------------------------
@@ -941,6 +1011,20 @@ function doPost(e) {
       return corsResponse({ status: "ok", questions: Object.values(allQ) });
     }
 
+    // getImagesAdmin — immagini per preview ed export. Serve solo ID citati nel banco
+    // domande: lo script ha accesso all'intero Drive del proprietario, e senza questo
+    // filtro la sola password admin basterebbe a leggere qualunque file.
+    if (data.action === "getImagesAdmin") {
+      if (data.password !== getAdminPassword()) {
+        return corsResponse({ status: "error", message: "Password errata" });
+      }
+      const allQ = loadAllQuestions();
+      const known = {};
+      Object.values(allQ).forEach(q => imageIdsInText(q.testo).forEach(id => known[id] = true));
+      const ids = (Array.isArray(data.ids) ? data.ids : []).map(String).filter(id => known[id]);
+      return corsResponse({ status: "ok", images: loadImagesData(ids) });
+    }
+
     // ----------------------------------------------------------------
     // createTrack — crea nuova traccia (solo template domande)
     // ----------------------------------------------------------------
@@ -1375,6 +1459,22 @@ function doPost(e) {
     // Consente di recuperare una sessione NON consegnata da qualsiasi dispositivo,
     // SOLO se il docente ha acceso l'interruttore globale per questo esame.
     // Non rivela mai le risposte corrette; rifiuta sessioni già finalizzate.
+    // getImages — immagini delle sole domande assegnate a questo studente. Senza riga
+    // (cioè prima dell'init) non restituisce nulla: le immagini non escono prima dell'esame.
+    // Canale separato da init/update perché resolveEsame gira a ogni azione, e leggere
+    // il Drive lì renderebbe lento ogni salvataggio di risposta.
+    if (data.action === "getImages") {
+      const rowIndex = findRow(sheet, data.matricola);
+      if (rowIndex === -1) return corsResponse({ status: "error", message: "Sessione non trovata" });
+      const qidsCell = sheet.getRange(rowIndex, COL_QIDS).getValue();
+      const allQ = loadAllQuestions();
+      const ids = [];
+      parseQIds(qidsCell).forEach(qId => {
+        if (allQ[qId]) imageIdsInText(allQ[qId].testo).forEach(id => { if (ids.indexOf(id) === -1) ids.push(id); });
+      });
+      return corsResponse({ status: "ok", images: loadImagesData(ids) });
+    }
+
     if (data.action === "resume") {
       if (!getResumeAll(track.exam_id)) {
         return corsResponse({ status: "error", message: "Ripresa non consentita" });

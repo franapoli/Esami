@@ -52,6 +52,8 @@
   @media print { .q-id { color: #666; } }
   .q-points { font-size: 0.82em; color: #777; margin-left: 8px; }
   .q-text { font-size: 1.05em; line-height: 1.65; margin-bottom: 22px; }
+  .q-img { display: block; max-width: 100%; height: auto; margin: 12px auto; }
+  .q-img-msg { display: block; margin: 12px 0; padding: 10px; font-size: 0.85em; color: #888; background: #f6f6f6; text-align: center; }
 
   .option { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
   .option:hover { background: #f5f5f0; }
@@ -251,6 +253,47 @@ function formatDateIt(dateStr) {
 
 function escHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---- IMMAGINI ----
+// [img:X] nel testo, X = ID Drive o link di condivisione. Le immagini arrivano da getImages
+// e NON vanno in localStorage: in base64 sforerebbero facilmente la quota (~5MB), e un
+// setItem fallito farebbe perdere il salvataggio locale delle risposte.
+// extractDriveId è duplicata identica nello script e in admin_v2.html.
+let questionImages = {};   // id → dataURI | null
+let imagesKey      = null; // domande per cui le immagini sono già state richieste
+
+function extractDriveId(ref) {
+  const s = String(ref || "").trim();
+  const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+function renderImages(html) {
+  return String(html).replace(/\[img:([^\]\s]+)\]/g, (all, ref) => {
+    const id = extractDriveId(ref);
+    if (!id) return all;
+    const uri = questionImages[id];
+    if (typeof uri === "string" && uri.indexOf("data:image/") === 0) return "<img class='q-img' src='" + uri + "' alt=''>";
+    if (uri === null) return "<span class='q-img-msg'>[immagine non disponibile]</span>";
+    return "<span class='q-img-msg'>caricamento immagine…</span>";
+  });
+}
+
+function ensureImages() {
+  const key = questions.map(q => q.id).join(",");
+  if (key === imagesKey || !studentMatricola) return;
+  if (!questions.some(q => /\[img:/.test(q.text || ""))) { imagesKey = key; return; }
+  imagesKey = key;
+  callScript({ action: "getImages", examId: EXAM_ID, matricola: studentMatricola })
+    .then(res => {
+      if (!res || res.status !== "ok" || imagesKey !== key) { if (imagesKey === key) imagesKey = null; return; }
+      Object.assign(questionImages, res.images || {});
+      // Solo se serve: il re-render toglierebbe il focus a chi sta scrivendo altrove
+      if (/\[img:/.test((questions[current] || {}).text || "")) renderQuestion();
+    })
+    .catch(() => { if (imagesKey === key) imagesKey = null; });
 }
 
 function getLSKey() { return "quiz_session_" + EXAM_ID; }
@@ -762,6 +805,7 @@ function showExtraTimeToast(msg) {
 
 // ---- RENDER ----
 function renderQuestion() {
+  ensureImages();
   const q     = questions[current];
   const total = questions.length;
 
@@ -775,7 +819,7 @@ function renderQuestion() {
   // Il testo domanda viene reso come innerHTML
   // cloze e multi-fitb con tabella ({{N}}) gestiscono il testo internamente
   const isTableFitb = q.type === "multi-fitb" && /\{\{\d+\}\}/.test(q.text || "");
-  if (q.type !== "cloze" && !isTableFitb) html += "<div class='q-text'>" + q.text + "</div>";
+  if (q.type !== "cloze" && !isTableFitb) html += "<div class='q-text'>" + renderImages(q.text) + "</div>";
 
   if (q.type === "mc") {
     const order = (shuffleMap && shuffleMap[current] && shuffleMap[current].length) ? shuffleMap[current] : q.options.map((_, i) => i);
@@ -920,7 +964,7 @@ function renderMultiFitbQuestion(q) {
 
   // Modalità tabella: {{N}} nel testo → input inline dentro la tabella HTML
   if (q.text && /\{\{\d+\}\}/.test(q.text)) {
-    let inner = q.text.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+    let inner = renderImages(q.text).replace(/\{\{(\d+)\}\}/g, (_, idx) => {
       const i = parseInt(idx);
       return "<input class='multi-fitb-table-input' type='text' " +
         "value='" + escHtml(String(ans[i] || "")) + "' " +
@@ -988,7 +1032,7 @@ function renderClozeQuestion(q) {
       });
       html += "<select class='cloze-select' onchange='saveClozeBox(" + i + ",parseInt(this.value))'>" + opts + "</select>";
     } else {
-      html += escHtml(part);
+      html += renderImages(escHtml(part));
     }
   });
   html += "</div>";
