@@ -7,7 +7,7 @@
 //   - Chi può accedere: Chiunque
 // ============================================================
 
-const VERSION = "2.25.0"; // aggiornare ad ogni deploy
+const VERSION = "2.25.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -209,7 +209,10 @@ function cacheGetChunked(cache, key) {
   return s;
 }
 
-// Restituisce { id: dataURI | null }. null = file assente, non immagine o troppo grande.
+// Restituisce { id: dataURI | {error, ...} }. Gli errori dicono all'admin cosa correggere:
+// not_found (ID errato o file non accessibile), not_image {mime}, too_large {size, max}.
+// Tipo e dimensione si controllano prima di scaricare, così un file enorme non viene letto.
+// Gli errori non vanno in cache: il file potrebbe essere corretto subito dopo.
 // La cache evita che trenta studenti che iniziano insieme rileggano gli stessi file dal Drive.
 function loadImagesData(ids) {
   const cache = CacheService.getScriptCache();
@@ -217,16 +220,25 @@ function loadImagesData(ids) {
   ids.forEach(id => {
     const cached = cacheGetChunked(cache, "img:" + id);
     if (cached) { out[id] = cached; return; }
+    let file;
+    try { file = DriveApp.getFileById(id); } catch(e) { out[id] = { error: "not_found" }; return; }
     try {
-      const blob = DriveApp.getFileById(id).getBlob();
-      const mime = String(blob.getContentType() || "");
-      const bytes = blob.getBytes();
-      if (mime.indexOf("image/") !== 0 || bytes.length > IMG_MAX_BYTES) { out[id] = null; return; }
-      const uri = "data:" + mime + ";base64," + Utilities.base64Encode(bytes);
+      const mime = String(file.getMimeType() || "");
+      if (mime.indexOf("image/") !== 0) { out[id] = { error: "not_image", mime: mime }; return; }
+      const size = file.getSize();
+      if (size > IMG_MAX_BYTES) { out[id] = { error: "too_large", size: size, max: IMG_MAX_BYTES }; return; }
+      const uri = "data:" + mime + ";base64," + Utilities.base64Encode(file.getBlob().getBytes());
       cachePutChunked(cache, "img:" + id, uri);
       out[id] = uri;
-    } catch(e) { out[id] = null; }
+    } catch(e) { out[id] = { error: "not_found" }; }
   });
+  return out;
+}
+
+// Allo studente basta sapere che l'immagine manca: il dettaglio serve solo all'admin.
+function imagesForStudent(images) {
+  const out = {};
+  Object.keys(images).forEach(id => { out[id] = typeof images[id] === "string" ? images[id] : null; });
   return out;
 }
 
@@ -1472,7 +1484,7 @@ function doPost(e) {
       parseQIds(qidsCell).forEach(qId => {
         if (allQ[qId]) imageIdsInText(allQ[qId].testo).forEach(id => { if (ids.indexOf(id) === -1) ids.push(id); });
       });
-      return corsResponse({ status: "ok", images: loadImagesData(ids) });
+      return corsResponse({ status: "ok", images: imagesForStudent(loadImagesData(ids)) });
     }
 
     if (data.action === "resume") {

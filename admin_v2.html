@@ -791,7 +791,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "1d9abec";
+const BUILD = "36a428a";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -863,7 +863,7 @@ function escHtml(str) {
 // ---- IMMAGINI ----
 // [img:X] nel testo, X = ID Drive o link di condivisione. extractDriveId è duplicata
 // identica nello script e in quiz_v2.html.
-const adminImages = {}; // id → dataURI | null
+const adminImages = {}; // id → dataURI | {error, ...}
 
 function extractDriveId(ref) {
   const s = String(ref || "").trim();
@@ -882,6 +882,17 @@ function imageIdsIn(text) {
   return ids;
 }
 
+function fmtMB(bytes) { return (bytes / 1e6).toFixed(1).replace(".", ",") + " MB"; }
+
+// Descrizione del problema di un'immagine già interrogata, o null se è a posto / non ancora caricata
+function imageProblem(id) {
+  const v = adminImages[id];
+  if (!v || typeof v === "string") return null;
+  if (v.error === "too_large") return `troppo grande: ${fmtMB(v.size)} (massimo ${fmtMB(v.max)})`;
+  if (v.error === "not_image") return `non è un'immagine (${escHtml(v.mime || "tipo sconosciuto")})`;
+  return "file non trovato o non accessibile — controlla l'ID";
+}
+
 function renderImagesAdmin(html) {
   return String(html).replace(/\[img:([^\]\s]+)\]/g, (all, ref) => {
     const id = extractDriveId(ref);
@@ -889,19 +900,59 @@ function renderImagesAdmin(html) {
     const uri = adminImages[id];
     if (typeof uri === "string" && uri.startsWith("data:image/"))
       return `<img src="${uri}" alt="" style="display:block;max-width:100%;height:auto;margin:10px auto;">`;
-    if (uri === null) return `<span style="color:#b00;">[immagine ${escHtml(id)} non disponibile: file assente, non immagine o oltre 1,5 MB]</span>`;
+    const problem = imageProblem(id);
+    if (problem) return `<span style="display:block;color:#b00;margin:8px 0;">⚠ Immagine ${escHtml(id)}: ${problem}</span>`;
     return `<span style="color:#888;">caricamento immagine…</span>`;
   });
 }
 
-// Scarica le immagini non ancora in cache. true se ne ha aggiunte.
+// Domande che uno slot casuale può estrarre: stesso filtro di resolveEsame nello script,
+// bozze escluse.
+function randomSlotPool(item) {
+  return (allQuestions || []).filter(q => {
+    if ((q.stato || "verificato") === "bozza") return false;
+    if (item.categoria  && q.categoria  !== item.categoria)  return false;
+    if (item.sottocateg && q.sottocateg !== item.sottocateg) return false;
+    if (item.tag && !String(q.tags || "").split(",").map(t => t.trim()).includes(item.tag)) return false;
+    if (item.punti !== undefined && item.punti !== null && q.punti !== item.punti) return false;
+    return true;
+  });
+}
+
+// Controlla le immagini di tutte le domande che la traccia può assegnare, slot casuali
+// compresi. Restituisce [{id, problem, qids}] per le immagini con problemi.
+async function checkTracciaImages(items) {
+  const byImg = {};
+  const addQ = q => imageIdsIn(q.testo).forEach(id => (byImg[id] = byImg[id] || []).includes(q.id) || byImg[id].push(q.id));
+  items.forEach(item => {
+    if (item.type === "fixed") { const q = (allQuestions || []).find(x => x.id === item.id); if (q) addQ(q); }
+    else randomSlotPool(item).forEach(addQ);
+  });
+  const ids = Object.keys(byImg);
+  if (!ids.length) return [];
+  await fetchAdminImages(ids);
+  return ids.filter(id => imageProblem(id)).map(id => ({ id, problem: imageProblem(id), qids: byImg[id] }));
+}
+
+function describeImageProblems(problems) {
+  return problems.map(p => `• ${p.qids.join(", ")} — immagine ${p.id}: ${p.problem}`).join("\n");
+}
+
+// Scarica le immagini non ancora caricate, e riprova quelle in errore (il file potrebbe
+// essere stato corretto nel frattempo). true solo se qualcosa è cambiato: chi ri-renderizza
+// in base al risultato non entra così in un ciclo.
 async function fetchAdminImages(ids) {
-  const missing = ids.filter(id => !(id in adminImages));
+  const missing = ids.filter(id => typeof adminImages[id] !== "string");
   if (!missing.length) return false;
   const res = await callScript({ action: "getImagesAdmin", password: adminPassword, ids: missing });
   if (!res || res.status !== "ok") return false;
-  missing.forEach(id => { adminImages[id] = (res.images || {})[id] ?? null; });
-  return true;
+  let changed = false;
+  missing.forEach(id => {
+    const v = (res.images || {})[id] ?? { error: "not_found" };
+    if (JSON.stringify(v) !== JSON.stringify(adminImages[id])) changed = true;
+    adminImages[id] = v;
+  });
+  return changed;
 }
 
 // ---- LOGIN ----
@@ -1913,7 +1964,7 @@ function previewQuestion(id, event) {
 
   document.getElementById("preview-body").innerHTML = renderImagesAdmin(body);
   const imgIds = imageIdsIn(q.testo);
-  if (imgIds.some(id => !(id in adminImages))) {
+  if (imgIds.some(id => typeof adminImages[id] !== "string")) {
     fetchAdminImages(imgIds).then(added => {
       if (added && document.getElementById("preview-overlay").classList.contains("open")
           && document.getElementById("preview-meta").textContent.includes(q.id)) previewQuestion(id);
@@ -2092,7 +2143,7 @@ function cleanItemsForSave(items) {
 async function saveTrackItems() {
   if (!currentTraccia) { alert("Seleziona una traccia prima di salvare."); return; }
   const msg = document.getElementById("save-items-msg");
-  msg.style.color = "#555"; msg.textContent = "Salvataggio…";
+  msg.style.color = "#555"; msg.style.whiteSpace = ""; msg.textContent = "Salvataggio…";
   try {
     const res = await callScript({
       action: "setTrack", password: adminPassword,
@@ -2105,7 +2156,17 @@ async function saveTrackItems() {
     msg.style.color = "#2e7d32"; msg.textContent = "✓ Salvato";
   } catch(e) {
     msg.style.color = "#b00"; msg.textContent = "Errore: " + e.message;
+    return;
   }
+  // Il salvataggio è già riuscito: il controllo immagini avvisa, non blocca
+  try {
+    const problems = await checkTracciaImages(trackItems);
+    if (problems.length) {
+      msg.style.color = "#b00"; msg.style.whiteSpace = "pre-line";
+      msg.textContent = "✓ Salvato, ma " + problems.length + " immagin" + (problems.length > 1 ? "i hanno" : "e ha") +
+        " problemi e non si vedr" + (problems.length > 1 ? "anno" : "à") + " all'esame:\n" + describeImageProblems(problems);
+    }
+  } catch(e) {}
 }
 
 // ---- EXPORT TRACCIA ----
@@ -2126,10 +2187,12 @@ async function exportTraccia() {
   }
 
   // Le immagini finiscono incorporate nei file, così restano leggibili e stampabili offline
-  const imgIds = [...new Set(questions.flatMap(x => imageIdsIn(x.q.testo)))];
-  if (imgIds.length) {
-    try { await fetchAdminImages(imgIds); } catch(e) {}
-  }
+  let problems = [];
+  try { problems = await checkTracciaImages(trackItems.filter(i => i.type === "fixed")); } catch(e) {}
+  if (problems.length && !confirm(
+      problems.length + " immagin" + (problems.length > 1 ? "i hanno" : "e ha") + " problemi e " +
+      (problems.length > 1 ? "mancheranno" : "mancherà") + " nei file esportati:\n\n" +
+      describeImageProblems(problems) + "\n\nEsportare comunque?")) return;
 
   const css = `
     body{font-family:Georgia,serif;max-width:760px;margin:40px auto;padding:0 24px;color:#111;font-size:14px;}
