@@ -156,6 +156,9 @@
   .import-intro { font-size:0.86em; color:#555; line-height:1.6; margin-bottom:12px; }
   .import-file { cursor:pointer; margin-top:0; }
   #import-summary { font-size:0.86em; margin:14px 0 8px; line-height:1.6; }
+  .import-dest { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; margin-top:14px; }
+  .import-dest .be-field { margin-bottom:0; }
+  .import-dest small { grid-column:1 / -1; color:#888; font-size:0.8em; }
   .import-list { border:1px solid #eee; max-height:45vh; overflow-y:auto; margin-bottom:14px; }
   .import-list:empty { display:none; }
   .import-row { display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #f0f0f0; font-size:0.84em; align-items:baseline; }
@@ -773,7 +776,8 @@
         <input type="search" id="banco-q" placeholder="Cerca in testo, opzioni, soluzioni, ID, tag…  (↑ ↓ per scorrere)"
                oninput="renderBanco()" onkeydown="bancoKey(event)" autocomplete="off">
         <select id="banco-tipo" autocomplete="off"  onchange="renderBanco()"><option value="">Tutti i tipi</option></select>
-        <select id="banco-cat" autocomplete="off"   onchange="renderBanco()"><option value="">Tutte le categorie</option></select>
+        <select id="banco-cat" autocomplete="off"   onchange="populateBancoSubcat(); renderBanco()"><option value="">Tutte le categorie</option></select>
+        <select id="banco-subcat" autocomplete="off" onchange="renderBanco()"><option value="">Tutte le sottocategorie</option></select>
         <select id="banco-stato" autocomplete="off" onchange="renderBanco()">
           <option value="">Ogni stato</option>
           <option value="verificato">Verificate</option>
@@ -884,6 +888,14 @@
       con le immagini caricate nel Drive; quelle che non si possono convertire vengono scartate, con il motivo.</p>
     <label class="btn btn-sm btn-outline import-file">Scegli il file XML…
       <input type="file" accept=".xml,text/xml,application/xml" hidden onchange="importMoodleFile(this)"></label>
+    <div id="import-dest" class="import-dest" style="display:none;">
+      <label class="be-field">Categoria di destinazione
+        <input type="text" id="import-cat" list="import-cats" autocomplete="off" oninput="importDestChanged()"></label>
+      <label class="be-field">Sottocategoria
+        <input type="text" id="import-subcat" list="import-subcats" autocomplete="off" oninput="importDestChanged()"></label>
+      <small id="import-dest-note"></small>
+      <datalist id="import-cats"></datalist><datalist id="import-subcats"></datalist>
+    </div>
     <div id="import-summary"></div>
     <div id="import-list" class="import-list"></div>
     <div class="folder-actions">
@@ -965,7 +977,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "97e4801";
+const BUILD = "bcd78cc";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2291,6 +2303,16 @@ function populateBancoFilters() {
   fill("banco-tipo", tipi, t => TIPO_LABEL[t] || t);
   const cats = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
   fill("banco-cat", cats, c => c);
+  populateBancoSubcat();
+}
+
+// Sottocategorie della categoria scelta (di tutte, se nessuna è scelta)
+function populateBancoSubcat() {
+  const el = document.getElementById("banco-subcat"), prev = el.value, cat = document.getElementById("banco-cat").value;
+  const subs = [...new Set(allQuestions.filter(q => !cat || q.categoria === cat).map(q => q.sottocateg).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "it"));
+  el.innerHTML = el.options[0].outerHTML + subs.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join("");
+  el.value = subs.includes(prev) ? prev : "";
 }
 
 // keepSelection: non spostare la selezione anche se i filtri la escludono (dopo un salvataggio)
@@ -2299,6 +2321,7 @@ function renderBanco(keepSelection) {
   const terms = normSearch(document.getElementById("banco-q").value).split(/\s+/).filter(Boolean);
   const tipo  = document.getElementById("banco-tipo").value;
   const cat   = document.getElementById("banco-cat").value;
+  const sub   = document.getElementById("banco-subcat").value;
   const stato = document.getElementById("banco-stato").value;
   const uso   = document.getElementById("banco-uso").value;
   const index = bancoIndex();
@@ -2307,6 +2330,7 @@ function renderBanco(keepSelection) {
   _bancoFiltered = allQuestions.filter(q => {
     if (tipo  && q.tipo !== tipo) return false;
     if (cat   && q.categoria !== cat) return false;
+    if (sub   && q.sottocateg !== sub) return false;
     if (stato && (q.stato || "verificato") !== stato) return false;
     if (uso === "fissa" && !fixed[q.id]) return false;
     if (uso === "mai"   &&  fixed[q.id]) return false;
@@ -2330,7 +2354,7 @@ function renderBanco(keepSelection) {
   } else if (!n) {
     const attivi = [];
     if (terms.length) attivi.push("ricerca «" + document.getElementById("banco-q").value.trim() + "»");
-    [["banco-tipo", "tipo"], ["banco-cat", "categoria"], ["banco-stato", "stato"], ["banco-uso", "uso"]].forEach(([id, nome]) => {
+    [["banco-tipo", "tipo"], ["banco-cat", "categoria"], ["banco-subcat", "sottocategoria"], ["banco-stato", "stato"], ["banco-uso", "uso"]].forEach(([id, nome]) => {
       const el = document.getElementById(id);
       if (el.value) attivi.push(nome + ": " + el.options[el.selectedIndex].text);
     });
@@ -2358,7 +2382,8 @@ function renderBanco(keepSelection) {
 }
 
 function bancoResetFilters() {
-  ["banco-q", "banco-tipo", "banco-cat", "banco-stato", "banco-uso"].forEach(id => document.getElementById(id).value = "");
+  ["banco-q", "banco-tipo", "banco-cat", "banco-subcat", "banco-stato", "banco-uso"].forEach(id => document.getElementById(id).value = "");
+  populateBancoSubcat();
   renderBanco();
 }
 
@@ -3066,10 +3091,19 @@ async function importMoodleFile(input) {
   });
   const buone = domande.filter(d => !d.scartata);
   moodleImport = { domande };
-  const cartelle = [...new Set(buone.map(d => [d.domanda.categoria, d.domanda.sottocateg].filter(Boolean).join(" › ")))];
-  sum.innerHTML = `<strong>${buone.length}</strong> ${buone.length === 1 ? "domanda da importare" : "domande da importare"}, ` +
-    `${domande.length - buone.length} scartate, su ${domande.length} nel file.` +
-    (buone.some(d => d.immagini.length) ? `<br>Immagini in: ${cartelle.map(c => "QuizForge › " + escHtml(c || "(senza categoria)")).join(", ")}` : "");
+  // Destinazione precompilata con la categoria del file, se è una sola; con più categorie i campi
+  // restano vuoti e ogni domanda tiene la sua
+  const catFile = [...new Set(buone.map(d => d.domanda.categoria + "\n" + d.domanda.sottocateg))];
+  const [c0, s0] = catFile.length === 1 ? catFile[0].split("\n") : ["", ""];
+  document.getElementById("import-cat").value = c0;
+  document.getElementById("import-subcat").value = s0;
+  document.getElementById("import-dest-note").textContent = catFile.length > 1
+    ? "Il file ha più categorie (" + catFile.map(x => x.replace("\n", " › ")).join("; ") + "): lasciando i campi vuoti ognuna mantiene la sua, compilandoli valgono per tutte."
+    : catFile.length === 1 ? "Precompilate con la categoria del file: modificale per importare altrove." : "";
+  document.getElementById("import-cats").innerHTML = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort()
+    .map(v => `<option value="${escAttr(v)}">`).join("");
+  document.getElementById("import-dest").style.display = buone.length ? "" : "none";
+  importDestChanged();
   list.innerHTML = domande.map(d => `<div class="import-row${d.scartata ? " scartata" : ""}">
       <span class="nome">${escHtml(d.nome)}${d.scartata ? `<span class="motivo">${escHtml(d.scartata)}</span>` :
         (d.note.concat(d.avvisi).length ? `<span class="motivo" style="color:#9a6b00;">${escHtml(d.note.concat(d.avvisi).join(" · "))}</span>` : "")}</span>
@@ -3078,14 +3112,36 @@ async function importMoodleFile(input) {
   document.getElementById("import-go").disabled = !buone.length;
 }
 
+// Categoria e sottocategoria di destinazione: se almeno un campo è compilato valgono per tutte le
+// domande (anche una sottocategoria lasciata vuota); se sono entrambi vuoti ognuna tiene la sua.
+function importDest(d) {
+  const cat = document.getElementById("import-cat").value.trim(), sub = document.getElementById("import-subcat").value.trim();
+  return cat || sub ? { categoria: cat, sottocateg: sub } : { categoria: d.domanda.categoria, sottocateg: d.domanda.sottocateg };
+}
+
+function importDestChanged() {
+  if (!moodleImport) return;
+  const buone = moodleImport.domande.filter(d => !d.scartata && !d.importata);
+  const cartelle = [...new Set(buone.filter(d => d.immagini.length).map(d => { const x = importDest(d); return [x.categoria, x.sottocateg].filter(Boolean).join(" › "); }))];
+  const cat = document.getElementById("import-cat").value.trim();
+  document.getElementById("import-summary").innerHTML =
+    `<strong>${buone.length}</strong> ${buone.length === 1 ? "domanda da importare" : "domande da importare"}, ` +
+    `${moodleImport.domande.filter(d => d.scartata).length} scartate, su ${moodleImport.domande.length} nel file.` +
+    (!cat && document.getElementById("import-subcat").value.trim() ? `<br><span style="color:#b00;">Manca la categoria: la sottocategoria da sola non basta.</span>` : "") +
+    (cartelle.length ? `<br>Immagini in: ${cartelle.map(c => "QuizForge › " + escHtml(c || "(senza categoria)")).join(", ")}` : "");
+  // subcategorie proposte: quelle già usate nella categoria scritta
+  document.getElementById("import-subcats").innerHTML = [...new Set(allQuestions.filter(q => !cat || q.categoria === cat)
+    .map(q => q.sottocateg).filter(Boolean))].sort().map(v => `<option value="${escAttr(v)}">`).join("");
+}
+
 // Cartella QuizForge › parti…, creata se manca (createFolder riusa quelle esistenti)
 async function cartellaImport(parti) {
   const radice = await callScript({ action: "listFolders", password: adminPassword, folderId: "" });
-  if (radice.status !== "ok") throw new Error(radice.message + versioneScriptHint());
+  if (radice.status !== "ok") throw new Error(radice.message);
   let id = radice.folder.id;
   for (const nome of parti.filter(Boolean)) {
     const r = await callScript({ action: "createFolder", password: adminPassword, parentId: id, name: nome });
-    if (r.status !== "ok") throw new Error(r.message + versioneScriptHint());
+    if (r.status !== "ok") throw new Error(r.message);
     id = r.folder.id;
   }
   return id;
@@ -3094,12 +3150,17 @@ async function cartellaImport(parti) {
 async function importMoodleRun() {
   if (!moodleImport) return;
   const buone = moodleImport.domande.filter(d => !d.scartata && !d.importata);
+  buone.forEach(d => { delete d.errore; });
   if (!buone.length) return;
   const msg = document.getElementById("import-msg"), go = document.getElementById("import-go");
+  if (!document.getElementById("import-cat").value.trim() && document.getElementById("import-subcat").value.trim()) {
+    msg.style.color = "#b00"; msg.textContent = "Indica anche la categoria."; return;
+  }
   go.disabled = true; moodleImport.inCorso = true;
   const cartelle = {};
-  let fatte = 0, errori = 0;
+  let fatte = 0, errori = 0, bloccante = null;
   for (const d of buone) {
+    Object.assign(d.domanda, importDest(d));
     msg.style.color = "#555"; msg.textContent = `Importo ${fatte + errori + 1} di ${buone.length}: ${d.nome}…`;
     try {
       let testo = d.domanda.testo;
@@ -3127,8 +3188,10 @@ async function importMoodleRun() {
       d.importata = res.question.id;
       fatte++;
     } catch(e) {
-      d.errore = e.message + versioneScriptHint();
+      d.errore = e.message;
       errori++;
+      // Script senza le azioni necessarie: inutile riprovare con le altre domande
+      if (/non disponibile nello script/.test(e.message)) { bloccante = e.message; break; }
     }
   }
   moodleImport.inCorso = false;
@@ -3136,10 +3199,21 @@ async function importMoodleRun() {
   populateBancoFilters();
   renderBanco();
   renderQBrowser();
-  msg.style.color = errori ? "#b00" : "#2e7d32";
-  msg.textContent = `✓ Importate ${fatte} domande, in bozza.` + (errori ? ` ${errori} non riuscite: ` +
-    buone.filter(d => d.errore).map(d => d.nome + " (" + d.errore + ")").join("; ") : "");
-  go.disabled = !buone.some(d => d.errore);   // si può riprovare solo quelle andate storte
+  const hint = errori ? versioneScriptHint() : "";
+  if (bloccante) {
+    msg.style.color = "#b00";
+    msg.textContent = (fatte ? `Importate ${fatte} domande, poi l'importazione si è fermata: ` : "Nessuna domanda importata: ") + bloccante + hint;
+  } else if (!fatte) {
+    const motivi = [...new Set(buone.filter(d => d.errore).map(d => d.errore))];
+    msg.style.color = "#b00";
+    msg.textContent = "Nessuna domanda importata: " + (motivi.length === 1 ? motivi[0]
+      : buone.filter(d => d.errore).map(d => d.nome + " (" + d.errore + ")").join("; ")) + hint;
+  } else {
+    msg.style.color = errori ? "#9a6b00" : "#2e7d32";
+    msg.textContent = `✓ Importate ${fatte} ${fatte === 1 ? "domanda" : "domande"}, in bozza.` + (errori ? ` Non riuscite: ` +
+      buone.filter(d => d.errore).map(d => d.nome + " (" + d.errore + ")").join("; ") + "." + hint : "");
+  }
+  go.disabled = !buone.some(d => d.errore || !d.importata);   // si può riprovare ciò che non è andato
 }
 
 // ---- CARTELLA DI DESTINAZIONE DELLE IMMAGINI ----
