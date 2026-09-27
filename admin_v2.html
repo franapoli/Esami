@@ -721,14 +721,14 @@
       <div class="card banco-toolbar">
         <input type="search" id="banco-q" placeholder="Cerca in testo, opzioni, soluzioni, ID, tag…  (↑ ↓ per scorrere)"
                oninput="renderBanco()" onkeydown="bancoKey(event)" autocomplete="off">
-        <select id="banco-tipo"  onchange="renderBanco()"><option value="">Tutti i tipi</option></select>
-        <select id="banco-cat"   onchange="renderBanco()"><option value="">Tutte le categorie</option></select>
-        <select id="banco-stato" onchange="renderBanco()">
+        <select id="banco-tipo" autocomplete="off"  onchange="renderBanco()"><option value="">Tutti i tipi</option></select>
+        <select id="banco-cat" autocomplete="off"   onchange="renderBanco()"><option value="">Tutte le categorie</option></select>
+        <select id="banco-stato" autocomplete="off" onchange="renderBanco()">
           <option value="">Ogni stato</option>
           <option value="verificato">Verificate</option>
           <option value="bozza">Bozze</option>
         </select>
-        <select id="banco-uso" onchange="renderBanco()">
+        <select id="banco-uso" autocomplete="off" onchange="renderBanco()">
           <option value="">Uso: tutte</option>
           <option value="fissa">Fisse in qualche traccia</option>
           <option value="mai">Mai fisse in una traccia</option>
@@ -879,7 +879,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "3a106c4";
+const BUILD = "95f7735";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2199,8 +2199,18 @@ function renderBanco(keepSelection) {
   }
 
   const list = document.getElementById("banco-list");
-  if (!n) {
-    list.innerHTML = '<div class="banco-empty">Nessuna domanda corrisponde.</div>';
+  if (!allQuestions.length) {
+    list.innerHTML = '<div class="banco-empty">Il foglio domande non contiene domande.</div>';
+  } else if (!n) {
+    const attivi = [];
+    if (terms.length) attivi.push("ricerca «" + document.getElementById("banco-q").value.trim() + "»");
+    [["banco-tipo", "tipo"], ["banco-cat", "categoria"], ["banco-stato", "stato"], ["banco-uso", "uso"]].forEach(([id, nome]) => {
+      const el = document.getElementById(id);
+      if (el.value) attivi.push(nome + ": " + el.options[el.selectedIndex].text);
+    });
+    list.innerHTML = `<div class="banco-empty">Nessuna delle ${allQuestions.length} domande corrisponde a ` +
+      `${escHtml(attivi.join(", "))}.<br><button class="btn btn-sm btn-outline" style="margin-top:10px;" ` +
+      `onclick="bancoResetFilters()">Azzera ricerca e filtri</button></div>`;
   } else {
     list.innerHTML = _bancoFiltered.slice(0, BANCO_MAX_ROWS).map(q => {
       const txt = plainText(q.testo);
@@ -2219,6 +2229,11 @@ function renderBanco(keepSelection) {
     }).join("");
   }
   if (!bancoEdit) renderBancoDetail();
+}
+
+function bancoResetFilters() {
+  ["banco-q", "banco-tipo", "banco-cat", "banco-stato", "banco-uso"].forEach(id => document.getElementById(id).value = "");
+  renderBanco();
 }
 
 function selectBanco(id) {
