@@ -34,9 +34,11 @@
   body.preview #quiz-wrapper { display: block; max-width: none; margin: 0; padding: 0; }
   body.preview #sidebar, body.preview .nav, body.preview #progress-label, body.preview #progress-bar-wrap { display: none; }
   body.preview #quiz-main { border: none; padding: 4px 2px 8px; }
-  #preview-bar { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
-  #preview-bar .btn { margin-top: 0; }
-  #preview-result { font-size: 0.95em; }
+  #preview-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+  #preview-bar .btn { margin-top: 0; white-space: nowrap; }
+  #preview-result { font-size: 0.95em; flex: 1 1 100%; }
+  #preview-result:empty { display: none; }
+  .preview-warn { margin-top: 14px; padding: 10px 12px; background: #fdecea; color: #b00; font-size: 0.88em; line-height: 1.6; }
 
   /* SIDEBAR */
   #sidebar { width: 210px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; padding: 20px 16px; position: sticky; top: 24px; }
@@ -324,15 +326,20 @@ async function initPreview() {
   const bar = document.createElement("div");
   bar.id = "preview-bar";
   bar.innerHTML = "<button class='btn' onclick='previewCheck()'>Verifica</button>" +
+                  "<button class='btn btn-outline' onclick='previewSolution()'>Mostra soluzione</button>" +
                   "<button class='btn btn-outline' onclick='previewReset()'>Ricomincia</button>" +
                   "<span id='preview-result'></span>";
   document.getElementById("quiz-main").appendChild(bar);
+  const lint = document.createElement("div");
+  lint.id = "preview-lint";
+  document.getElementById("quiz-main").appendChild(lint);
 
   let error = null;
   try {
     const res = await fetch("quiz_apps_script_v2.js", { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    previewBackend = new Function(await res.text() + "\n;return { buildQuestionObj, scoreAnswer, VERSION };")();
+    previewBackend = new Function(await res.text() +
+      "\n;return { buildQuestionObj, scoreAnswer, validateQuestion, lintQuestion, normalizeIncomingQuestion, VERSION };")();
   } catch(e) {
     error = "Impossibile caricare lo script di backend (" + e.message + "). Deve restare caricabile nel browser: " +
             "niente chiamate ad API Google fuori dalle funzioni.";
@@ -364,21 +371,62 @@ function previewReset() {
   shuffleMap = null;
   matchSelected = null;
   document.getElementById("preview-result").innerHTML = "";
+  // Le stesse regole con cui il server valida i salvataggi dall'editor. Servono anche per
+  // i casi che "Mostra soluzione" non può vedere: una lettera corretta vuota o non valida
+  // diventa "A" in silenzio (letterToIndex), e soluzione e punteggio restano coerenti.
+  const norm = previewBackend.normalizeIncomingQuestion(previewRepoQ);
+  const errs = previewBackend.validateQuestion(norm).concat(previewBackend.lintQuestion(norm));
+  document.getElementById("preview-lint").innerHTML = errs.length
+    ? "<div class='preview-warn'><strong>Domanda configurata male:</strong><br>" + errs.map(escHtml).join("<br>") + "</div>" : "";
   renderQuestion();
 }
 
+const fmtPts = n => String(Math.round(n * 100) / 100).replace(".", ",");
+
+// Punteggio della risposta corrente, calcolato da scoreAnswer del server
+function previewScore() {
+  const pts = previewBackend.scoreAnswer(previewRepoQ, serializeAnswer(questions[0], answers[0]));
+  return { pts, max: Number(previewRepoQ.punti) || 1 };
+}
+
 function previewCheck() {
-  const q = questions[0];
   const out = document.getElementById("preview-result");
-  if (q.type === "free") {
+  if (questions[0].type === "free") {
     out.innerHTML = "<span style='color:#777'>Risposta aperta: nessun punteggio automatico.</span>";
     return;
   }
-  const pts = previewBackend.scoreAnswer(previewRepoQ, serializeAnswer(q, answers[0]));
-  const max = Number(previewRepoQ.punti) || 1;
-  const fmt = n => String(Math.round(n * 100) / 100).replace(".", ",");
+  const { pts, max } = previewScore();
   const color = pts >= max ? "#2e7d32" : pts > 0 ? "#9a6b00" : "#b00";
-  out.innerHTML = "<strong style='color:" + color + "'>" + fmt(pts) + " / " + fmt(max) + " punti</strong>";
+  out.innerHTML = "<strong style='color:" + color + "'>" + fmtPts(pts) + " / " + fmtPts(max) + " punti</strong>";
+}
+
+// La soluzione come l'esercitazione la rivela dopo la consegna (buildQuestionObj con le
+// risposte corrette), tradotta nella forma delle risposte dello studente
+function solutionAnswer(key) {
+  if (key.type === "mc")         return typeof key.correct === "number" ? key.correct : null;
+  if (key.type === "multi-mc")   return Array.isArray(key.correct) ? key.correct.slice() : [];
+  if (key.type === "fitb")       return String(key.correct ?? "");
+  if (key.type === "match")      return (key.correct || []).map((_, i) => i); // correct[i] è right[i]
+  if (key.type === "multi-fitb") return (key.correct || []).map(v => String(v ?? ""));
+  if (key.type === "cloze")      return (key.correct || []).slice();
+  return null;
+}
+
+// Inserisce la soluzione e la corregge: se non vale il pieno, la domanda è configurata male
+function previewSolution() {
+  const out = document.getElementById("preview-result");
+  if (questions[0].type === "free") {
+    out.innerHTML = "<span style='color:#777'>Risposta aperta: non c'è una soluzione da inserire.</span>";
+    return;
+  }
+  matchSelected = null;
+  answers[0] = solutionAnswer(previewBackend.buildQuestionObj(previewRepoQ, 1, true));
+  renderQuestion();
+  const { pts, max } = previewScore();
+  out.innerHTML = pts >= max
+    ? "<strong style='color:#2e7d32'>Soluzione: " + fmtPts(pts) + " / " + fmtPts(max) + " punti</strong>"
+    : "<strong style='color:#b00'>La soluzione registrata vale solo " + fmtPts(pts) + " / " + fmtPts(max) +
+      " punti: la domanda è configurata male.</strong>";
 }
 
 function getLSKey() { return "quiz_session_" + EXAM_ID; }

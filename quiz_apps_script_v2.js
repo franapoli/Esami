@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "2.26.0"; // aggiornare ad ogni deploy
+const VERSION = "2.26.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -381,6 +381,65 @@ function validateQuestion(q) {
   return err;
 }
 
+// Problemi nel contenuto di match, multi-fitb e cloze. Avvisi, non blocchi: validateQuestion
+// impedisce i salvataggi, e una domanda rotta deve restare modificabile almeno nei metadati.
+// Li mostra la prova dell'admin; serviranno anche all'editor dedicato di questi tipi.
+// Tutti casi che "Mostra soluzione" non può scoprire, perché soluzione e punteggio restano
+// coerenti: per esempio una casella senza soluzione dà il punto a chi la lascia vuota.
+function lintQuestion(q) {
+  const warn = [];
+  const markers = [];
+  String(q.testo || "").replace(/\{\{(\d+)\}\}/g, (_, n) => { markers.push(parseInt(n, 10)); return ""; });
+  const checkMarkers = (n, cosa) => {
+    const fuori = markers.filter(m => m >= n);
+    if (fuori.length) warn.push("Il testo usa {{" + fuori.join("}}, {{") + "}} ma ci sono solo " + n + " " + cosa + ".");
+    const mancanti = [];
+    for (let i = 0; i < n; i++) if (markers.indexOf(i) === -1) mancanti.push(i);
+    if (mancanti.length) warn.push("Nel testo manca {{" + mancanti.join("}}, {{") + "}}.");
+  };
+  let d = {};
+  if (q.tipo === "multi-fitb" || q.tipo === "cloze") {
+    try { d = JSON.parse(q.data || "{}") || {}; } catch(e) { warn.push("Il campo dati (colonna M) non è JSON valido."); return warn; }
+  }
+  if (q.tipo === "multi-fitb") {
+    const boxes = Array.isArray(d.boxes) ? d.boxes : [];
+    if (!boxes.length) warn.push("Nessuna casella definita.");
+    boxes.forEach((b, i) => {
+      if (b.correct === undefined || b.correct === null || String(b.correct).trim() === "") {
+        warn.push("La casella " + i + " non ha una soluzione: prenderebbe il punto chi la lascia vuota.");
+      }
+    });
+    if (boxes.length && boxes.every(b => !(Number(b.pts) > 0))) warn.push("Tutte le caselle valgono zero punti: la domanda darebbe sempre 0.");
+    if (markers.length) checkMarkers(boxes.length, "caselle");
+  }
+  if (q.tipo === "cloze") {
+    const dds = Array.isArray(d.dropdowns) ? d.dropdowns : [];
+    if (!dds.length) warn.push("Nessun menu a tendina definito.");
+    dds.forEach((dd, i) => {
+      const opts = Array.isArray(dd.options) ? dd.options : [];
+      const c = dd.correct === undefined || dd.correct === null ? 0 : dd.correct;
+      if (opts.length < 2) warn.push("Il menu " + i + " ha meno di due opzioni.");
+      if (!Number.isInteger(c) || c < 0 || c >= opts.length) {
+        warn.push("Il menu " + i + " indica come corretta l'opzione " + c + ", ma le opzioni vanno da 0 a " + (opts.length - 1) + ".");
+      }
+    });
+    checkMarkers(dds.length, "menu");
+  }
+  if (q.tipo === "match") {
+    const left = Array.isArray(q.options) ? q.options : [];
+    let right = null;
+    try { right = JSON.parse(q.corretta || ""); } catch(e) {}
+    if (!Array.isArray(right)) warn.push("La colonna destra (colonna J) non è un array JSON.");
+    else {
+      if (left.length < 2) warn.push("Servono almeno due elementi a sinistra.");
+      if (right.length !== left.length) warn.push("Ci sono " + left.length + " elementi a sinistra e " + right.length + " a destra.");
+      const doppi = right.filter((r, i) => right.indexOf(r) !== i);
+      if (doppi.length) warn.push("Elementi ripetuti a destra (" + doppi.join(", ") + "): più abbinamenti risultano corretti.");
+    }
+  }
+  return warn;
+}
+
 // Sheets interpreta ciò che riceve: "1/2" diventa una data, "0012" un numero, e un testo che
 // inizia con = + - @ una formula. Le colonne di testo vanno in formato testo, e l'apostrofo
 // iniziale (che Sheets non memorizza nel valore) neutralizza le formule.
@@ -483,7 +542,7 @@ function buildQuestionObj(q, pos, withCorrect) {
       obj.boxes = (d.boxes || []).map(b => withCorrect ? b : { label: b.label, cols: b.cols, pts: b.pts });
       obj.cols  = d.cols || 1;
     } catch(e) { obj.boxes = []; obj.cols = 1; }
-    if (withCorrect) obj.correct = obj.boxes.map(b => String(b.correct || "").trim());
+    if (withCorrect) obj.correct = obj.boxes.map(b => String(b.correct ?? "").trim());
   } else if (q.tipo === "cloze") {
     try {
       const d = JSON.parse(q.data || "{}");
