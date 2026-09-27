@@ -200,6 +200,8 @@
   .be-code { font-family:monospace !important; font-size:0.86em !important; white-space:pre; overflow-x:auto; }
   .be-json-actions { display:flex; gap:8px; margin:-6px 0 10px; }
   .be-example { font-size:0.82em; color:#555; margin:0 0 12px; }
+  .be-avanzate { margin:0 0 12px; }
+  .be-avanzate > summary { cursor:pointer; font-size:0.82em; color:#777; margin-bottom:8px; }
   .be-example summary { cursor:pointer; color:#777; }
   .be-example pre { background:#f6f6f2; padding:10px 12px; overflow-x:auto; font-size:0.95em; margin:8px 0; }
   .be-example table { border-collapse:collapse; }
@@ -879,7 +881,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "9074afe";
+const BUILD = "fc0ec8b";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -976,6 +978,32 @@ function canonicalMultiFitbAdmin(q) {
     }
   }
   return q;
+}
+
+// Copia di boxWeight dello script: senza "pts" la casella pesa 1
+function boxWeightAdmin(b) {
+  if (!b || b.pts === undefined || b.pts === null || b.pts === "") return 1;
+  const n = Number(b.pts);
+  return isFinite(n) && n > 0 ? n : 0;
+}
+
+// Testo di una multi-fitb riscritto con le risposte tra doppie quadre, o null se non si può
+// senza cambiare nulla: caselle tutte in linea e nello stesso ordine (le risposte consegnate
+// sono salvate per posizione, riordinarle scombinerebbe i risultati passati), pesi uguali,
+// risposte senza [[ o ]]. Etichette e colonne si perdono, ma in linea non vengono mostrate.
+function multiFitbInlineText(q) {
+  const c = canonicalMultiFitbAdmin(q);
+  let d;
+  try { d = JSON.parse(c.data || "{}") || {}; } catch(e) { return null; }
+  const boxes = Array.isArray(d.boxes) ? d.boxes : [];
+  const markers = [];
+  String(c.testo || "").replace(/\{\{(\d+)\}\}/g, (_, n) => { markers.push(parseInt(n, 10)); return ""; });
+  if (!boxes.length || markers.length !== boxes.length || markers.some((m, i) => m !== i)) return null;
+  const w = boxes.map(boxWeightAdmin);
+  if (!w[0] || w.some(x => x !== w[0])) return null;
+  const ans = boxes.map(b => String(b.correct ?? ""));
+  if (ans.some(a => /\[\[|\]\]/.test(a))) return null;
+  return mapTextSegments(c.testo, seg => seg.replace(/\{\{(\d+)\}\}/g, (_, n) => "[[" + ans[parseInt(n, 10)] + "]]"));
 }
 
 // ---- IMMAGINI ----
@@ -2468,16 +2496,18 @@ function questionToDraft(q) {
   let right = null;
   try { right = JSON.parse(q.corretta || ""); } catch(e) {}
   const isMc = q.tipo === "mc" || q.tipo === "multi-mc";
+  // Una multi-fitb esprimibile con le risposte nel testo si apre già così: una sola sintassi da leggere
+  const inline = q.tipo === "multi-fitb" ? multiFitbInlineText(q) : null;
   // Un campo per tipo, così passare da un tipo all'altro e tornare indietro non perde niente
   return {
     corso: q.corso || "", categoria: q.categoria || "", sottocateg: q.sottocateg || "", tags: q.tags || "",
-    stato: q.stato || "verificato", tipo: q.tipo, testo: q.testo || "", punti: String(q.punti ?? ""),
+    stato: q.stato || "verificato", tipo: q.tipo, testo: inline ?? (q.testo || ""), punti: String(q.punti ?? ""),
     options: isMc && opts.length ? opts : ["", ""], correct: isMc ? correct : [],
     corretta: q.tipo === "fitb" ? (q.corretta || "") : "",
     placeholder: q.placeholder || "",
     matchLeft:  q.tipo === "match" ? opts.join("\n") : "",
     matchRight: q.tipo === "match" ? (Array.isArray(right) ? right.map(String).join("\n") : String(q.corretta || "")) : "",
-    dataFitb:   q.tipo === "multi-fitb" ? pretty(q.data) : "",
+    dataFitb:   q.tipo === "multi-fitb" && inline === null ? pretty(q.data) : "",
     dataCloze:  q.tipo === "cloze" ? pretty(q.data) : ""
   };
 }
@@ -2662,7 +2692,6 @@ function renderBancoEditTipo() {
   const d = bancoEdit.draft, box = document.getElementById("be-tipo-fields");
   const hint = {
     fitb: "Il primo ___ (almeno tre trattini bassi) diventa la casella dentro la frase; senza, la casella va sotto il testo.",
-    "multi-fitb": "Scrivi la risposta di ogni casella tra doppie quadre: l'algoritmo di [[Smith-Waterman]] è locale.",
     cloze: "Scrivi {{0}}, {{1}}, … dove vanno i menu a tendina."
   }[d.tipo];
   document.getElementById("be-testo-hint").innerHTML =
@@ -2696,18 +2725,23 @@ function renderBancoEditTipo() {
   } else if (d.tipo === "multi-fitb" || d.tipo === "cloze") {
     const campo = BE_ESEMPI[d.tipo].campo;
     const fitb = d.tipo === "multi-fitb";
-    box.innerHTML = (fitb ? `<div class="be-note">
-        <strong>Modo semplice:</strong> scrivi le risposte nel testo tra doppie quadre, e ognuna diventa una casella al suo posto:<br>
-        <code>Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale.</code><br>
-        Le caselle valgono tutte uguale, e il campo qui sotto non serve. Usalo solo per pesi diversi, etichette o la griglia.
-        <div id="be-fitb-mode" style="margin-top:6px;"></div></div>` : "") +
-      `<label class="be-field">${d.tipo === "cloze" ? "Menu a tendina" : "Caselle (avanzato)"} <small>JSON, come nella colonna M del foglio</small>
+    const editor = `<label class="be-field">${fitb ? "Caselle" : "Menu a tendina"} <small>JSON, come nella colonna M del foglio</small>
         <textarea rows="10" class="be-code" id="be-json" oninput="bancoEditSet('${campo}', this.value)">${escHtml(d[campo])}</textarea></label>
       <div class="be-json-actions">
         <button class="be-mini" onclick="bancoEditFormat()">Formatta</button>
         <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
       </div>
       ${beEsempioHtml(d.tipo)}`;
+    box.innerHTML = fitb
+      ? `<div class="be-note">Scrivi ogni risposta nel testo tra doppie quadre: diventa una casella al suo posto.<br>
+           <code>Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale.</code><br>
+           Funziona anche nelle celle di una tabella. Le caselle valgono tutte uguale.
+           <div id="be-fitb-mode" style="margin-top:6px;"></div></div>
+         <details class="be-avanzate" ${d.dataFitb.trim() && !/\[\[/.test(d.testo) ? "open" : ""}>
+           <summary>Avanzato: caselle in JSON, per pesi diversi, etichette o griglia sotto il testo</summary>
+           ${editor}
+         </details>`
+      : editor;
   } else {
     box.innerHTML =
       (d.tipo === "fitb" ? `<label class="be-field">Risposta corretta
@@ -2790,8 +2824,8 @@ function bancoEditRefresh() {
   const modo = document.getElementById("be-fitb-mode");
   if (modo) {
     const n = (q.testo.match(/\[\[[^\]]*\]\]/g) || []).length;
-    modo.innerHTML = n ? `<strong style="color:#2e7d32;">In uso: ${n} ${n === 1 ? "casella scritta" : "caselle scritte"} nel testo. ` +
-                         `Il campo JSON viene ignorato.</strong>` : "";
+    modo.innerHTML = n ? `<strong style="color:#2e7d32;">${n} ${n === 1 ? "casella" : "caselle"} nel testo.</strong>` +
+                         (bancoEdit.draft.dataFitb.trim() ? " Il JSON avanzato viene ignorato." : "") : "";
   }
   // Gli avvisi hanno senso solo su una domanda leggibile: con errori di sintassi ripeterebbero lo stesso problema
   const warns = errs.length ? [] : lintDraft(q);
