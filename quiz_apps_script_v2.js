@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "2.26.1"; // aggiornare ad ogni deploy
+const VERSION = "2.27.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -362,7 +362,8 @@ function normalizeIncomingQuestion(d) {
 }
 
 // Stesse regole di validateQuestionAdmin in admin_v2.html (lì servono per gli errori in diretta).
-// match, multi-fitb e cloze: per ora solo i campi comuni, il contenuto lo modificherà l'editor dedicato.
+// Blocca solo ciò che rende la domanda illeggibile; i problemi di contenuto di match,
+// multi-fitb e cloze sono avvisi di lintQuestion.
 function validateQuestion(q) {
   const err = [];
   if (TIPI_DOMANDA.indexOf(q.tipo) === -1) err.push("Tipo non valido: " + q.tipo);
@@ -378,6 +379,17 @@ function validateQuestion(q) {
     else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
   }
   if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
+  if (q.tipo === "multi-fitb" || q.tipo === "cloze") {
+    let d = null;
+    if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
+    else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
+    if (d !== null && (typeof d !== "object" || Array.isArray(d))) err.push("Il campo dati deve essere un oggetto JSON { … }.");
+  }
+  if (q.tipo === "match") {
+    let r = null;
+    try { r = JSON.parse(q.corretta || ""); } catch(e) {}
+    if (!Array.isArray(r)) err.push("La colonna destra del match deve essere un array JSON.");
+  }
   return err;
 }
 
@@ -409,7 +421,7 @@ function lintQuestion(q) {
         warn.push("La casella " + i + " non ha una soluzione: prenderebbe il punto chi la lascia vuota.");
       }
     });
-    if (boxes.length && boxes.every(b => !(Number(b.pts) > 0))) warn.push("Tutte le caselle valgono zero punti: la domanda darebbe sempre 0.");
+    if (boxes.length && boxes.every(b => boxWeight(b) === 0)) warn.push("Tutte le caselle hanno peso zero: la domanda darebbe sempre 0.");
     if (markers.length) checkMarkers(boxes.length, "caselle");
   }
   if (q.tipo === "cloze") {
@@ -516,6 +528,15 @@ function readEsame(examId) {
 // Costruisce l'oggetto domanda pronto per il client.
 // withCorrect=false (default): omette le risposte corrette — usato per getTrack (studenti).
 // withCorrect=true: include le risposte corrette — usato solo internamente per scoring o admin.
+// Peso relativo di una casella multi-fitb. Il punteggio della domanda è Q_PUNTI, ripartito
+// fra le caselle in proporzione ai pesi. Senza "pts" la casella pesa 1: prima pesava 0, e una
+// domanda senza pesi dava sempre 0 punti anche con tutte le risposte giuste.
+function boxWeight(b) {
+  if (!b || b.pts === undefined || b.pts === null || b.pts === "") return 1;
+  const n = Number(b.pts);
+  return isFinite(n) && n > 0 ? n : 0;
+}
+
 function buildQuestionObj(q, pos, withCorrect) {
   const obj = {
     id:   q.id,
@@ -547,7 +568,8 @@ function buildQuestionObj(q, pos, withCorrect) {
     try {
       const d = JSON.parse(q.data || "{}");
       // Invia boxes senza il campo "correct" interno se non autorizzato
-      obj.boxes = (d.boxes || []).map(b => withCorrect ? b : { label: b.label, cols: b.cols, pts: b.pts });
+      obj.boxes = (d.boxes || []).map(b => withCorrect ? Object.assign({}, b, { pts: boxWeight(b) })
+                                                       : { label: b.label, cols: b.cols, pts: boxWeight(b) });
       obj.cols  = d.cols || 1;
     } catch(e) { obj.boxes = []; obj.cols = 1; }
     if (withCorrect) obj.correct = obj.boxes.map(b => String(b.correct ?? "").trim());
@@ -618,8 +640,8 @@ function scoreAnswer(q, ans) {
       const given = typeof ans === "string" ? JSON.parse(ans) : (ans || []);
       let earned = 0, total = 0;
       boxes.forEach((b, i) => {
-        total += (b.pts || 0);
-        if (normalizeText(given[i]) === normalizeText(String(b.correct ?? ""))) earned += (b.pts || 0);
+        total += boxWeight(b);
+        if (normalizeText(given[i]) === normalizeText(String(b.correct ?? ""))) earned += boxWeight(b);
       });
       if (total === 0) return 0;
       return Math.round((earned / total) * q.punti * 100) / 100;

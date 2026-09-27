@@ -195,6 +195,15 @@
   .be-mini { background:none; border:1px solid #ddd; cursor:pointer; padding:2px 7px; font-size:0.72em; color:#666; }
   .be-mini:disabled { opacity:.3; cursor:default; }
   .be-errors { color:#b00; font-size:0.84em; margin:10px 0 0; line-height:1.6; }
+  .be-note.be-avviso { background:#fff8e1; color:#7b5e00; margin:10px 0 0; }
+  .be-two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .be-code { font-family:monospace !important; font-size:0.86em !important; white-space:pre; overflow-x:auto; }
+  .be-json-actions { display:flex; gap:8px; margin:-6px 0 10px; }
+  .be-example { font-size:0.82em; color:#555; margin:0 0 12px; }
+  .be-example summary { cursor:pointer; color:#777; }
+  .be-example pre { background:#f6f6f2; padding:10px 12px; overflow-x:auto; font-size:0.95em; margin:8px 0; }
+  .be-example table { border-collapse:collapse; }
+  .be-example td { padding:3px 10px 3px 0; vertical-align:top; }
   .be-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; }
   .be-actions .btn { margin-top:0; }
   .be-actions .btn:disabled { opacity:.4; cursor:not-allowed; }
@@ -202,7 +211,7 @@
   .be-preview-title { margin-top:22px; padding-top:12px; border-top:1px solid #eee; font-size:0.74em; color:#999;
                       text-transform:uppercase; letter-spacing:.06em; }
   .be-preview { margin-top:10px; }
-  @media (max-width: 900px) { .be-grid { grid-template-columns:1fr; } }
+  @media (max-width: 900px) { .be-grid, .be-two { grid-template-columns:1fr; } }
   .q-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
             border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; }
   .q-row:hover { background: #f8f8f4; }
@@ -870,7 +879,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "252d805";
+const BUILD = "3a106c4";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2263,10 +2272,11 @@ const PROVE = [];
 function makeProva(frameId, wrapId, warnId) {
   const p = { ready: false, version: null, error: null, pending: null };
   p.frame = () => document.getElementById(frameId);
-  p.show = q => {
+  p.show = (q, opts) => {
     document.getElementById(wrapId).style.display = "";
     const fr = p.frame();
-    if (!fr.dataset.loaded) { fr.dataset.loaded = "1"; fr.src = "quiz_v2.html?preview"; }
+    // BUILD nell'URL: dopo un aggiornamento la pagina di prova non arriva dalla cache in versione vecchia
+    if (!fr.dataset.loaded) { fr.dataset.loaded = "1"; fr.src = "quiz_v2.html?preview&v=" + encodeURIComponent(BUILD); }
     // Solo immagini risolte: un errore diventa null ("non disponibile"), le non ancora
     // caricate restano fuori e l'iframe mostra "caricamento"
     const images = {};
@@ -2275,7 +2285,8 @@ function makeProva(frameId, wrapId, warnId) {
       if (typeof v === "string") images[id] = v;
       else if (v) images[id] = null;
     });
-    p.pending = { type: "qf-preview-question", question: JSON.parse(JSON.stringify(q)), images };
+    p.pending = { type: "qf-preview-question", question: JSON.parse(JSON.stringify(q)), images,
+                  showLint: !(opts && opts.showLint === false) };
     if (p.ready) p.send();
   };
   p.send = () => {
@@ -2331,7 +2342,7 @@ function renderBancoDetail() {
   bancoFlash = null;
   main.innerHTML =
     `<div class="banco-detail-actions">
-       <button class="btn btn-sm" onclick="bancoEditStart()">${BANCO_TIPI_EDITABILI.includes(q.tipo) ? "Modifica" : "Modifica metadati"}</button>
+       <button class="btn btn-sm" onclick="bancoEditStart()">Modifica</button>
        ${flash}
      </div>` +
     `<div class="prev-meta" style="margin:0;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
@@ -2353,8 +2364,8 @@ function renderBancoDetail() {
 // ---- EDITOR DOMANDE ----
 // Una modifica sovrascrive la domanda (updateQuestion) o la salva come domanda nuova e
 // indipendente (createQuestion). Niente versioni né legami fra le due.
-// match, multi-fitb e cloze: per ora solo metadati, il contenuto resta bloccato.
-const BANCO_TIPI_EDITABILI = ["mc", "multi-mc", "fitb", "free"];
+// Ogni tipo si modifica per intero; match, multi-fitb e cloze con la sintassi del foglio,
+// accompagnata da un esempio.
 let bancoEdit  = null;   // { id, original (copia), draft, initialFp, busy, imgTried:Set }
 let bancoFlash = null;   // { id, text } messaggio da mostrare una volta nel dettaglio
 
@@ -2385,6 +2396,17 @@ function validateQuestionAdmin(q) {
     else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
   }
   if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
+  if (q.tipo === "multi-fitb" || q.tipo === "cloze") {
+    let d = null;
+    if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
+    else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
+    if (d !== null && (typeof d !== "object" || Array.isArray(d))) err.push("Il campo dati deve essere un oggetto JSON { … }.");
+  }
+  if (q.tipo === "match") {
+    let r = null;
+    try { r = JSON.parse(q.corretta || ""); } catch(e) {}
+    if (!Array.isArray(r)) err.push("La colonna destra del match deve essere un array JSON.");
+  }
   return err;
 }
 
@@ -2396,12 +2418,22 @@ function questionToDraft(q) {
   if (q.tipo === "mc") correct = [idx(q.corretta)];
   if (q.tipo === "multi-mc") correct = parseMultiCorrettaAdmin(q.corretta).map(idx);
   correct = correct.filter(i => i >= 0 && i < opts.length);
+  // JSON leggibile nell'editor; se non è JSON valido resta com'è, e la validazione lo segnala
+  const pretty = raw => { try { return JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { return String(raw || ""); } };
+  let right = null;
+  try { right = JSON.parse(q.corretta || ""); } catch(e) {}
+  const isMc = q.tipo === "mc" || q.tipo === "multi-mc";
+  // Un campo per tipo, così passare da un tipo all'altro e tornare indietro non perde niente
   return {
     corso: q.corso || "", categoria: q.categoria || "", sottocateg: q.sottocateg || "", tags: q.tags || "",
     stato: q.stato || "verificato", tipo: q.tipo, testo: q.testo || "", punti: String(q.punti ?? ""),
-    options: opts.length ? opts : ["", ""], correct,
+    options: isMc && opts.length ? opts : ["", ""], correct: isMc ? correct : [],
     corretta: q.tipo === "fitb" ? (q.corretta || "") : "",
-    placeholder: q.placeholder || "", data: q.data || ""
+    placeholder: q.placeholder || "",
+    matchLeft:  q.tipo === "match" ? opts.join("\n") : "",
+    matchRight: q.tipo === "match" ? (Array.isArray(right) ? right.map(String).join("\n") : String(q.corretta || "")) : "",
+    dataFitb:   q.tipo === "multi-fitb" ? pretty(q.data) : "",
+    dataCloze:  q.tipo === "cloze" ? pretty(q.data) : ""
   };
 }
 
@@ -2411,10 +2443,15 @@ function draftToQuestion(d, original) {
     stato: d.stato, tipo: d.tipo, testo: d.testo.trim(), punti: Number(String(d.punti).replace(",", ".")),
     options: [], corretta: "", placeholder: "", data: ""
   };
-  if (!BANCO_TIPI_EDITABILI.includes(original.tipo)) {
-    // Contenuto bloccato: si riscrive identico all'originale
-    Object.assign(q, { tipo: original.tipo, testo: original.testo, options: original.options,
-                       corretta: original.corretta, placeholder: original.placeholder, data: original.data });
+  const lines   = t => String(t || "").split("\n").map(x => x.trim()).filter(Boolean);
+  const compact = t => { try { return JSON.stringify(JSON.parse(t)); } catch(e) { return String(t || "").trim(); } };
+  if (d.tipo === "match") {
+    q.options  = lines(d.matchLeft);
+    q.corretta = JSON.stringify(lines(d.matchRight));
+  } else if (d.tipo === "multi-fitb") {
+    q.data = compact(d.dataFitb);
+  } else if (d.tipo === "cloze") {
+    q.data = compact(d.dataCloze);
   } else if (d.tipo === "mc" || d.tipo === "multi-mc") {
     q.options = d.options.map(o => o.trim());
     const letters = [...d.correct].sort((a, b) => a - b).map(i => String.fromCharCode(65 + i));
@@ -2437,6 +2474,25 @@ function openExamsUsing(q) {
   return allEsami.filter(e => e.stato === "open" && tracce.has(e.traccia_id));
 }
 
+// Il backend in uno scope isolato, come nella prova: l'editor ne usa lintQuestion per gli
+// avvisi sul contenuto, senza tenere una copia sua di quelle regole. Se non si carica,
+// l'editor funziona lo stesso, solo senza avvisi.
+let _adminBackend = null, _adminBackendPromise = null, _adminBackendError = null;
+function loadAdminBackend() {
+  if (_adminBackend) return Promise.resolve(_adminBackend);
+  if (!_adminBackendPromise) {
+    _adminBackendPromise = fetch("quiz_apps_script_v2.js", { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(src => (_adminBackend = new Function(src + "\n;return { lintQuestion, normalizeIncomingQuestion };")()))
+      .catch(e => { _adminBackendError = e.message; _adminBackendPromise = null; throw e; });
+  }
+  return _adminBackendPromise;
+}
+
+function lintDraft(q) {
+  return _adminBackend ? _adminBackend.lintQuestion(_adminBackend.normalizeIncomingQuestion(q)) : [];
+}
+
 function bancoEditStart() {
   const q = allQuestions.find(x => x.id === bancoSelected);
   if (!q) return;
@@ -2445,6 +2501,7 @@ function bancoEditStart() {
   bancoEdit = { id: q.id, original, draft, busy: false, imgTried: new Set(),
                 initialFp: questionFingerprintAdmin(draftToQuestion(draft, original)) };
   renderBancoEditor();
+  loadAdminBackend().then(() => bancoEditRefresh()).catch(() => bancoEditRefresh());
 }
 
 function bancoEditCancel() {
@@ -2455,7 +2512,6 @@ function bancoEditCancel() {
 
 function renderBancoEditor() {
   const e = bancoEdit, d = e.draft, q = e.original;
-  const locked = !BANCO_TIPI_EDITABILI.includes(q.tipo);
   const aperti = openExamsUsing(q);
   const tracceIds = new Set(allTracks.filter(t => (t.items || []).some(it =>
     (it.type === "fixed" && it.id === q.id) || (it.type === "random" && slotAccepts(it, q)))).map(t => t.track_id));
@@ -2471,15 +2527,14 @@ function renderBancoEditor() {
       `Per conservare quella vecchia, usa "Salva come nuova domanda".</div>`;
   }
   const uniq = f => [...new Set(allQuestions.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
-  const tipiSel = locked ? [q.tipo] : BANCO_TIPI_EDITABILI;
 
   document.getElementById("bd-main").innerHTML = `
-    <div class="be-head"><strong>${locked ? "Modifica metadati" : "Modifica"}</strong> <code>${escHtml(q.id)}</code></div>
+    <div class="be-head"><strong>Modifica</strong> <code>${escHtml(q.id)}</code></div>
     ${nota}
     <div class="be-grid">
       <label class="be-field">Tipo
-        <select id="be-tipo" ${locked ? "disabled" : ""} onchange="bancoEditTipo(this.value)">
-          ${tipiSel.map(t => `<option value="${t}" ${t === d.tipo ? "selected" : ""}>${escHtml(TIPO_LABEL[t] || t)}</option>`).join("")}
+        <select id="be-tipo" onchange="bancoEditTipo(this.value)">
+          ${Object.keys(TIPO_LABEL).map(t => `<option value="${t}" ${t === d.tipo ? "selected" : ""}>${escHtml(TIPO_LABEL[t] || t)}</option>`).join("")}
         </select></label>
       <label class="be-field">Punti
         <input type="text" inputmode="decimal" value="${escAttr(d.punti)}" oninput="bancoEditSet('punti', this.value)"></label>
@@ -2496,11 +2551,11 @@ function renderBancoEditor() {
         <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
     </div>
     <label class="be-field">Testo
-      <textarea rows="6" ${locked ? "readonly" : ""} oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
-      <small>${locked ? "Testo e contenuto di questo tipo si modificheranno con l'editor dedicato."
-                      : "HTML ammesso · [img:ID o link Drive] per un'immagine"}</small></label>
+      <textarea rows="6" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
+      <small id="be-testo-hint"></small></label>
     <div id="be-tipo-fields"></div>
     <div id="be-errors" class="be-errors"></div>
+    <div id="be-warn"></div>
     <div id="be-info"></div>
     <div class="be-actions">
       <button class="btn btn-sm btn-green" id="be-save" onclick="bancoSave(false)">Salva</button>
@@ -2516,9 +2571,57 @@ function renderBancoEditor() {
   bancoEditRefresh();
 }
 
+// Sintassi dei tipi complessi: è quella delle colonne del foglio, con un esempio accanto
+const BE_ESEMPI = {
+  "multi-fitb": {
+    campo: "dataFitb",
+    json: {
+      cols: 2,
+      boxes: [
+        { label: "Algoritmo locale",  correct: "Smith-Waterman",   pts: 1 },
+        { label: "Algoritmo globale", correct: "Needleman-Wunsch", pts: 1 }
+      ]
+    },
+    testo: "Nel testo, {{0}}, {{1}}, … mettono le caselle al loro posto, anche dentro una tabella " +
+           "(&lt;table class=\"dp-table\"&gt; per le matrici). Senza {{N}} le caselle compaiono in griglia sotto il testo.",
+    campi: [["correct", "risposta attesa; il confronto ignora spazi e maiuscole"],
+            ["pts", "peso relativo della casella, facoltativo (1 se manca): i punti della domanda si dividono in proporzione"],
+            ["label", "etichetta della casella, mostrata solo nella griglia"],
+            ["cols", "colonne della griglia, facoltativo"]]
+  },
+  cloze: {
+    campo: "dataCloze",
+    json: {
+      dropdowns: [
+        { options: ["locali", "globali", "multipli"], correct: 0 },
+        { options: ["casuale", "vuoto", "reale"], correct: 0 }
+      ]
+    },
+    testo: "Nel testo, {{0}}, {{1}}, … mettono i menu a tendina al loro posto, nell'ordine dei dropdown.",
+    campi: [["options", "le scelte del menu, nell'ordine in cui compaiono"],
+            ["correct", "posizione della scelta giusta, contando da 0 (0 = la prima)"]]
+  }
+};
+
+function beEsempioHtml(tipo) {
+  const ex = BE_ESEMPI[tipo];
+  return `<details class="be-example"><summary>Sintassi ed esempio</summary>
+      <p>${ex.testo}</p>
+      <pre>${escHtml(JSON.stringify(ex.json, null, 2))}</pre>
+      <table>${ex.campi.map(([k, v]) => `<tr><td><code>${k}</code></td><td>${escHtml(v)}</td></tr>`).join("")}</table>
+    </details>`;
+}
+
 function renderBancoEditTipo() {
   const d = bancoEdit.draft, box = document.getElementById("be-tipo-fields");
-  if (!BANCO_TIPI_EDITABILI.includes(bancoEdit.original.tipo)) { box.innerHTML = ""; return; }
+  const hint = {
+    fitb: "Il primo ___ (almeno tre trattini bassi) diventa la casella dentro la frase; senza, la casella va sotto il testo.",
+    "multi-fitb": "Scrivi {{0}}, {{1}}, … dove vanno le caselle, oppure niente per averle in griglia sotto il testo.",
+    cloze: "Scrivi {{0}}, {{1}}, … dove vanno i menu a tendina."
+  }[d.tipo];
+  document.getElementById("be-testo-hint").innerHTML =
+    "HTML ammesso · [img:ID o link Drive] per un'immagine" + (hint ? " · " + escHtml(hint) : "");
+
   if (d.tipo === "mc" || d.tipo === "multi-mc") {
     const multi = d.tipo === "multi-mc", n = d.options.length;
     box.innerHTML = `<div class="be-field" style="margin-bottom:4px;">Opzioni <small>${multi ? "spunta tutte le corrette" : "seleziona la corretta"}</small></div>` +
@@ -2532,6 +2635,27 @@ function renderBancoEditTipo() {
         <button class="be-mini" onclick="bancoEditRemove(${i})" ${n <= 2 ? "disabled" : ""} title="Elimina">✕</button>
       </div>`).join("") +
       `<button class="btn btn-sm btn-outline" style="margin-top:4px;" onclick="bancoEditAdd()" ${n >= 26 ? "disabled" : ""}>+ Aggiungi opzione</button>`;
+  } else if (d.tipo === "match") {
+    box.innerHTML = `<div class="be-two">
+        <label class="be-field">Colonna sinistra <small>un elemento per riga</small>
+          <textarea rows="6" class="be-code" oninput="bancoEditSet('matchLeft', this.value)">${escHtml(d.matchLeft)}</textarea></label>
+        <label class="be-field">Colonna destra <small>sulla stessa riga, l'abbinamento giusto</small>
+          <textarea rows="6" class="be-code" oninput="bancoEditSet('matchRight', this.value)">${escHtml(d.matchRight)}</textarea></label>
+      </div>
+      <details class="be-example"><summary>Esempio</summary>
+        <p>Riga per riga, a sinistra l'elemento e a destra ciò con cui va abbinato:</p>
+        <pre>Adenina      Timina\nGuanina      Citosina\nCitosina     Guanina\nTimina       Adenina</pre>
+        <p>Nel foglio diventano due array JSON: colonna I la sinistra, colonna J la destra. Le righe vuote vengono ignorate.</p>
+      </details>`;
+  } else if (d.tipo === "multi-fitb" || d.tipo === "cloze") {
+    const campo = BE_ESEMPI[d.tipo].campo;
+    box.innerHTML = `<label class="be-field">${d.tipo === "cloze" ? "Menu a tendina" : "Caselle"} <small>JSON, come nella colonna M del foglio</small>
+        <textarea rows="10" class="be-code" id="be-json" oninput="bancoEditSet('${campo}', this.value)">${escHtml(d[campo])}</textarea></label>
+      <div class="be-json-actions">
+        <button class="be-mini" onclick="bancoEditFormat()">Formatta</button>
+        <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
+      </div>
+      ${beEsempioHtml(d.tipo)}`;
   } else {
     box.innerHTML =
       (d.tipo === "fitb" ? `<label class="be-field">Risposta corretta
@@ -2541,6 +2665,23 @@ function renderBancoEditTipo() {
       `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo</small>
          <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
   }
+}
+
+function bancoEditFormat() {
+  const campo = BE_ESEMPI[bancoEdit.draft.tipo].campo;
+  try {
+    bancoEdit.draft[campo] = JSON.stringify(JSON.parse(bancoEdit.draft[campo]), null, 2);
+    document.getElementById("be-json").value = bancoEdit.draft[campo];
+    bancoEditRefresh();
+  } catch(e) {} // l'errore di sintassi è già tra gli errori, con la posizione
+}
+
+function bancoEditExample() {
+  const ex = BE_ESEMPI[bancoEdit.draft.tipo];
+  if (bancoEdit.draft[ex.campo].trim() && !confirm("Sostituire il contenuto attuale con l'esempio?")) return;
+  bancoEdit.draft[ex.campo] = JSON.stringify(ex.json, null, 2);
+  document.getElementById("be-json").value = bancoEdit.draft[ex.campo];
+  bancoEditRefresh();
 }
 
 function bancoEditSet(field, value) { bancoEdit.draft[field] = value; bancoEditRefresh(); }
@@ -2594,6 +2735,11 @@ function bancoEditRefresh() {
   const errs = validateQuestionAdmin(q);
   const dirty = questionFingerprintAdmin(q) !== e.initialFp;
   document.getElementById("be-errors").innerHTML = errs.map(x => `<div>• ${escHtml(x)}</div>`).join("");
+  // Gli avvisi hanno senso solo su una domanda leggibile: con errori di sintassi ripeterebbero lo stesso problema
+  const warns = errs.length ? [] : lintDraft(q);
+  document.getElementById("be-warn").innerHTML = warns.length
+    ? `<div class="be-note be-avviso"><strong>Da controllare:</strong>${warns.map(x => `<div>• ${escHtml(x)}</div>`).join("")}</div>`
+    : (_adminBackendError ? `<div class="be-note">Avvisi sul contenuto non disponibili: ${escHtml(_adminBackendError)}</div>` : "");
   document.getElementById("be-save").disabled     = e.busy || !!errs.length || !dirty;
   document.getElementById("be-save-new").disabled = e.busy || !!errs.length;
 
@@ -2611,7 +2757,7 @@ function bancoEditRefresh() {
   if (fp !== e.provaFp) {
     e.provaFp = fp;
     clearTimeout(e.provaTimer);
-    e.provaTimer = setTimeout(() => { if (bancoEdit === e) provaBanco.show({ ...q, id: e.id }); }, 300);
+    e.provaTimer = setTimeout(() => { if (bancoEdit === e) provaBanco.show({ ...q, id: e.id }, { showLint: false }); }, 300);
   }
 
   // Una richiesta per immagine a sessione di modifica, non una a ogni tasto
@@ -2629,6 +2775,9 @@ async function bancoSave(asNew) {
   if (!e || e.busy) return;
   const q = draftToQuestion(e.draft, e.original);
   if (validateQuestionAdmin(q).length) return;
+  const warns = lintDraft(q);
+  if (warns.length && !confirm("La domanda ha " + (warns.length === 1 ? "un problema" : warns.length + " problemi") + ":\n\n• " +
+                               warns.join("\n• ") + "\n\nSalvare comunque?")) return;
   if (!asNew) {
     const aperti = openExamsUsing(e.original);
     if (aperti.length && !confirm(

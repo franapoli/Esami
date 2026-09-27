@@ -273,6 +273,16 @@ function escHtml(str) {
 // come "l'acido" verrebbe troncata a "l" al primo ridisegno
 function escAttrQ(str) { return escHtml(str).replace(/'/g, "&#39;"); }
 
+// I pts delle caselle sono pesi relativi (il server manda già quelli effettivi): i punti veri
+// sono la quota di q.pts. Mostrare i pesi come punti farebbe leggere 12 punti su una domanda da 2,5.
+function multiFitbShareHint(q) {
+  const w = q.boxes.map(b => Number(b.pts) || 0);
+  const tot = w.reduce((a, b) => a + b, 0);
+  if (!tot) return "";
+  const fmt = n => String(Math.round(n * 100) / 100).replace(".", ",");
+  return "<p class='fitb-hint'>Punteggio parziale: " + w.map(x => fmt(x / tot * q.pts)).join(" + ") + " pt</p>";
+}
+
 // Fitb con la casella dentro il testo: il primo "___" (tre o più trattini bassi) è il punto
 // da completare. Si cerca solo nel testo, non dentro i tag HTML né nei segnaposto [img:…],
 // dove gli ID Drive possono contenere trattini bassi. null se il testo non ne ha: la casella
@@ -335,6 +345,7 @@ function ensureImages() {
 // Nessun salvataggio locale, nessuna chiamata di rete verso lo script.
 let previewBackend = null;  // { buildQuestionObj, scoreAnswer, VERSION }
 let previewRepoQ   = null;  // domanda in forma foglio, quella che riceve scoreAnswer
+let previewShowLint = true;  // l'editor mostra gli avvisi accanto ai campi, e li spegne qui
 
 async function initPreview() {
   document.body.classList.add("preview");
@@ -373,6 +384,7 @@ async function initPreview() {
     if (m.type !== "qf-preview-question" || !previewBackend) return;
     Object.assign(questionImages, m.images || {});
     previewRepoQ = m.question;
+    previewShowLint = m.showLint !== false;
     previewReset();
   });
   // L'admin dimensiona l'iframe sul contenuto
@@ -396,7 +408,7 @@ function previewReset() {
   // diventa "A" in silenzio (letterToIndex), e soluzione e punteggio restano coerenti.
   const norm = previewBackend.normalizeIncomingQuestion(previewRepoQ);
   const errs = previewBackend.validateQuestion(norm).concat(previewBackend.lintQuestion(norm));
-  document.getElementById("preview-lint").innerHTML = errs.length
+  document.getElementById("preview-lint").innerHTML = errs.length && previewShowLint
     ? "<div class='preview-warn'><strong>Domanda configurata male:</strong><br>" + errs.map(escHtml).join("<br>") + "</div>" : "";
   renderQuestion();
 }
@@ -1119,7 +1131,6 @@ function renderMultiFitbQuestion(q) {
   if (!q.boxes || q.boxes.length === 0) return "<p style='color:#b00;font-size:0.9em;'>Errore: configurazione caselle mancante (aggiornare il deploy dello script).</p>";
   if (!Array.isArray(answers[current])) answers[current] = new Array(q.boxes.length).fill("");
   const ans  = answers[current];
-  const ptsList = q.boxes.map(b => b.pts || 0);
 
   // Modalità tabella: {{N}} nel testo → input inline dentro la tabella HTML
   if (q.text && /\{\{\d+\}\}/.test(q.text)) {
@@ -1130,7 +1141,7 @@ function renderMultiFitbQuestion(q) {
         "oninput='saveMultiFitbBox(" + i + ",this.value)'>";
     });
     let html = "<div class='q-text'>" + inner + "</div>";
-    html += "<p class='fitb-hint'>Punteggio parziale: " + ptsList.join(" + ") + " pt</p>";
+    html += multiFitbShareHint(q);
     return html;
   }
 
@@ -1147,7 +1158,7 @@ function renderMultiFitbQuestion(q) {
       "</div>";
   });
   html += "</div>";
-  html += "<p class='fitb-hint'>Punteggio parziale: " + ptsList.join(" + ") + " pt</p>";
+  html += multiFitbShareHint(q);
   return html;
 }
 
