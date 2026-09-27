@@ -177,10 +177,16 @@ const IMG_CACHE_TTL      = 3600;
 const IMG_CACHE_CHUNK    = 90000;   // CacheService accetta al massimo 100KB per valore
 
 function extractDriveId(ref) {
-  const s = String(ref || "").trim();
+  const s = String(ref || "").split("|")[0].trim();   // "|400" dopo l'ID è la larghezza (imageWidth)
   const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+// Larghezza in pixel da [img:ID|400], o null se non indicata (l'immagine resta entro la colonna)
+function imageWidth(ref) {
+  const w = String(ref || "").split("|")[1];
+  return w && /^\s*\d{1,4}\s*$/.test(w) ? parseInt(w, 10) : null;
 }
 
 function imageIdsInText(text) {

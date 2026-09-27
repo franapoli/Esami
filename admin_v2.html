@@ -144,6 +144,27 @@
   #folder-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
                     z-index:1001; align-items:center; justify-content:center; padding:20px; }
   #folder-overlay.open { display:flex; }
+  #import-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+                    z-index:1001; align-items:center; justify-content:center; padding:20px; }
+  #import-overlay.open { display:flex; }
+  #import-box { background:#fff; border:1px solid #ccc; max-width:760px; width:100%; max-height:85vh;
+                overflow-y:auto; padding:26px 28px; position:relative; }
+  #import-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em; color:#888;
+                   margin-bottom:12px; font-weight:normal; }
+  #import-close { position:absolute; top:12px; right:16px; background:none; border:none;
+                  font-size:1.3em; cursor:pointer; color:#888; line-height:1; }
+  .import-intro { font-size:0.86em; color:#555; line-height:1.6; margin-bottom:12px; }
+  .import-file { cursor:pointer; margin-top:0; }
+  #import-summary { font-size:0.86em; margin:14px 0 8px; line-height:1.6; }
+  .import-list { border:1px solid #eee; max-height:45vh; overflow-y:auto; margin-bottom:14px; }
+  .import-list:empty { display:none; }
+  .import-row { display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #f0f0f0; font-size:0.84em; align-items:baseline; }
+  .import-row .nome { flex:1; }
+  .import-row .tipo { color:#888; white-space:nowrap; }
+  .import-row .esito { white-space:nowrap; }
+  .import-row.scartata .nome { color:#999; }
+  .import-row .motivo { display:block; color:#b00; font-size:0.92em; }
+  #import-msg { font-size:0.84em; }
   #folder-box { background:#fff; border:1px solid #ccc; max-width:480px; width:100%; max-height:80vh;
                 overflow-y:auto; padding:26px 28px; position:relative; }
   #folder-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em; color:#888;
@@ -764,7 +785,8 @@
           <option value="mai">Mai fisse in una traccia</option>
         </select>
         <span id="banco-count"></span>
-        <button class="btn btn-sm" style="margin-top:0;margin-left:auto;" onclick="reloadBanco()">↻ Ricarica dal foglio</button>
+        <button class="btn btn-sm btn-outline" style="margin-top:0;margin-left:auto;" onclick="openImportMoodle()">Importa da Moodle…</button>
+        <button class="btn btn-sm" style="margin-top:0;" onclick="reloadBanco()">↻ Ricarica dal foglio</button>
       </div>
       <div class="banco-layout">
         <div class="card banco-list" id="banco-list" tabindex="0" onkeydown="bancoKey(event)"></div>
@@ -853,6 +875,24 @@
 </div>
 
 <!-- MODAL PREVIEW DOMANDA -->
+<!-- IMPORTAZIONE DA MOODLE (XML) -->
+<div id="import-overlay" onclick="if (event.target === this) closeImportMoodle()">
+  <div id="import-box">
+    <button id="import-close" onclick="closeImportMoodle()" title="Chiudi">✕</button>
+    <h3>Importa da Moodle</h3>
+    <p class="import-intro">Scegli un file esportato da Moodle in formato XML. Le domande vengono create <strong>in bozza</strong>,
+      con le immagini caricate nel Drive; quelle che non si possono convertire vengono scartate, con il motivo.</p>
+    <label class="btn btn-sm btn-outline import-file">Scegli il file XML…
+      <input type="file" accept=".xml,text/xml,application/xml" hidden onchange="importMoodleFile(this)"></label>
+    <div id="import-summary"></div>
+    <div id="import-list" class="import-list"></div>
+    <div class="folder-actions">
+      <button class="btn btn-sm btn-green" id="import-go" onclick="importMoodleRun()" disabled>Importa</button>
+      <span id="import-msg"></span>
+    </div>
+  </div>
+</div>
+
 <!-- SCELTA DELLA CARTELLA PER LE IMMAGINI (solo dentro la cartella QuizForge) -->
 <div id="folder-overlay" onclick="if (event.target === this) closeFolderPicker()">
   <div id="folder-box">
@@ -925,7 +965,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "a4c4706";
+const BUILD = "48c1491";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1030,10 +1070,16 @@ function canon(q) { return _adminBackend && q ? _adminBackend.canonicalForm(q) :
 const adminImages = {}; // id → dataURI | {error, ...}
 
 function extractDriveId(ref) {
-  const s = String(ref || "").trim();
+  const s = String(ref || "").split("|")[0].trim();   // "|400" dopo l'ID è la larghezza (imageWidth)
   const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+// Larghezza in pixel da [img:ID|400], o null se non indicata (l'immagine resta entro la colonna)
+function imageWidth(ref) {
+  const w = String(ref || "").split("|")[1];
+  return w && /^\s*\d{1,4}\s*$/.test(w) ? parseInt(w, 10) : null;
 }
 
 function imageIdsIn(text) {
@@ -1062,8 +1108,9 @@ function renderImagesAdmin(html) {
     const id = extractDriveId(ref);
     if (!id) return `<span style="color:#b00;">${all} (riferimento non valido)</span>`;
     const uri = adminImages[id];
+    const w = imageWidth(ref);
     if (typeof uri === "string" && uri.startsWith("data:image/"))
-      return `<img src="${uri}" alt="" style="display:block;max-width:100%;height:auto;margin:10px auto;">`;
+      return `<img src="${uri}" alt="" style="display:block;max-width:100%;height:auto;margin:10px auto;${w ? "width:" + w + "px;" : ""}">`;
     const problem = imageProblem(id);
     if (problem) return `<span style="display:block;color:#b00;margin:8px 0;">⚠ Immagine ${escHtml(id)}: ${problem}</span>`;
     return `<span style="color:#888;">caricamento immagine…</span>`;
@@ -2497,7 +2544,32 @@ function usaFormatoNelTesto(q) {
 // Domanda del formato vecchio (colonne I, J, M) riscritta nel formato nel testo.
 // note: cosa cambia rispetto a prima, se qualcosa cambia. legacy: colonne da conservare quando
 // la conversione non si può fare (voci che contengono [[, ]], => o iniziano con *).
+// Conversione con controllo di andata e ritorno: dal testo nuovo il server deve ricavare le stesse
+// voci di prima. Se no (per esempio opzioni che contengono HTML, che nel testo verrebbero spezzate
+// sui tag) la domanda resta nel formato vecchio invece di perdere contenuto.
 function questionToText(q) {
+  const conv = questionToTextRaw(q);
+  const B = _adminBackend;
+  if (!B || conv.legacy || q.tipo === "free") return conv;
+  const prima = B.canonicalForm(q);
+  const dopo  = B.canonicalForm(Object.assign({}, q, { testo: conv.testo, options: [], corretta: "", data: "" }));
+  const voci = c => {
+    if (c.tipo === "mc" || c.tipo === "multi-mc") return (c.options || []).map(String);
+    if (c.tipo === "match") return (c.options || []).map(String).concat([c.corretta]);
+    if (c.tipo === "fitb") return [String(c.corretta || "")];
+    let d = {}; try { d = JSON.parse(c.data || "{}") || {}; } catch(e) {}
+    if (c.tipo === "multi-fitb") return (d.boxes || []).map(b => String(b.correct ?? "")).sort();
+    if (c.tipo === "cloze") return (d.dropdowns || []).map(dd => JSON.stringify((dd.options || []).map(String))).sort();
+    return [];
+  };
+  if (JSON.stringify(voci(prima)) !== JSON.stringify(voci(dopo))) {
+    return { testo: q.testo || "", note: [], motivo: "alcune voci contengono HTML o caratteri che il formato nel testo non gestisce",
+             legacy: { tipo: q.tipo, options: q.options || [], corretta: q.corretta || "", data: q.data || "" } };
+  }
+  return conv;
+}
+
+function questionToTextRaw(q) {
   const B = _adminBackend;
   const tieni = motivo => ({ testo: q.testo || "", note: [], motivo: motivo || "",
                              legacy: { tipo: q.tipo, options: q.options || [], corretta: q.corretta || "", data: q.data || "" } });
@@ -2731,7 +2803,7 @@ function renderBancoEditor() {
     </div>
     <label class="be-field">Testo
       <textarea rows="9" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
-      <small>HTML ammesso · [img:ID o link Drive] per un'immagine</small></label>
+      <small>HTML ammesso · [img:ID o link Drive] per un'immagine, [img:ID|400] per mostrarla larga 400 px</small></label>
     <div id="be-parse" class="be-parse"></div>
     <div class="be-json-actions">
       <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
@@ -2848,6 +2920,226 @@ async function bancoEditImage(input, folder) {
   } catch(err) {
     if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Caricamento non riuscito: " + err.message + versioneScriptHint(); }
   }
+}
+
+// ---- IMPORTAZIONE DA MOODLE (XML) ----
+// Legge nel browser un export XML di Moodle e crea le domande nel formato nel testo, in bozza,
+// con le immagini caricate nel Drive in QuizForge › categoria › sottocategoria. Scarta (dicendo
+// perché) ciò che non si converte senza perdite: immagini non incluse nell'export, tipi non
+// supportati, voci con HTML o con i caratteri della sintassi. Ogni domanda porta il tag
+// moodle-<id>, così lo stesso export importato due volte non crea doppioni.
+let moodleImport = null;   // { domande: [...], cartella: [nomi] }
+
+function openImportMoodle() {
+  document.getElementById("import-overlay").classList.add("open");
+}
+function closeImportMoodle() {
+  if (moodleImport && moodleImport.inCorso) return;   // non si chiude a metà importazione
+  document.getElementById("import-overlay").classList.remove("open");
+}
+
+function mTxt(el, sel) { const x = el.querySelector(sel); return x ? x.textContent : ""; }
+
+// Voce di un'opzione: testo semplice, senza i caratteri che il formato nel testo usa come sintassi
+function mVoce(html) {
+  const t = String(html || "").replace(/^\s*<p[^>]*>([\s\S]*?)<\/p>\s*$/i, "$1").trim();
+  return /<\/?[A-Za-z!][^>]*>|\[\[|\]\]|[{}]|=>/.test(t) ? null : t.replace(/&nbsp;/g, " ").trim();
+}
+
+const MOODLE_TIPI = { gapselect: "cloze", multichoice: "mc", truefalse: "mc", shortanswer: "fitb", numerical: "fitb",
+                      essay: "free", matching: "match" };
+
+function convertiMoodle(q, categoria, idMoodle) {
+  const tipoM = q.getAttribute("type");
+  const nome = mTxt(q, ":scope > name > text").trim() || "(senza nome)";
+  const scarta = motivo => ({ nome, tipoM, idMoodle, scartata: motivo });
+  if (!MOODLE_TIPI[tipoM]) return scarta("tipo Moodle «" + tipoM + "» non supportato");
+  if (idMoodle && allQuestions.some(x => String(x.tags || "").split(",").map(t => t.trim()).includes("moodle-" + idMoodle))) {
+    return scarta("già importata (tag moodle-" + idMoodle + ")");
+  }
+  let html = mTxt(q, ":scope > questiontext > text");
+  if (tipoM !== "gapselect" && /\[\[|\]\]/.test(html)) return scarta("il testo contiene [[ o ]], che nel formato nel testo hanno un significato");
+
+  // Immagini: solo quelle incluse nell'export. Una ripetuta di seguito (refuso frequente) resta una.
+  const files = {};
+  q.querySelectorAll(":scope > questiontext > file").forEach(f => { files[f.getAttribute("name")] = f.textContent.replace(/\s+/g, ""); });
+  const mancanti = [];
+  html = html.replace(/<img\b[^>]*>/gi, tag => {
+    const m = tag.match(/\bsrc="@@PLUGINFILE@@\/([^"]+)"/i);
+    const nomeFile = m ? decodeURIComponent(m[1]) : null;
+    if (!nomeFile || !files[nomeFile]) { mancanti.push(nomeFile || (tag.match(/\bsrc="([^"]*)"/i) || [])[1] || "?"); return ""; }
+    const w = (tag.match(/\bwidth="(\d{1,4})"/i) || [])[1];   // la larghezza che aveva in Moodle
+    return "\u0000IMG:" + nomeFile + (w ? "|" + w : "") + "\u0000";
+  });
+  if (mancanti.length) return scarta("immagine non inclusa nell'export (" + mancanti.join(", ") + ")");
+  let prima;
+  do { prima = html; html = html.replace(/(\u0000IMG:([^\u0000]+)\u0000)(?:\s|&nbsp;|<\/?p>)*\u0000IMG:\2\u0000/g, "$1"); } while (html !== prima);
+  const immagini = [...new Set([...html.matchAll(/\u0000IMG:([^\u0000|]+)(?:\|\d+)?\u0000/g)].map(m => m[1]))];
+
+  let tipo = MOODLE_TIPI[tipoM], testo = html.trim(), note = [];
+  const answers = [...q.querySelectorAll(":scope > answer")].map(a => ({ html: mTxt(a, ":scope > text"), fr: parseFloat(a.getAttribute("fraction")) || 0 }));
+
+  if (tipoM === "gapselect") {
+    // [[k]] = k-esima selectoption (da 1). Le voci dello stesso gruppo formano un menu: una lista
+    // per gruppo, e ogni [[k]] diventa {{lista: posizione di k nel suo gruppo}}.
+    const so = [...q.querySelectorAll(":scope > selectoption")].map(o => ({ voce: mVoce(mTxt(o, ":scope > text")), gruppo: mTxt(o, ":scope > group").trim() || "1" }));
+    if (!so.length) return scarta("nessuna opzione per i menu");
+    if (so.some(o => o.voce === null || o.voce === "")) return scarta("un'opzione dei menu contiene HTML o i caratteri [[ ]] { } =>");
+    const gruppi = [...new Set(so.map(o => o.gruppo))];
+    const nomeLista = g => gruppi.length === 1 ? "scelte" : "gruppo" + g;
+    const pos = so.map((o, i) => so.slice(0, i + 1).filter(x => x.gruppo === o.gruppo).length);
+    let fuori = false;
+    testo = testo.replace(/\[\[(\d+)\]\]/g, (_, k) => {
+      const o = so[+k - 1];
+      if (!o) { fuori = true; return ""; }
+      return "{{" + nomeLista(o.gruppo) + ": " + pos[+k - 1] + "}}";
+    });
+    if (fuori) return scarta("un segnaposto rimanda a un'opzione che non esiste");
+    const dich = gruppi.map(g => "{{" + nomeLista(g) + " = " + so.filter(o => o.gruppo === g).map(o => "[[" + o.voce + "]]").join(" ") + "}}");
+    testo = dich.join("\n") + "\n" + testo;
+  } else if (tipoM === "multichoice" || tipoM === "truefalse") {
+    let voci;
+    if (tipoM === "truefalse") {
+      const vero = answers.find(a => /^true$/i.test(a.html.trim())), falso = answers.find(a => /^false$/i.test(a.html.trim()));
+      voci = [{ t: "Vero", ok: !!vero && vero.fr > 0 }, { t: "Falso", ok: !!falso && falso.fr > 0 }];
+    } else {
+      voci = answers.map(a => ({ t: mVoce(a.html), fr: a.fr }));
+      if (voci.some(v => v.t === null || v.t === "")) return scarta("un'opzione contiene HTML (per esempio una tabella) o i caratteri [[ ]] { } =>");
+      const singola = mTxt(q, ":scope > single").trim() !== "false";
+      tipo = singola ? "mc" : "multi-mc";
+      const max = Math.max(...voci.map(v => v.fr));
+      if (singola && voci.some(v => v.fr > 0 && v.fr < max)) note.push("credito parziale di Moodle non riportato: vale solo la risposta migliore");
+      voci = voci.map(v => ({ t: v.t, ok: singola ? v.fr === max && max > 0 : v.fr > 0 }));
+    }
+    testo += "\n" + voci.map(v => "[[" + (v.ok ? "*" : "") + v.t + "]]").join("\n");
+  } else if (tipoM === "shortanswer" || tipoM === "numerical") {
+    const giuste = answers.filter(a => a.fr >= 100).map(a => mVoce(a.html));
+    if (!giuste.length || giuste[0] === null) return scarta("nessuna risposta pienamente corretta utilizzabile");
+    if (giuste.length > 1) note.push("Moodle accettava più risposte: vale solo «" + giuste[0] + "»");
+    let fatto = false;
+    testo = testo.replace(/_{3,}/, () => { fatto = true; return "[[" + giuste[0] + "]]"; });
+    if (!fatto) testo += " [[" + giuste[0] + "]]";
+  } else if (tipoM === "matching") {
+    const coppie = [...q.querySelectorAll(":scope > subquestion")].map(sq => ({ l: mVoce(mTxt(sq, ":scope > text")), r: mVoce(mTxt(sq, ":scope > answer > text")) }));
+    if (coppie.some(c => c.l === null || c.r === null)) return scarta("un elemento contiene HTML o i caratteri [[ ]] { } =>");
+    const valide = coppie.filter(c => c.l);
+    if (valide.length < coppie.length) note.push("le risposte distrattrici di Moodle (senza domanda) non sono riportate");
+    testo += "\n" + valide.map(c => "[[" + c.l + " => " + c.r + "]]").join("\n");
+  }
+
+  const tags = ["moodle-" + (idMoodle || "senza-id")].concat([...q.querySelectorAll(":scope > tags > tag > text")].map(t => t.textContent.trim()).filter(Boolean));
+  const domanda = { corso: "", categoria: categoria[0] || "", sottocateg: categoria.slice(1).join(" › "), tags: tags.join(","),
+                    stato: "bozza", tipo, testo, punti: parseFloat(mTxt(q, ":scope > defaultgrade")) || 1,
+                    options: [], corretta: "", placeholder: "", data: "" };
+  // Controllo con le regole del server; le immagini qui sono ancora segnaposti interni
+  const perControllo = Object.assign({}, domanda, { testo: testo.replace(/\u0000IMG:[^\u0000]+\u0000/g, "") });
+  const errori = validateQuestionAdmin(perControllo);
+  if (errori.length) return scarta(errori.join(" "));
+  return { nome, tipoM, idMoodle, domanda, immagini, files, note, avvisi: lintDraft(perControllo) };
+}
+
+async function importMoodleFile(input) {
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file) return;
+  const sum = document.getElementById("import-summary"), list = document.getElementById("import-list");
+  document.getElementById("import-go").disabled = true;
+  document.getElementById("import-msg").textContent = "";
+  sum.textContent = "Leggo il file…"; list.innerHTML = "";
+  try { await Promise.all([ensureQuestionsLoaded(), loadAdminBackend()]); }
+  catch(e) { sum.textContent = "Servono le domande e lo script di backend: " + e.message; return; }
+  const doc = new DOMParser().parseFromString(await file.text(), "application/xml");
+  if (doc.querySelector("parsererror") || !doc.querySelector("quiz")) { sum.textContent = "Il file non è un export XML di Moodle leggibile."; return; }
+
+  // I commenti "question: NNN" portano l'id Moodle della domanda che segue; le "category" valgono per le successive
+  const domande = [];
+  let categoria = [], idMoodle = null;
+  doc.querySelector("quiz").childNodes.forEach(n => {
+    if (n.nodeType === Node.COMMENT_NODE) { const m = n.nodeValue.match(/question:\s*(\d+)/); idMoodle = m ? m[1] : null; return; }
+    if (n.nodeType !== Node.ELEMENT_NODE || n.nodeName !== "question") return;
+    if (n.getAttribute("type") === "category") {
+      categoria = mTxt(n, ":scope > category > text").split("/").map(x => x.trim()).filter(x => x && x !== "$course$" && x !== "top" && !/^\$.*\$$/.test(x));
+      return;
+    }
+    domande.push(convertiMoodle(n, categoria, idMoodle));
+    idMoodle = null;
+  });
+  const buone = domande.filter(d => !d.scartata);
+  moodleImport = { domande };
+  const cartelle = [...new Set(buone.map(d => [d.domanda.categoria, d.domanda.sottocateg].filter(Boolean).join(" › ")))];
+  sum.innerHTML = `<strong>${buone.length}</strong> ${buone.length === 1 ? "domanda da importare" : "domande da importare"}, ` +
+    `${domande.length - buone.length} scartate, su ${domande.length} nel file.` +
+    (buone.some(d => d.immagini.length) ? `<br>Immagini in: ${cartelle.map(c => "QuizForge › " + escHtml(c || "(senza categoria)")).join(", ")}` : "");
+  list.innerHTML = domande.map(d => `<div class="import-row${d.scartata ? " scartata" : ""}">
+      <span class="nome">${escHtml(d.nome)}${d.scartata ? `<span class="motivo">${escHtml(d.scartata)}</span>` :
+        (d.note.concat(d.avvisi).length ? `<span class="motivo" style="color:#9a6b00;">${escHtml(d.note.concat(d.avvisi).join(" · "))}</span>` : "")}</span>
+      <span class="tipo">${escHtml(d.tipoM)}${d.domanda ? " → " + escHtml(TIPO_LABEL[d.domanda.tipo] || d.domanda.tipo) : ""}${d.immagini && d.immagini.length ? " · " + d.immagini.length + " img" : ""}</span>
+      <span class="esito">${d.scartata ? "scartata" : "✓"}</span></div>`).join("");
+  document.getElementById("import-go").disabled = !buone.length;
+}
+
+// Cartella QuizForge › parti…, creata se manca (createFolder riusa quelle esistenti)
+async function cartellaImport(parti) {
+  const radice = await callScript({ action: "listFolders", password: adminPassword, folderId: "" });
+  if (radice.status !== "ok") throw new Error(radice.message + versioneScriptHint());
+  let id = radice.folder.id;
+  for (const nome of parti.filter(Boolean)) {
+    const r = await callScript({ action: "createFolder", password: adminPassword, parentId: id, name: nome });
+    if (r.status !== "ok") throw new Error(r.message + versioneScriptHint());
+    id = r.folder.id;
+  }
+  return id;
+}
+
+async function importMoodleRun() {
+  if (!moodleImport) return;
+  const buone = moodleImport.domande.filter(d => !d.scartata && !d.importata);
+  if (!buone.length) return;
+  const msg = document.getElementById("import-msg"), go = document.getElementById("import-go");
+  go.disabled = true; moodleImport.inCorso = true;
+  const cartelle = {};
+  let fatte = 0, errori = 0;
+  for (const d of buone) {
+    msg.style.color = "#555"; msg.textContent = `Importo ${fatte + errori + 1} di ${buone.length}: ${d.nome}…`;
+    try {
+      let testo = d.domanda.testo;
+      if (d.immagini.length) {
+        const chiave = d.domanda.categoria + "\n" + d.domanda.sottocateg;
+        if (!cartelle[chiave]) cartelle[chiave] = await cartellaImport([d.domanda.categoria, d.domanda.sottocateg]);
+        for (const nomeFile of d.immagini) {
+          const ext = (nomeFile.split(".").pop() || "").toLowerCase();
+          const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" }[ext] || "image/png";
+          const bytes = Uint8Array.from(atob(d.files[nomeFile]), c => c.charCodeAt(0));
+          const blob = await shrinkImage(new File([bytes], nomeFile, { type: mime }));
+          const uri = await blobToDataUri(blob);
+          const nome = blob.type === mime ? nomeFile : nomeFile.replace(/\.[^.]*$/, "") + ".jpg";
+          const up = await callScript({ action: "uploadImage", password: adminPassword, name: nome, folderId: cartelle[chiave],
+                                        mime: blob.type || mime, base64: uri.slice(uri.indexOf(",") + 1) });
+          if (up.status !== "ok") throw new Error(up.message);
+          adminImages[up.id] = uri;
+          testo = testo.replace(new RegExp("\u0000IMG:" + nomeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\|\\d+)?\u0000", "g"),
+                                (_, w) => "[img:" + up.id + (w || "") + "]");
+        }
+      }
+      const res = await callScript({ action: "createQuestion", password: adminPassword, question: Object.assign({}, d.domanda, { testo }) });
+      if (res.status !== "ok") throw new Error(res.errors ? res.errors.join(" ") : res.message);
+      allQuestions.push(res.question);
+      d.importata = res.question.id;
+      fatte++;
+    } catch(e) {
+      d.errore = e.message + versioneScriptHint();
+      errori++;
+    }
+  }
+  moodleImport.inCorso = false;
+  _bancoIndex = null;
+  populateBancoFilters();
+  renderBanco();
+  renderQBrowser();
+  msg.style.color = errori ? "#b00" : "#2e7d32";
+  msg.textContent = `✓ Importate ${fatte} domande, in bozza.` + (errori ? ` ${errori} non riuscite: ` +
+    buone.filter(d => d.errore).map(d => d.nome + " (" + d.errore + ")").join("; ") : "");
+  go.disabled = !buone.some(d => d.errore);   // si può riprovare solo quelle andate storte
 }
 
 // ---- CARTELLA DI DESTINAZIONE DELLE IMMAGINI ----

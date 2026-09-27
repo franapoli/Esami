@@ -318,10 +318,16 @@ let questionImages = {};   // id → dataURI | null
 let imagesKey      = null; // domande per cui le immagini sono già state richieste
 
 function extractDriveId(ref) {
-  const s = String(ref || "").trim();
+  const s = String(ref || "").split("|")[0].trim();   // "|400" dopo l'ID è la larghezza (imageWidth)
   const m = s.match(/\/d\/([A-Za-z0-9_-]{10,})/) || s.match(/[?&;]id=([A-Za-z0-9_-]{10,})/);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : null;
+}
+
+// Larghezza in pixel da [img:ID|400], o null se non indicata (l'immagine resta entro la colonna)
+function imageWidth(ref) {
+  const w = String(ref || "").split("|")[1];
+  return w && /^\s*\d{1,4}\s*$/.test(w) ? parseInt(w, 10) : null;
 }
 
 function renderImages(html) {
@@ -329,7 +335,8 @@ function renderImages(html) {
     const id = extractDriveId(ref);
     if (!id) return all;
     const uri = questionImages[id];
-    if (typeof uri === "string" && uri.indexOf("data:image/") === 0) return "<img class='q-img' src='" + uri + "' alt=''>";
+    const w = imageWidth(ref);
+    if (typeof uri === "string" && uri.indexOf("data:image/") === 0) return "<img class='q-img' src='" + uri + "' alt=''" + (w ? " style='width:" + w + "px'" : "") + ">";
     if (uri === null) return "<span class='q-img-msg'>[immagine non disponibile]</span>";
     return "<span class='q-img-msg'>caricamento immagine…</span>";
   });
@@ -1199,7 +1206,8 @@ function renderClozeQuestion(q) {
   if (!Array.isArray(answers[current])) answers[current] = new Array(q.dropdowns.length).fill(null);
   const ans = answers[current];
 
-  // Sostituisce {{N}} con <select> inline, escaping il testo circostante
+  // Sostituisce {{N}} con <select> inline. Il testo intorno è HTML, come per gli altri tipi:
+  // i menu possono stare nelle celle di una tabella (per esempio una tavola di verità)
   const parts = q.text.split(/(\{\{\d+\}\})/);
   let html = '<div class="cloze-text">';
   parts.forEach(part => {
@@ -1214,7 +1222,7 @@ function renderClozeQuestion(q) {
       });
       html += "<select class='cloze-select' onchange='saveClozeBox(" + i + ",parseInt(this.value))'>" + opts + "</select>";
     } else {
-      html += renderImages(escHtml(part));
+      html += renderImages(part);
     }
   });
   html += "</div>";
