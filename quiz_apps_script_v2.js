@@ -5,6 +5,12 @@
 // Distribuisci come App Web:
 //   - Esegui come: Me (franapoli@gmail.com)
 //   - Chi può accedere: Chiunque
+//
+// VINCOLO: questo file deve restare caricabile anche in un browser. La preview dell'admin
+// (quiz_v2.html?preview) lo scarica dal sito e ne usa buildQuestionObj e scoreAnswer, così
+// la prova di una domanda la prepara e la corregge esattamente come l'esame. Quindi a livello
+// di file solo costanti e funzioni: nessuna chiamata ad API Google (SpreadsheetApp,
+// PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
 const VERSION = "2.26.0"; // aggiornare ad ogni deploy

@@ -28,6 +28,15 @@
   /* QUIZ LAYOUT */
   #quiz-wrapper { display: none; max-width: 1100px; margin: 30px auto; padding: 0 16px; gap: 24px; display: none; align-items: flex-start; }
   #quiz-wrapper.active { display: flex; }
+  /* Preview dell'admin: solo la domanda, senza intestazione, barra laterale e navigazione */
+  body.preview { background: #fff; margin: 0; }
+  body.preview > *:not(#quiz-wrapper) { display: none !important; }
+  body.preview #quiz-wrapper { display: block; max-width: none; margin: 0; padding: 0; }
+  body.preview #sidebar, body.preview .nav, body.preview #progress-label, body.preview #progress-bar-wrap { display: none; }
+  body.preview #quiz-main { border: none; padding: 4px 2px 8px; }
+  #preview-bar { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  #preview-bar .btn { margin-top: 0; }
+  #preview-result { font-size: 0.95em; }
 
   /* SIDEBAR */
   #sidebar { width: 210px; flex-shrink: 0; background: #fff; border: 1px solid #ddd; padding: 20px 16px; position: sticky; top: 24px; }
@@ -203,6 +212,7 @@
 <script>
 const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnHlThdzpJYU4CWz2IB9GDrrLdXLVXwG4ezGToFZEVVXfb2_VJHkoyNnw/exec";
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
+const PREVIEW_MODE    = new URLSearchParams(window.location.search).has("preview");
 let ACTIVE_URL        = _isTestMode ? TEST_SCRIPT_URL : "";
 if (_isTestMode) document.getElementById("test-banner").style.display = "block";
 
@@ -294,6 +304,81 @@ function ensureImages() {
       if (/\[img:/.test((questions[current] || {}).text || "")) renderQuestion();
     })
     .catch(() => { if (imagesKey === key) imagesKey = null; });
+}
+
+// ---- PREVIEW PER L'ADMIN (quiz_v2.html?preview, dentro un iframe) ----
+// Disegna una sola domanda con il renderer vero dell'esame, e la prepara (buildQuestionObj)
+// e la corregge (scoreAnswer) con il codice del server, caricato da quiz_apps_script_v2.js
+// in uno scope isolato: la preview non ha una copia sua della logica che possa divergere.
+// Nessun salvataggio locale, nessuna chiamata di rete verso lo script.
+let previewBackend = null;  // { buildQuestionObj, scoreAnswer, VERSION }
+let previewRepoQ   = null;  // domanda in forma foglio, quella che riceve scoreAnswer
+
+async function initPreview() {
+  document.body.classList.add("preview");
+  saveLocal       = () => {};
+  enqueueProgress = () => {};
+  updateGrid      = () => {};
+  document.getElementById("loading-overlay").classList.add("hidden");
+  document.getElementById("quiz-wrapper").classList.add("active");
+  const bar = document.createElement("div");
+  bar.id = "preview-bar";
+  bar.innerHTML = "<button class='btn' onclick='previewCheck()'>Verifica</button>" +
+                  "<button class='btn btn-outline' onclick='previewReset()'>Ricomincia</button>" +
+                  "<span id='preview-result'></span>";
+  document.getElementById("quiz-main").appendChild(bar);
+
+  let error = null;
+  try {
+    const res = await fetch("quiz_apps_script_v2.js", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    previewBackend = new Function(await res.text() + "\n;return { buildQuestionObj, scoreAnswer, VERSION };")();
+  } catch(e) {
+    error = "Impossibile caricare lo script di backend (" + e.message + "). Deve restare caricabile nel browser: " +
+            "niente chiamate ad API Google fuori dalle funzioni.";
+    document.getElementById("question-container").innerHTML = "<p style='color:#b00;'>" + escHtml(error) + "</p>";
+    bar.style.display = "none";
+  }
+
+  window.addEventListener("message", ev => {
+    if (ev.origin !== location.origin || ev.source !== window.parent) return;
+    const m = ev.data || {};
+    if (m.type !== "qf-preview-question" || !previewBackend) return;
+    Object.assign(questionImages, m.images || {});
+    previewRepoQ = m.question;
+    previewReset();
+  });
+  // L'admin dimensiona l'iframe sul contenuto
+  new ResizeObserver(() => window.parent.postMessage(
+    { type: "qf-preview-height", height: document.documentElement.scrollHeight }, location.origin
+  )).observe(document.body);
+  window.parent.postMessage({ type: "qf-preview-ready", version: previewBackend ? previewBackend.VERSION : null, error },
+                            location.origin);
+}
+
+function previewReset() {
+  if (!previewRepoQ) return;
+  questions = [previewBackend.buildQuestionObj(previewRepoQ, 1, false)];
+  answers = [null];
+  current = 0;
+  shuffleMap = null;
+  matchSelected = null;
+  document.getElementById("preview-result").innerHTML = "";
+  renderQuestion();
+}
+
+function previewCheck() {
+  const q = questions[0];
+  const out = document.getElementById("preview-result");
+  if (q.type === "free") {
+    out.innerHTML = "<span style='color:#777'>Risposta aperta: nessun punteggio automatico.</span>";
+    return;
+  }
+  const pts = previewBackend.scoreAnswer(previewRepoQ, serializeAnswer(q, answers[0]));
+  const max = Number(previewRepoQ.punti) || 1;
+  const fmt = n => String(Math.round(n * 100) / 100).replace(".", ",");
+  const color = pts >= max ? "#2e7d32" : pts > 0 ? "#9a6b00" : "#b00";
+  out.innerHTML = "<strong style='color:" + color + "'>" + fmt(pts) + " / " + fmt(max) + " punti</strong>";
 }
 
 function getLSKey() { return "quiz_session_" + EXAM_ID; }
@@ -434,6 +519,8 @@ function showBtn() {
 
 // ---- AVVIO PAGINA ----
 window.addEventListener("load", async function() {
+  // In preview non parte nulla del flusso d'esame: niente config, traccia, timer, salvataggi
+  if (PREVIEW_MODE) { initPreview(); return; }
   await loadConfig();
   if (!ACTIVE_URL) {
     document.getElementById("loading-overlay").classList.add("hidden");
@@ -1055,18 +1142,20 @@ function saveClozeBox(idx, val) {
 // client-side. Le risposte corrette vengono mostrate solo in practice, dopo la
 // consegna, usando i dati restituiti da finalize (correct_answers).
 
+// Risposta in memoria → forma grezza che il server salva e passa a scoreAnswer.
+// Unica per update, consegna e preview dell'admin.
+function serializeAnswer(q, value) {
+  if (q.type === "mc") return (value !== null && value !== undefined) ? String(value) : "";
+  if (q.type === "multi-mc" || q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
+    return JSON.stringify(value || []);
+  }
+  return String(value || "");
+}
+
 async function saveProgress(qIndex, value) {
   setSaveStatus("Salvataggio…");
   try {
-    const q = questions[qIndex];
-    let ans;
-    if (q.type === "mc") {
-      ans = (value !== null && value !== undefined) ? String(value) : "";
-    } else if (q.type === "multi-mc" || q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
-      ans = JSON.stringify(value || []);
-    } else {
-      ans = String(value || "");
-    }
+    const ans = serializeAnswer(questions[qIndex], value);
     // Invia solo la risposta grezza — il punteggio viene calcolato server-side in finalize
     const res = await callScript({ action:"update", examId: EXAM_ID, matricola: studentMatricola,
                                    qIndex: qIndex + 1, ans });
@@ -1118,18 +1207,7 @@ async function showResults() {
   document.getElementById("thankyou").style.display = "block";
 
   // Costruisce le risposte grezze da inviare al server (nessun punteggio client-side)
-  const rawAnswers = questions.map((q, i) => {
-    const value = answers[i];
-    let ans;
-    if (q.type === "multi-mc" || q.type === "match" || q.type === "multi-fitb" || q.type === "cloze") {
-      ans = JSON.stringify(value || []);
-    } else if (q.type === "mc") {
-      ans = (value !== null && value !== undefined) ? String(value) : "";
-    } else {
-      ans = String(value || "");
-    }
-    return { ans };
-  });
+  const rawAnswers = questions.map((q, i) => ({ ans: serializeAnswer(q, answers[i]) }));
 
   const endTime    = new Date();
   const elapsed    = startTime ? Math.round((endTime - startTime) / 1000) : null;

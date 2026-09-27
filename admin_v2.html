@@ -183,6 +183,9 @@
     .banco-layout { flex-direction:column; }
     .banco-list, .banco-detail { flex:none; width:100%; max-height:none; position:static; }
   }
+  #bd-prova-frame { width:100%; height:120px; border:1px solid #e4e4e0; margin-top:10px; display:block; }
+  .prova-warn { font-size:0.82em; padding:8px 10px; margin-top:10px; background:#fff8e1; color:#7b5e00; line-height:1.5; }
+  .prova-warn.errore { background:#fdecea; color:#b00; }
   .banco-detail-actions { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
   .banco-detail-actions .btn { margin-top:0; }
   .banco-flash { font-size:0.84em; color:#2e7d32; }
@@ -737,7 +740,17 @@
       </div>
       <div class="banco-layout">
         <div class="card banco-list" id="banco-list" tabindex="0" onkeydown="bancoKey(event)"></div>
-        <div class="card banco-detail" id="banco-detail"></div>
+        <div class="card banco-detail" id="banco-detail">
+          <div id="bd-main"></div>
+          <!-- Fuori da bd-main perché non venga ricreato: ricaricare l'iframe a ogni selezione
+               vorrebbe dire riscaricare lo script di backend -->
+          <div id="bd-prova" style="display:none;">
+            <div class="be-preview-title">Come la vede lo studente</div>
+            <div id="bd-prova-warn"></div>
+            <iframe id="bd-prova-frame" title="Prova della domanda"></iframe>
+          </div>
+          <div id="bd-sol"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -865,7 +878,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "8c61a49";
+const BUILD = "6788ca7";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1053,6 +1066,7 @@ async function doLogin() {
     }
     adminPassword = pwd;
     allEsami = res.esami || [];
+    deployedScriptVersion = res.version || null;
     if (res.version) {
       document.getElementById("build-label").textContent =
         "build " + BUILD + " · v" + res.version;
@@ -2324,21 +2338,87 @@ function bancoUsageHtml(q) {
   return html + "</div>";
 }
 
+// ---- PROVA INTERATTIVA (iframe quiz_v2.html?preview) ----
+// Un solo iframe per tutto il tab: gli si manda la domanda da mostrare, lui risponde
+// "pronto" (con la versione del backend caricato) e l'altezza del contenuto.
+let deployedScriptVersion = null;   // da getAllEsami al login: lo script che usano gli esami
+const prova = { ready: false, version: null, error: null, pending: null };
+
+function provaFrame() { return document.getElementById("bd-prova-frame"); }
+
+function showProva(q) {
+  document.getElementById("bd-prova").style.display = "";
+  const fr = provaFrame();
+  if (!fr.dataset.loaded) { fr.dataset.loaded = "1"; fr.src = "quiz_v2.html?preview"; }
+  // Solo immagini risolte: un errore diventa null ("non disponibile"), le non ancora caricate
+  // restano fuori e l'iframe mostra "caricamento"
+  const images = {};
+  imageIdsIn(q.testo).forEach(id => {
+    const v = adminImages[id];
+    if (typeof v === "string") images[id] = v;
+    else if (v) images[id] = null;
+  });
+  prova.pending = { type: "qf-preview-question", question: JSON.parse(JSON.stringify(q)), images };
+  if (prova.ready) sendProva();
+}
+
+function sendProva() {
+  if (!prova.pending) return;
+  provaFrame().contentWindow.postMessage(prova.pending, location.origin);
+  prova.pending = null;
+}
+
+function hideProva() { document.getElementById("bd-prova").style.display = "none"; }
+
+function renderProvaWarn() {
+  const el = document.getElementById("bd-prova-warn");
+  if (prova.error) {
+    el.innerHTML = `<div class="prova-warn errore">${escHtml(prova.error)}</div>`;
+  } else if (deployedScriptVersion && prova.version && prova.version !== deployedScriptVersion) {
+    el.innerHTML = `<div class="prova-warn">La prova usa lo script ${escHtml(prova.version)} pubblicato sul sito, ma ` +
+      `${_isTestMode ? "l'ambiente di test usa" : "gli esami usano"} la ${escHtml(deployedScriptVersion)} deployata su Google: ` +
+      `finché non rideployi, preparazione e punteggi all'esame possono differire da quelli che vedi qui.</div>`;
+  } else {
+    el.innerHTML = "";
+  }
+}
+
+window.addEventListener("message", ev => {
+  const fr = provaFrame();
+  if (!fr || ev.source !== fr.contentWindow || ev.origin !== location.origin) return;
+  const m = ev.data || {};
+  if (m.type === "qf-preview-ready") {
+    Object.assign(prova, { ready: true, version: m.version, error: m.error });
+    renderProvaWarn();
+    sendProva();
+  } else if (m.type === "qf-preview-height") {
+    fr.style.height = Math.max(80, Math.ceil(m.height)) + "px";
+  }
+});
+
 function renderBancoDetail() {
-  const el = document.getElementById("banco-detail");
+  const main = document.getElementById("bd-main"), sol = document.getElementById("bd-sol");
   const q = bancoSelected && allQuestions && allQuestions.find(x => x.id === bancoSelected);
-  if (!q) { el.innerHTML = '<div class="banco-empty">Seleziona una domanda dall\'elenco.</div>'; return; }
+  if (!q) {
+    main.innerHTML = '<div class="banco-empty">Seleziona una domanda dall\'elenco.</div>';
+    sol.innerHTML = "";
+    hideProva();
+    return;
+  }
   const qs = q.stato || "verificato";
   const flash = bancoFlash && bancoFlash.id === q.id ? `<span class="banco-flash">${escHtml(bancoFlash.text)}</span>` : "";
   bancoFlash = null;
-  el.innerHTML =
+  main.innerHTML =
     `<div class="banco-detail-actions">
        <button class="btn btn-sm" onclick="bancoEditStart()">${BANCO_TIPI_EDITABILI.includes(q.tipo) ? "Modifica" : "Modifica metadati"}</button>
        ${flash}
      </div>` +
-    `<div class="prev-meta" style="margin:0 0 14px;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
-      ` &nbsp;·&nbsp; ${escHtml(TIPO_LABEL[q.tipo] || q.tipo)} &nbsp;·&nbsp; ${q.punti} pt</div>` +
-    renderImagesAdmin(questionBodyHtml(q)) +
+    `<div class="prev-meta" style="margin:0;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
+      ` &nbsp;·&nbsp; ${escHtml(TIPO_LABEL[q.tipo] || q.tipo)} &nbsp;·&nbsp; ${q.punti} pt</div>`;
+  showProva(q);
+  sol.innerHTML =
+    `<div class="be-preview-title">Soluzione</div><div class="be-preview">` +
+    renderImagesAdmin(questionBodyHtml(q)) + `</div>` +
     `<div class="prev-meta">ID: <code>${escHtml(q.id)}</code>` +
       (q.tags ? ` &nbsp;·&nbsp; Tag: ${escHtml(q.tags)}` : "") +
       ` &nbsp;·&nbsp; <span class="stato-badge stato-${qs}" style="cursor:pointer;" onclick="toggleStato('${q.id}')" title="Clicca per cambiare stato">${qs === "bozza" ? "✎ bozza" : "✓ verificato"}</span></div>` +
@@ -2474,7 +2554,7 @@ function renderBancoEditor() {
   const uniq = f => [...new Set(allQuestions.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
   const tipiSel = locked ? [q.tipo] : BANCO_TIPI_EDITABILI;
 
-  document.getElementById("banco-detail").innerHTML = `
+  document.getElementById("bd-main").innerHTML = `
     <div class="be-head"><strong>${locked ? "Modifica metadati" : "Modifica"}</strong> <code>${escHtml(q.id)}</code></div>
     ${nota}
     <div class="be-grid">
@@ -2508,10 +2588,11 @@ function renderBancoEditor() {
       <button class="btn btn-sm btn-outline" onclick="bancoEditCancel()">Annulla</button>
       <span id="be-msg"></span>
     </div>
-    <div class="be-preview-title">Anteprima</div>
-    <div id="be-preview" class="be-preview"></div>
     <datalist id="be-cats">${uniq(x => x.categoria).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>
     <datalist id="be-subcats">${uniq(x => x.sottocateg).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>`;
+  document.getElementById("bd-sol").innerHTML =
+    `<div class="be-preview-title">Soluzione della bozza</div><div id="be-preview" class="be-preview"></div>`;
+  e.provaFp = null;
   renderBancoEditTipo();
   bancoEditRefresh();
 }
@@ -2602,6 +2683,15 @@ function bancoEditRefresh() {
   const ids = imageIdsIn(q.testo);
   const nuove = new Set(ids.filter(id => !salvate.has(id)));
   document.getElementById("be-preview").innerHTML = renderImagesAdmin(questionBodyHtml({ ...q, id: e.id }), nuove);
+
+  // La prova segue la bozza. Con un piccolo ritardo: ogni invio la ridisegna e azzera
+  // le risposte di prova, non ha senso farlo a ogni tasto.
+  const fp = questionFingerprintAdmin(q);
+  if (fp !== e.provaFp) {
+    e.provaFp = fp;
+    clearTimeout(e.provaTimer);
+    e.provaTimer = setTimeout(() => { if (bancoEdit === e) showProva({ ...q, id: e.id }); }, 300);
+  }
 
   // Una richiesta per immagine a sessione di modifica, non una a ogni tasto
   const daProvare = ids.filter(id => salvate.has(id) && typeof adminImages[id] !== "string" && !e.imgTried.has(id));
