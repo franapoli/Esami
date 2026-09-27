@@ -164,7 +164,7 @@
   #banco-count { font-size:0.8em; color:#888; }
   .banco-layout { display:flex; gap:18px; align-items:flex-start; }
   .banco-list { flex:0 0 42%; padding:0; max-height:calc(100vh - 230px); overflow-y:auto; outline:none; }
-  .banco-detail { flex:1; min-width:0; position:sticky; top:12px; max-height:calc(100vh - 230px); overflow-y:auto; }
+  .banco-detail { flex:1; min-width:0; }
   .banco-empty { padding:16px; color:#aaa; font-size:0.85em; font-style:italic; }
   .banco-uso { font-size:0.84em; color:#444; line-height:1.7; margin-top:16px; padding-top:12px; border-top:1px solid #eee; }
   .banco-uso .aperto { color:#b00; font-weight:600; }
@@ -879,7 +879,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "95f7735";
+const BUILD = "1d8cea0";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
