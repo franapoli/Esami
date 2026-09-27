@@ -381,7 +381,7 @@ function validateQuestion(q) {
   return err;
 }
 
-// Problemi nel contenuto di match, multi-fitb e cloze. Avvisi, non blocchi: validateQuestion
+// Problemi nel contenuto delle domande (soprattutto match, multi-fitb e cloze). Avvisi, non blocchi: validateQuestion
 // impedisce i salvataggi, e una domanda rotta deve restare modificabile almeno nei metadati.
 // Li mostra la prova dell'admin; serviranno anche all'editor dedicato di questi tipi.
 // Tutti casi che "Mostra soluzione" non può scoprire, perché soluzione e punteggio restano
@@ -424,6 +424,14 @@ function lintQuestion(q) {
       }
     });
     checkMarkers(dds.length, "menu");
+  }
+  if (q.tipo === "fitb") {
+    // Il primo "___" diventa la casella (quiz_v2.html, splitFitbBlank); gli altri restano testo
+    const blanks = String(q.testo || "").replace(/<[^>]*>|\[img:[^\]]*\]/g, " ").match(/_{3,}/g) || [];
+    if (blanks.length > 1) {
+      warn.push("Il testo ha " + blanks.length + " spazi da completare, ma una fitb ha una sola casella: " +
+                "solo il primo diventa la casella. Per più risposte usa multi-fitb.");
+    }
   }
   if (q.tipo === "match") {
     const left = Array.isArray(q.options) ? q.options : [];

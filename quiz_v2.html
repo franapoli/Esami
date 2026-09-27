@@ -74,6 +74,8 @@
   .option-label { font-size: 0.95em; line-height: 1.5; }
   .fitb-input { width: 100%; padding: 9px 12px; border: 1px solid #bbb; font-size: 1em; font-family: monospace; margin-top: 4px; }
   .fitb-hint { font-size: 0.82em; color: #777; margin-top: 6px; }
+  .fitb-input.fitb-inline { display: inline-block; width: 11em; max-width: 100%; margin: 0 4px; padding: 3px 8px;
+                            font-size: 0.95em; vertical-align: baseline; background: #fffbe6; border-color: #1a1a1a; }
 
   /* MATCH */
   .match-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
@@ -265,6 +267,24 @@ function formatDateIt(dateStr) {
 
 function escHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Per valori dentro attributi tra apici singoli: escHtml non tocca gli apici, e una risposta
+// come "l'acido" verrebbe troncata a "l" al primo ridisegno
+function escAttrQ(str) { return escHtml(str).replace(/'/g, "&#39;"); }
+
+// Fitb con la casella dentro il testo: il primo "___" (tre o più trattini bassi) è il punto
+// da completare. Si cerca solo nel testo, non dentro i tag HTML né nei segnaposto [img:…],
+// dove gli ID Drive possono contenere trattini bassi. null se il testo non ne ha: la casella
+// resta sotto, come per le domande scritte senza segnaposto.
+function splitFitbBlank(text) {
+  const parts = String(text || "").split(/(<[^>]*>|\[img:[^\]]*\])/); // pari: testo, dispari: tag
+  for (let i = 0; i < parts.length; i += 2) {
+    const m = parts[i].match(/_{3,}/);
+    if (m) return [parts.slice(0, i).join("") + parts[i].slice(0, m.index),
+                   parts[i].slice(m.index + m[0].length) + parts.slice(i + 1).join("")];
+  }
+  return null;
 }
 
 // ---- IMMAGINI ----
@@ -954,7 +974,8 @@ function renderQuestion() {
   // Il testo domanda viene reso come innerHTML
   // cloze e multi-fitb con tabella ({{N}}) gestiscono il testo internamente
   const isTableFitb = q.type === "multi-fitb" && /\{\{\d+\}\}/.test(q.text || "");
-  if (q.type !== "cloze" && !isTableFitb) html += "<div class='q-text'>" + renderImages(q.text) + "</div>";
+  const fitbBlank = q.type === "fitb" ? splitFitbBlank(q.text) : null;  // il testo lo scrive il ramo fitb
+  if (q.type !== "cloze" && !isTableFitb && !fitbBlank) html += "<div class='q-text'>" + renderImages(q.text) + "</div>";
 
   if (q.type === "mc") {
     const order = (shuffleMap && shuffleMap[current] && shuffleMap[current].length) ? shuffleMap[current] : q.options.map((_, i) => i);
@@ -978,15 +999,18 @@ function renderQuestion() {
   } else if (q.type === "fitb") {
     const val = answers[current] !== null ? answers[current] : "";
     const ph  = q.placeholder || "";
-    html += "<input class='fitb-input' type='text' id='fitb-input' value='" + escHtml(String(val)) +
-            "' placeholder='" + escHtml(ph) + "' oninput='saveText(this.value)'>" +
-            "<p class='fitb-hint'>Inserisci i valori separati da virgola, senza spazi</p>";
+    const input = cls => "<input class='" + cls + "' type='text' id='fitb-input' value='" + escAttrQ(String(val)) +
+                         "' placeholder='" + escAttrQ(ph) + "' oninput='saveText(this.value)'>";
+    html += fitbBlank
+      ? "<div class='q-text'>" + renderImages(fitbBlank[0]) + input("fitb-input fitb-inline") + renderImages(fitbBlank[1]) + "</div>"
+      : input("fitb-input");
+    html += "<p class='fitb-hint'>Inserisci i valori separati da virgola, senza spazi</p>";
   } else if (q.type === "match") {
     html += renderMatchQuestion(q);
   } else if (q.type === "free") {
     const val = answers[current] !== null ? answers[current] : "";
     html += "<textarea class='free-textarea' oninput='saveText(this.value)' " +
-            "placeholder='" + escHtml(q.placeholder || "Scrivi la tua risposta qui…") + "'>" +
+            "placeholder='" + escAttrQ(q.placeholder || "Scrivi la tua risposta qui…") + "'>" +
             escHtml(String(val)) + "</textarea>" +
             "<p class='fitb-hint'>La risposta verrà registrata; il punteggio sarà assegnato manualmente.</p>";
   } else if (q.type === "multi-fitb") {
@@ -1102,7 +1126,7 @@ function renderMultiFitbQuestion(q) {
     let inner = renderImages(q.text).replace(/\{\{(\d+)\}\}/g, (_, idx) => {
       const i = parseInt(idx);
       return "<input class='multi-fitb-table-input' type='text' " +
-        "value='" + escHtml(String(ans[i] || "")) + "' " +
+        "value='" + escAttrQ(String(ans[i] ?? "")) + "' " +
         "oninput='saveMultiFitbBox(" + i + ",this.value)'>";
     });
     let html = "<div class='q-text'>" + inner + "</div>";
@@ -1117,8 +1141,8 @@ function renderMultiFitbQuestion(q) {
     html += "<div class='multi-fitb-box'>" +
       (box.label ? "<label class='multi-fitb-label'>" + escHtml(box.label) + "</label>" : "") +
       "<input class='multi-fitb-input' type='text' " +
-      "value='" + escHtml(String(ans[i] || "")) + "' " +
-      "placeholder='" + escHtml(box.placeholder || "") + "' " +
+      "value='" + escAttrQ(String(ans[i] ?? "")) + "' " +
+      "placeholder='" + escAttrQ(box.placeholder || "") + "' " +
       "oninput='saveMultiFitbBox(" + i + ",this.value)'>" +
       "</div>";
   });
