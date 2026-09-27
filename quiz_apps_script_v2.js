@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "2.28.0"; // aggiornare ad ogni deploy
+const VERSION = "2.29.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -239,6 +239,26 @@ function loadImagesData(ids) {
     } catch(e) { out[id] = { error: "not_found" }; }
   });
   return out;
+}
+
+// Le immagini caricate dall'editor vanno in questa sottocartella della cartella QuizForge
+const IMG_FOLDER_NAME = "QuizForge immagini";
+
+function getImagesFolder(create) {
+  const root = DriveApp.getFolderById(getDriveFolderId());
+  const it = root.getFoldersByName(IMG_FOLDER_NAME);
+  if (it.hasNext()) return it.next();
+  return create ? root.createFolder(IMG_FOLDER_NAME) : null;
+}
+
+function isInImagesFolder(id) {
+  try {
+    const folder = getImagesFolder(false);
+    if (!folder) return false;
+    const parents = DriveApp.getFileById(id).getParents();
+    while (parents.hasNext()) if (parents.next().getId() === folder.getId()) return true;
+  } catch(e) {}
+  return false;
 }
 
 // Allo studente basta sapere che l'immagine manca: il dettaglio serve solo all'admin.
@@ -1248,8 +1268,9 @@ function doPost(e) {
     }
 
     // getImagesAdmin — immagini per preview ed export. Serve solo ID citati nel banco
-    // domande: lo script ha accesso all'intero Drive del proprietario, e senza questo
-    // filtro la sola password admin basterebbe a leggere qualunque file.
+    // domande o file della cartella immagini di QuizForge (quelli appena caricati, non ancora
+    // in una domanda salvata): lo script ha accesso all'intero Drive del proprietario, e senza
+    // questo filtro la sola password admin basterebbe a leggere qualunque file.
     if (data.action === "getImagesAdmin") {
       if (data.password !== getAdminPassword()) {
         return corsResponse({ status: "error", message: "Password errata" });
@@ -1257,8 +1278,25 @@ function doPost(e) {
       const allQ = loadAllQuestions();
       const known = {};
       Object.values(allQ).forEach(q => imageIdsInText(q.testo).forEach(id => known[id] = true));
-      const ids = (Array.isArray(data.ids) ? data.ids : []).map(String).filter(id => known[id]);
+      const ids = (Array.isArray(data.ids) ? data.ids : []).map(String).filter(id => known[id] || isInImagesFolder(id));
       return corsResponse({ status: "ok", images: loadImagesData(ids) });
+    }
+
+    // uploadImage — carica un'immagine dall'editor nella cartella immagini di QuizForge e ne
+    // restituisce l'ID, da usare come [img:ID]. Il file resta privato: lo serve getImages.
+    if (data.action === "uploadImage") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const mime = String(data.mime || "");
+      if (mime.indexOf("image/") !== 0) return corsResponse({ status: "error", message: "Il file non è un'immagine." });
+      let bytes;
+      try { bytes = Utilities.base64Decode(String(data.base64 || "")); } catch(e) { bytes = null; }
+      if (!bytes || !bytes.length) return corsResponse({ status: "error", message: "Dati dell'immagine non leggibili." });
+      if (bytes.length > IMG_MAX_BYTES) {
+        return corsResponse({ status: "error", message: "Immagine troppo grande: " + (bytes.length / 1e6).toFixed(1) + " MB, massimo " + (IMG_MAX_BYTES / 1e6).toFixed(1) + " MB." });
+      }
+      const name = String(data.name || "immagine").replace(/[^\w.\- ]+/g, "_").slice(0, 80) || "immagine";
+      const file = getImagesFolder(true).createFile(Utilities.newBlob(bytes, mime, name));
+      return corsResponse({ status: "ok", id: file.getId() });
     }
 
     // updateQuestion — sovrascrive una domanda dall'editor admin. data.expected è la domanda

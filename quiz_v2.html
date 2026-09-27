@@ -288,7 +288,11 @@ function multiFitbShareHint(q) {
   const tot = w.reduce((a, b) => a + b, 0);
   if (!tot) return "";
   const fmt = n => String(Math.round(n * 100) / 100).replace(".", ",");
-  return "<p class='fitb-hint'>Punteggio parziale: " + w.map(x => fmt(x / tot * q.pts)).join(" + ") + " pt</p>";
+  const quote = w.map(x => fmt(x / tot * q.pts));
+  const testo = quote.length > 1 && quote.every(x => x === quote[0])
+    ? quote.length + " caselle da " + quote[0] + " pt"
+    : quote.join(" + ") + " pt";
+  return "<p class='fitb-hint'>Punteggio parziale: " + testo + "</p>";
 }
 
 // Fitb con la casella dentro il testo: il primo "___" (tre o più trattini bassi) è il punto

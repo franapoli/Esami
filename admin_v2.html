@@ -201,6 +201,11 @@
   .be-json-actions { display:flex; gap:8px; margin:-6px 0 10px; }
   .be-example { font-size:0.82em; color:#555; margin:0 0 12px; }
   .be-avanzate { margin:0 0 12px; }
+  .be-upload { display:inline-block; cursor:pointer; }
+  .be-ed-form { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; align-items:end; margin:6px 0; }
+  .be-ed-form .be-field { margin-bottom:0; }
+  .be-check { font-size:0.8em; color:#555; display:flex; align-items:center; gap:6px; }
+  .be-ed-form .btn { margin-top:0; justify-self:start; }
   .be-avanzate > summary { cursor:pointer; font-size:0.82em; color:#777; margin-bottom:8px; }
   .be-example summary { cursor:pointer; color:#777; }
   .be-example pre { background:#f6f6f2; padding:10px 12px; overflow-x:auto; font-size:0.95em; margin:8px 0; }
@@ -881,7 +886,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "fc0ec8b";
+const BUILD = "00f9cdc";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2626,8 +2631,12 @@ function renderBancoEditor() {
         <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
     </div>
     <label class="be-field">Testo
-      <textarea rows="6" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
+      <textarea rows="6" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
       <small id="be-testo-hint"></small></label>
+    <div class="be-json-actions">
+      <label class="be-mini be-upload">Inserisci immagine…
+        <input type="file" accept="image/*" hidden onchange="bancoEditImage(this)"></label>
+    </div>
     <div id="be-tipo-fields"></div>
     <div id="be-errors" class="be-errors"></div>
     <div id="be-warn"></div>
@@ -2737,6 +2746,17 @@ function renderBancoEditTipo() {
            <code>Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale.</code><br>
            Funziona anche nelle celle di una tabella. Le caselle valgono tutte uguale.
            <div id="be-fitb-mode" style="margin-top:6px;"></div></div>
+         <details class="be-avanzate" id="be-ed">
+           <summary>Genera una matrice di edit distance</summary>
+           <div class="be-ed-form">
+             <label class="be-field">Stringa s1 (righe)<input type="text" id="be-ed-s1" placeholder="es. GCAT" autocomplete="off"></label>
+             <label class="be-field">Stringa s2 (colonne)<input type="text" id="be-ed-s2" placeholder="es. GCG" autocomplete="off"></label>
+             <label class="be-check"><input type="checkbox" id="be-ed-bordi"> da completare anche prima riga e prima colonna</label>
+             <button class="btn btn-sm" onclick="bancoEditGeneraED()">Genera</button>
+           </div>
+           <small>Scrive testo e matrice di Levenshtein (inserimento, cancellazione e sostituzione costano 1),
+             con le soluzioni come [[n]]: poi puoi ritoccare il testo. Ogni cella vale uguale.</small>
+         </details>
          <details class="be-avanzate" ${d.dataFitb.trim() && !/\[\[/.test(d.testo) ? "open" : ""}>
            <summary>Avanzato: caselle in JSON, per pesi diversi, etichette o griglia sotto il testo</summary>
            ${editor}
@@ -2751,6 +2771,115 @@ function renderBancoEditTipo() {
       `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo</small>
          <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
   }
+}
+
+// Un'immagine oltre il limite del server viene rimpicciolita qui (lato più lungo 1600 px,
+// poi meno, in JPEG): le foto del telefono pesano spesso 3-5 MB. Un SVG non si ridimensiona.
+const IMG_UPLOAD_MAX = 1500000;   // come IMG_MAX_BYTES nello script
+
+function blobToDataUri(blob) {
+  return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
+}
+
+async function shrinkImage(file) {
+  if (file.size <= IMG_UPLOAD_MAX) return file;
+  if (file.type === "image/svg+xml") throw new Error("SVG troppo grande (" + fmtMB(file.size) + ", massimo " + fmtMB(IMG_UPLOAD_MAX) + ").");
+  const img = await new Promise((ok, ko) => {
+    const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error("immagine non leggibile"));
+    i.src = URL.createObjectURL(file);
+  });
+  for (const lato of [1600, 1200, 900]) {
+    const k = Math.min(1, lato / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);   // JPEG non ha trasparenza
+    g.drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.85));
+    if (blob && blob.size <= IMG_UPLOAD_MAX) return blob;
+  }
+  throw new Error("non riesco a portarla sotto " + fmtMB(IMG_UPLOAD_MAX) + ".");
+}
+
+async function bancoEditImage(input) {
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file || !bancoEdit) return;
+  const e = bancoEdit, msg = document.getElementById("be-msg");
+  if (!/^image\//.test(file.type)) { msg.style.color = "#b00"; msg.textContent = "Il file non è un'immagine."; return; }
+  msg.style.color = "#555"; msg.textContent = "Carico l'immagine…";
+  try {
+    const blob = await shrinkImage(file);
+    const uri = await blobToDataUri(blob);
+    // Ridotta diventa JPEG: il nome nel Drive deve dirlo
+    const name = blob === file ? file.name : file.name.replace(/\.[^.]*$/, "") + ".jpg";
+    const res = await callScript({ action: "uploadImage", password: adminPassword, name,
+                                   mime: blob.type || file.type, base64: uri.slice(uri.indexOf(",") + 1) });
+    if (!res || res.status !== "ok") throw new Error((res && res.message) || "risposta non valida");
+    if (bancoEdit !== e) return;
+    adminImages[res.id] = uri;   // già in mano: niente seconda richiesta per vederla
+    // Il segnaposto va dove c'è il cursore nel testo
+    const ta = document.getElementById("be-testo"), tag = "[img:" + res.id + "]";
+    const at = ta.selectionStart ?? ta.value.length;
+    ta.value = ta.value.slice(0, at) + tag + ta.value.slice(ta.selectionEnd ?? at);
+    ta.selectionStart = ta.selectionEnd = at + tag.length;
+    e.draft.testo = ta.value;
+    e.provaFp = null;
+    bancoEditRefresh();
+    msg.style.color = "#2e7d32";
+    msg.textContent = "✓ Immagine caricata" + (blob !== file ? " (ridotta a " + fmtMB(blob.size) + ")" : "") + " e inserita nel testo.";
+  } catch(err) {
+    if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Caricamento non riuscito: " + err.message; }
+  }
+}
+
+// ---- GENERATORE: EDIT DISTANCE ----
+function editDistanceMatrix(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d;
+}
+
+// Testo della domanda: matrice con le celle da completare come [[valore]]
+function editDistanceTesto(s1, s2, bordi) {
+  const d = editDistanceMatrix(s1, s2);
+  const cella = (v, daCompletare) => "<td>" + (daCompletare ? "[[" + v + "]]" : v) + "</td>";
+  let t = `Calcola la <b>edit distance</b> (Levenshtein) tra <b>s1 = "${s1}"</b> e <b>s2 = "${s2}"</b>. ` +
+          `d[i][j] è il numero minimo di operazioni (inserimento, cancellazione, sostituzione, ciascuna di costo 1) ` +
+          `per trasformare i primi i caratteri di s1 nei primi j caratteri di s2. Completa la matrice.\n` +
+          `<table class="dp-table">\n<tr><th></th><th>""</th>` + [...s2].map(c => `<th>${c}</th>`).join("") + `</tr>\n`;
+  d.forEach((riga, i) => {
+    t += `<tr><th>${i === 0 ? '""' : s1[i - 1]}</th>` +
+         riga.map((v, j) => cella(v, bordi || (i > 0 && j > 0))).join("") + `</tr>\n`;
+  });
+  return t + `</table>`;
+}
+
+function bancoEditGeneraED() {
+  const s1 = document.getElementById("be-ed-s1").value.trim();
+  const s2 = document.getElementById("be-ed-s2").value.trim();
+  const msg = document.getElementById("be-msg");
+  // Solo lettere e cifre: le stringhe finiscono nell'HTML del testo e tra [[ ]]
+  if (!/^[A-Za-z0-9]+$/.test(s1) || !/^[A-Za-z0-9]+$/.test(s2)) {
+    msg.style.color = "#b00"; msg.textContent = "Le due stringhe devono contenere solo lettere e cifre."; return;
+  }
+  if (s1.length > 10 || s2.length > 10) {
+    msg.style.color = "#b00"; msg.textContent = "Al massimo 10 caratteri per stringa: oltre, la matrice diventa illeggibile."; return;
+  }
+  const d = bancoEdit.draft;
+  if (d.testo.trim() && !confirm("Sostituire il testo attuale con la matrice generata?")) return;
+  d.testo = editDistanceTesto(s1, s2, document.getElementById("be-ed-bordi").checked);
+  d.dataFitb = "";
+  document.getElementById("be-testo").value = d.testo;
+  const json = document.getElementById("be-json");
+  if (json) json.value = "";
+  bancoEditRefresh();
+  const n = (d.testo.match(/\[\[/g) || []).length;
+  msg.style.color = "#2e7d32";
+  msg.textContent = "✓ Matrice generata: " + n + " celle da completare, edit distance = " + editDistanceMatrix(s1, s2)[s1.length][s2.length] + ".";
 }
 
 function bancoEditFormat() {
@@ -2835,13 +2964,16 @@ function bancoEditRefresh() {
   document.getElementById("be-save").disabled     = e.busy || !!errs.length || !dirty;
   document.getElementById("be-save-new").disabled = e.busy || !!errs.length;
 
-  // getImagesAdmin serve solo immagini già citate nel banco: una nuova si vede dopo il salvataggio
+  // getImagesAdmin serve le immagini già citate nel banco e quelle della cartella immagini di
+  // QuizForge (dove finiscono le caricate). Un file altrove nel Drive, citato solo in questa
+  // bozza, si vede dopo il salvataggio.
   const salvate = new Set(allQuestions.flatMap(x => imageIdsIn(x.testo)));
   const ids = imageIdsIn(q.testo);
-  const nuove = ids.filter(id => !salvate.has(id));
-  document.getElementById("be-info").innerHTML = nuove.length
-    ? `<div class="be-note" style="margin:10px 0 0;">Immagini nuove (${nuove.map(escHtml).join(", ")}): nella prova ` +
-      `compariranno dopo il salvataggio, perché il server serve solo immagini già citate nel banco.</div>` : "";
+  const altrove = ids.filter(id => !salvate.has(id) && e.imgTried.has(id) && typeof adminImages[id] !== "string");
+  document.getElementById("be-info").innerHTML = altrove.length
+    ? `<div class="be-note" style="margin:10px 0 0;">Immagine ${altrove.map(escHtml).join(", ")}: non è nella cartella ` +
+      `immagini di QuizForge, quindi compare dopo il salvataggio (se l'ID è giusto). Per vederla subito, ` +
+      `caricala con "Inserisci immagine".</div>` : "";
 
   // La prova segue la bozza. Con un piccolo ritardo: ogni invio la ridisegna e azzera
   // le risposte di prova, non ha senso farlo a ogni tasto.
@@ -2853,7 +2985,7 @@ function bancoEditRefresh() {
   }
 
   // Una richiesta per immagine a sessione di modifica, non una a ogni tasto
-  const daProvare = ids.filter(id => salvate.has(id) && typeof adminImages[id] !== "string" && !e.imgTried.has(id));
+  const daProvare = ids.filter(id => typeof adminImages[id] !== "string" && !e.imgTried.has(id));
   if (daProvare.length) {
     daProvare.forEach(id => e.imgTried.add(id));
     fetchAdminImages(daProvare).then(changed => {
