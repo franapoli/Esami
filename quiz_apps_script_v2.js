@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.3.0"; // aggiornare ad ogni deploy
+const VERSION = "3.4.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -576,6 +576,28 @@ function lintQuestion(q) {
 function sheetText(v) {
   const s = (v === null || v === undefined) ? "" : String(v);
   return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+// Gli ID già presenti: solo la colonna A, senza leggere e interpretare tutto il foglio
+function existingQuestionIds(sheet) {
+  const ids = {};
+  const n = sheet.getLastRow();
+  if (n < 2) return ids;
+  sheet.getRange(2, Q_ID + 1, n - 1, 1).getValues().forEach(r => { const id = String(r[0]).trim(); if (id) ids[id] = true; });
+  return ids;
+}
+
+function newQuestionId(taken) {
+  let id;
+  do { id = generateQuestionId(); } while (taken[id]);
+  taken[id] = true;
+  return id;
+}
+
+// La riga A..M di una domanda già normalizzata, come la scrive writeQuestionRow
+function questionRowValues(id, q) {
+  return [id, q.corso, q.categoria, q.sottocateg, q.tags, q.stato, q.tipo, q.testo, JSON.stringify(q.options),
+          q.corretta, q.punti, q.placeholder, q.data].map((v, c) => c === Q_PUNTI ? v : sheetText(v));
 }
 
 function writeQuestionRow(sheet, rowIndex, q) {
@@ -1637,6 +1659,34 @@ function doPost(e) {
       }
     }
 
+    // createQuestions — più domande nuove in una sola chiamata (import da Moodle): tutte validate
+    // prima di scrivere; se anche una non è valida non ne scrive nessuna e le elenca, così non
+    // restano import a metà. Le righe si scrivono in un unico blocco in fondo al foglio.
+    if (data.action === "createQuestions") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const qs = (Array.isArray(data.questions) ? data.questions : []).map(normalizeIncomingQuestion);
+      if (!qs.length) return corsResponse({ status: "ok", questions: [] });
+      const invalid = [];
+      qs.forEach((q, i) => { const errors = validateQuestion(q); if (errors.length) invalid.push({ index: i, errors: errors }); });
+      if (invalid.length) return corsResponse({ status: "invalid", invalid: invalid });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const sheet = getQuestionsSheet();
+        const taken = existingQuestionIds(sheet);
+        const rows  = qs.map(q => questionRowValues(newQuestionId(taken), q));
+        const first = sheet.getLastRow() + 1;
+        if (sheet.getMaxRows() < first + rows.length - 1) sheet.insertRowsAfter(sheet.getMaxRows(), first + rows.length - 1 - sheet.getMaxRows());
+        sheet.getRange(first, Q_CORSO + 1, rows.length, Q_CORRETTA - Q_CORSO + 1).setNumberFormat("@");
+        sheet.getRange(first, Q_PLACEHOLDER + 1, rows.length, Q_DATA - Q_PLACEHOLDER + 1).setNumberFormat("@");
+        sheet.getRange(first, 1, rows.length, Q_DATA + 1).setValues(rows);
+        const written = sheet.getRange(first, 1, rows.length, Q_DATA + 1).getValues();
+        return corsResponse({ status: "ok", questions: written.map(rowToQuestion) });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
+      }
+    }
+
     // createQuestion — "salva come nuova" dall'editor: nuova riga con ID nuovo, validata.
     // Diversa da addQuestion, che non valida e scrive i valori così come arrivano.
     if (data.action === "createQuestion") {
@@ -1648,9 +1698,7 @@ function doPost(e) {
       try { lock.waitLock(15000); } catch(e) {}
       try {
         const sheet = getQuestionsSheet();
-        const allQ  = loadAllQuestions();
-        let newId;
-        do { newId = generateQuestionId(); } while (allQ[newId]);
+        const newId = newQuestionId(existingQuestionIds(sheet));
         sheet.appendRow([newId]);
         const rowIndex = sheet.getLastRow();
         writeQuestionRow(sheet, rowIndex, q);

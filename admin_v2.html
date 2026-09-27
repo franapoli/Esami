@@ -1033,7 +1033,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "551c7b1";
+const BUILD = "b75617c";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -3420,41 +3420,99 @@ async function importMoodleRun() {
     msg.style.color = "#b00"; msg.textContent = "Indica anche la categoria."; return;
   }
   go.disabled = true; moodleImport.inCorso = true;
-  const cartelle = {};
   let fatte = 0, errori = 0, bloccante = null;
-  for (const d of buone) {
-    Object.assign(d.domanda, importDest(d));
-    msg.style.color = "#555"; msg.textContent = `Importo ${fatte + errori + 1} di ${buone.length}: ${d.nome}…`;
+  const stato = t => { msg.style.color = "#555"; msg.textContent = t; };
+  const fallita = (d, e) => {
+    d.errore = e.message; errori++;
+    // Script senza le azioni necessarie: inutile andare avanti
+    if (/non disponibile nello script/.test(e.message)) bloccante = bloccante || e.message;
+  };
+  buone.forEach(d => { Object.assign(d.domanda, importDest(d)); d.testoFinale = d.domanda.testo; });
+
+  // 1. Cartelle, una per categoria › sottocategoria (in sequenza: condividono la radice)
+  const cartelle = {};
+  const chiave = d => d.domanda.categoria + "\n" + d.domanda.sottocateg;
+  for (const d of buone.filter(d => d.immagini.length)) {
+    if (bloccante) break;
+    if (cartelle[chiave(d)] === undefined) {
+      stato("Preparo le cartelle delle immagini…");
+      try { cartelle[chiave(d)] = await cartellaImport([d.domanda.categoria, d.domanda.sottocateg]); }
+      catch(e) { cartelle[chiave(d)] = e; }
+    }
+  }
+
+  // 2. Immagini, qualche caricamento alla volta. La stessa immagine nella stessa cartella si carica una volta sola.
+  const lavori = [];
+  buone.forEach(d => d.immagini.forEach(nomeFile => lavori.push({ d, nomeFile })));
+  const caricate = new Map();   // cartella + contenuto → Promise dell'ID
+  let fatteImg = 0;
+  const carica = async ({ d, nomeFile }) => {
+    const folderId = cartelle[chiave(d)];
+    if (folderId instanceof Error) throw folderId;
+    const k = folderId + "\n" + d.files[nomeFile];
+    if (!caricate.has(k)) caricate.set(k, (async () => {
+      const ext = (nomeFile.split(".").pop() || "").toLowerCase();
+      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" }[ext] || "image/png";
+      const bytes = Uint8Array.from(atob(d.files[nomeFile]), c => c.charCodeAt(0));
+      const blob = await shrinkImage(new File([bytes], nomeFile, { type: mime }));
+      const uri = await blobToDataUri(blob);
+      const nome = blob.type === mime ? nomeFile : nomeFile.replace(/\.[^.]*$/, "") + ".jpg";
+      const up = await callScript({ action: "uploadImage", password: adminPassword, name: nome, folderId,
+                                    mime: blob.type || mime, base64: uri.slice(uri.indexOf(",") + 1) });
+      if (up.status !== "ok") throw new Error(up.message);
+      adminImages[up.id] = uri;
+      return up.id;
+    })());
+    return caricate.get(k);
+  };
+  const IMG_PARALLELE = 4;
+  let prossimo = 0;
+  await Promise.all(Array.from({ length: Math.min(IMG_PARALLELE, lavori.length) }, async () => {
+    while (prossimo < lavori.length && !bloccante) {
+      const lavoro = lavori[prossimo++];
+      if (lavoro.d.errore) continue;
+      try {
+        const id = await carica(lavoro);
+        lavoro.d.testoFinale = lavoro.d.testoFinale.replace(
+          new RegExp("\u0000IMG:" + lavoro.nomeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\|\\d+)?\u0000", "g"),
+          (_, w) => "[img:" + id + (w || "") + "]");
+      } catch(e) { if (!lavoro.d.errore) fallita(lavoro.d, e); }
+      stato(`Carico le immagini: ${++fatteImg} di ${lavori.length}…`);
+    }
+  }));
+
+  // 3. Domande: tutte in una chiamata. Con uno script precedente alla 3.4.0 si torna a una per volta.
+  const pronte = () => buone.filter(d => !d.errore);
+  const registra = (d, q) => { allQuestions.push(q); d.importata = q.id; fatte++; };
+  let unaAllaVolta = false;
+  while (!bloccante && pronte().length) {
+    const lotto = pronte();
+    stato(`Creo ${lotto.length} ${lotto.length === 1 ? "domanda" : "domande"}…`);
+    let res;
     try {
-      let testo = d.domanda.testo;
-      if (d.immagini.length) {
-        const chiave = d.domanda.categoria + "\n" + d.domanda.sottocateg;
-        if (!cartelle[chiave]) cartelle[chiave] = await cartellaImport([d.domanda.categoria, d.domanda.sottocateg]);
-        for (const nomeFile of d.immagini) {
-          const ext = (nomeFile.split(".").pop() || "").toLowerCase();
-          const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" }[ext] || "image/png";
-          const bytes = Uint8Array.from(atob(d.files[nomeFile]), c => c.charCodeAt(0));
-          const blob = await shrinkImage(new File([bytes], nomeFile, { type: mime }));
-          const uri = await blobToDataUri(blob);
-          const nome = blob.type === mime ? nomeFile : nomeFile.replace(/\.[^.]*$/, "") + ".jpg";
-          const up = await callScript({ action: "uploadImage", password: adminPassword, name: nome, folderId: cartelle[chiave],
-                                        mime: blob.type || mime, base64: uri.slice(uri.indexOf(",") + 1) });
-          if (up.status !== "ok") throw new Error(up.message);
-          adminImages[up.id] = uri;
-          testo = testo.replace(new RegExp("\u0000IMG:" + nomeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\|\\d+)?\u0000", "g"),
-                                (_, w) => "[img:" + up.id + (w || "") + "]");
-        }
-      }
-      const res = await callScript({ action: "createQuestion", password: adminPassword, question: Object.assign({}, d.domanda, { testo }) });
-      if (res.status !== "ok") throw new Error(res.errors ? res.errors.join(" ") : res.message);
-      allQuestions.push(res.question);
-      d.importata = res.question.id;
-      fatte++;
-    } catch(e) {
-      d.errore = e.message;
-      errori++;
-      // Script senza le azioni necessarie: inutile riprovare con le altre domande
-      if (/non disponibile nello script/.test(e.message)) { bloccante = e.message; break; }
+      res = await callScript({ action: "createQuestions", password: adminPassword,
+                               questions: lotto.map(d => Object.assign({}, d.domanda, { testo: d.testoFinale })) });
+    } catch(e) { lotto.forEach(d => fallita(d, e)); break; }
+    if (res.status === "ok") { res.questions.forEach((q, i) => registra(lotto[i], q)); break; }
+    if (res.status === "invalid") {   // non ha scritto niente: si riprova senza quelle non valide
+      res.invalid.forEach(x => fallita(lotto[x.index], new Error(x.errors.join(" "))));
+      continue;
+    }
+    if (/non disponibile nello script/.test(res.message || "")) { unaAllaVolta = true; break; }
+    lotto.forEach(d => fallita(d, new Error(res.message || "errore")));
+    break;
+  }
+  if (unaAllaVolta) {
+    const lotto = pronte();
+    for (const d of lotto) {
+      if (bloccante) break;
+      stato(`Creo la domanda ${lotto.indexOf(d) + 1} di ${lotto.length} (script vecchio: una per volta)…`);
+      try {
+        const res = await callScript({ action: "createQuestion", password: adminPassword,
+                                       question: Object.assign({}, d.domanda, { testo: d.testoFinale }) });
+        if (res.status !== "ok") throw new Error(res.errors ? res.errors.join(" ") : res.message);
+        registra(d, res.question);
+      } catch(e) { fallita(d, e); }
     }
   }
   moodleImport.inCorso = false;
