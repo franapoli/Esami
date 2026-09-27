@@ -865,7 +865,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "781f9d6";
+const BUILD = "8c61a49";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2055,6 +2055,9 @@ function questionBodyHtml(q) {
         body += `</div>`;
       });
     } catch(e) { body += "<p style='color:#b00;'>Dati cloze non leggibili</p>"; }
+  } else if (q.tipo === "free") {
+    body += `<div style="font-size:0.85em;color:#777;">Risposta aperta: nessuna soluzione, valutazione manuale.</div>`;
+    if (q.placeholder) body += `<div style="font-size:0.82em;color:#aaa;">Placeholder: ${escHtml(q.placeholder)}</div>`;
   } else {
     body += `<div style="font-size:0.85em;color:#777;margin-bottom:4px;">Risposta corretta:</div>
              <div class="prev-fitb">${escHtml(q.corretta)}</div>`;
