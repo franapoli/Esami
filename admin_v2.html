@@ -275,6 +275,12 @@
   .be-esempio { background:#fff; border:1px solid #e4e4e0; padding:8px 10px; margin:8px 0 0; white-space:pre-wrap;
                 font-size:0.95em; font-family:monospace; color:#333; }
   .be-upload { display:inline-block; cursor:pointer; }
+  /* Il campo Testo è dove si lavora: carattere pieno, non quello ridotto delle etichette */
+  .be-field textarea#be-testo { font-size:15px; line-height:1.6; padding:10px 12px; color:#1a1a1a; min-height:15em; }
+  details.be-sintassi { padding:0; }
+  details.be-sintassi > summary { cursor:pointer; padding:8px 10px; list-style:revert; }
+  details.be-sintassi[open] > summary { padding-bottom:4px; }
+  details.be-sintassi > div { padding:0 10px 10px; }
   .be-ed-form { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; align-items:end; margin:6px 0; }
   .be-ed-form .be-field { margin-bottom:0; }
   .be-check { font-size:0.8em; color:#555; display:flex; align-items:center; gap:6px; }
@@ -1033,7 +1039,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "b75617c";
+const BUILD = "c111e8e";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -3090,7 +3096,7 @@ function renderBancoEditor() {
         <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
     </div>
     <label class="be-field">Testo
-      <textarea rows="9" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
+      <textarea rows="12" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
       <small>HTML ammesso · [img:ID o link Drive] per un'immagine, [img:ID|400] per mostrarla larga 400 px</small></label>
     <div id="be-parse" class="be-parse"></div>
     <div class="be-json-actions">
@@ -3115,10 +3121,16 @@ function renderBancoEditor() {
   bancoEditRefresh();
 }
 
+let bancoSintassiAperta = false;
+
 // Sintassi del tipo scelto, con un esempio, e i campi che valgono solo per alcuni tipi
 function renderBancoEditTipo() {
   const d = bancoEdit.draft, s = BE_SINTASSI[d.tipo] || BE_SINTASSI.free;
-  let html = `<div class="be-note"><strong>Come si scrive:</strong> ${escHtml(s.spiega)}<pre class="be-esempio">${escHtml(s.esempio)}</pre></div>`;
+  // Chiusa di default; se l'admin la apre resta aperta anche cambiando tipo
+  let html = `<details class="be-note be-sintassi"${bancoSintassiAperta ? " open" : ""}
+      ontoggle="bancoSintassiAperta = this.open">
+      <summary><strong>Come si scrive</strong> una domanda di tipo «${escHtml(TIPO_LABEL[d.tipo] || d.tipo)}», con un esempio</summary>
+      <div>${escHtml(s.spiega)}<pre class="be-esempio">${escHtml(s.esempio)}</pre></div></details>`;
   if (d.tipo === "fitb" || d.tipo === "free") {
     html += `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo, colonna L</small>
                <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
