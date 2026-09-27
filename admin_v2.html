@@ -201,6 +201,9 @@
   .be-json-actions { display:flex; gap:8px; margin:-6px 0 10px; }
   .be-example { font-size:0.82em; color:#555; margin:0 0 12px; }
   .be-avanzate { margin:0 0 12px; }
+  .be-parse { font-size:0.8em; color:#2e7d32; margin:-4px 0 8px; min-height:1em; }
+  .be-esempio { background:#fff; border:1px solid #e4e4e0; padding:8px 10px; margin:8px 0 0; white-space:pre-wrap;
+                font-size:0.95em; font-family:monospace; color:#333; }
   .be-upload { display:inline-block; cursor:pointer; }
   .be-ed-form { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; align-items:end; margin:6px 0; }
   .be-ed-form .be-field { margin-bottom:0; }
@@ -886,7 +889,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "00f9cdc";
+const BUILD = "5455d16";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -955,61 +958,26 @@ function escHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
-// ---- MULTI-FITB: FORMA CANONICA ----
-// Copia identica di mapTextSegments/canonicalMultiFitb dello script: risposte scritte nel testo
-// ([[Smith-Waterman]]) o "___" allineati alle caselle diventano testo con {{N}} più caselle.
-// Serve dove l'admin mostra o stampa la domanda senza passare dal server (export, risultati).
-function mapTextSegments(html, fn) {
-  return String(html || "").split(/(<[^>]*>|\[img:[^\]]*\])/).map((p, i) => i % 2 ? p : fn(p)).join("");
-}
-function canonicalMultiFitbAdmin(q) {
-  if (!q || q.tipo !== "multi-fitb") return q;
-  const testo = String(q.testo || "");
-  if (/\[\[[^\]]*\]\]/.test(testo)) {
-    const boxes = [];
-    const t = mapTextSegments(testo, seg => seg.replace(/\[\[([^\]]*)\]\]/g,
-      (_, ans) => "{{" + (boxes.push({ correct: ans.trim() }) - 1) + "}}"));
-    return Object.assign({}, q, { testo: t, data: JSON.stringify({ boxes: boxes }) });
+// ---- FORMATO NEL TESTO: FUNZIONI DEL BACKEND ----
+// L'admin non tiene copie della conversione fra formato nel testo e forma interna: carica
+// quiz_apps_script_v2.js in uno scope isolato, come la prova, e usa le stesse funzioni del
+// server per editor, elenco, export e risultati. Finché non è caricato (o se non si carica)
+// le domande si mostrano così come sono scritte.
+let _adminBackend = null, _adminBackendPromise = null, _adminBackendError = null;
+function loadAdminBackend() {
+  if (_adminBackend) return Promise.resolve(_adminBackend);
+  if (!_adminBackendPromise) {
+    _adminBackendPromise = fetch("quiz_apps_script_v2.js", { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(src => (_adminBackend = new Function(src + "\n;return { canonicalForm, validateQuestion, lintQuestion, " +
+        "normalizeIncomingQuestion, hasItems, isTextCloze, mapTextSegments, boxWeight };")()))
+      .catch(e => { _adminBackendError = e.message; _adminBackendPromise = null; throw e; });
   }
-  if (!/\{\{\d+\}\}/.test(testo)) {
-    let d;
-    try { d = JSON.parse(q.data || "{}") || {}; } catch(e) { return q; }
-    const n = Array.isArray(d.boxes) ? d.boxes.length : 0;
-    let count = 0;
-    mapTextSegments(testo, seg => { count += (seg.match(/_{3,}/g) || []).length; return seg; });
-    if (n && count === n) {
-      let k = 0;
-      return Object.assign({}, q, { testo: mapTextSegments(testo, seg => seg.replace(/_{3,}/g, () => "{{" + (k++) + "}}")) });
-    }
-  }
-  return q;
+  return _adminBackendPromise;
 }
 
-// Copia di boxWeight dello script: senza "pts" la casella pesa 1
-function boxWeightAdmin(b) {
-  if (!b || b.pts === undefined || b.pts === null || b.pts === "") return 1;
-  const n = Number(b.pts);
-  return isFinite(n) && n > 0 ? n : 0;
-}
-
-// Testo di una multi-fitb riscritto con le risposte tra doppie quadre, o null se non si può
-// senza cambiare nulla: caselle tutte in linea e nello stesso ordine (le risposte consegnate
-// sono salvate per posizione, riordinarle scombinerebbe i risultati passati), pesi uguali,
-// risposte senza [[ o ]]. Etichette e colonne si perdono, ma in linea non vengono mostrate.
-function multiFitbInlineText(q) {
-  const c = canonicalMultiFitbAdmin(q);
-  let d;
-  try { d = JSON.parse(c.data || "{}") || {}; } catch(e) { return null; }
-  const boxes = Array.isArray(d.boxes) ? d.boxes : [];
-  const markers = [];
-  String(c.testo || "").replace(/\{\{(\d+)\}\}/g, (_, n) => { markers.push(parseInt(n, 10)); return ""; });
-  if (!boxes.length || markers.length !== boxes.length || markers.some((m, i) => m !== i)) return null;
-  const w = boxes.map(boxWeightAdmin);
-  if (!w[0] || w.some(x => x !== w[0])) return null;
-  const ans = boxes.map(b => String(b.correct ?? ""));
-  if (ans.some(a => /\[\[|\]\]/.test(a))) return null;
-  return mapTextSegments(c.testo, seg => seg.replace(/\{\{(\d+)\}\}/g, (_, n) => "[[" + ans[parseInt(n, 10)] + "]]"));
-}
+// Forma interna di una domanda (opzioni, soluzioni, caselle e menu), qualunque formato usi
+function canon(q) { return _adminBackend && q ? _adminBackend.canonicalForm(q) : q; }
 
 // ---- IMMAGINI ----
 // [img:X] nel testo, X = ID Drive o link di condivisione. extractDriveId è duplicata
@@ -1142,6 +1110,7 @@ async function doLogin() {
     document.getElementById("loading-overlay").classList.remove("active");
     ensureTracksLoaded();    // background: popola traccia-selects e crossref
     ensureDriveListLoaded(); // background: popola i select Drive
+    loadAdminBackend().catch(() => {}); // background: conversione del formato nel testo per elenchi, export, risultati
   } catch(e) {
     document.getElementById("loading-overlay").classList.remove("active");
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;
@@ -1945,6 +1914,8 @@ async function showStudentDetail(rowIdx) {
       return;
     }
   }
+  // Per leggere opzioni e soluzioni delle domande scritte nel formato nel testo
+  try { await loadAdminBackend(); } catch(e) {}
 
   const qMap = Object.fromEntries(allQuestions.map(q => [q.id, q]));
   const qids = Array.isArray(r.qids) ? r.qids : (r.qids ? String(r.qids).split(";")[0].split(",").map(x => x.trim()).filter(Boolean) : []);
@@ -1975,7 +1946,7 @@ async function showStudentDetail(rowIdx) {
         <td class="col-pt">${pt}</td>
       </tr>`;
     }
-    const qc = canonicalMultiFitbAdmin(q);   // le soluzioni scritte nel testo stanno nelle caselle
+    const qc = canon(q);   // opzioni e soluzioni nella forma interna, qualunque formato usi la domanda
     const testo = qc.testo.length > 120 ? escHtml(qc.testo.slice(0, 120)) + "…" : escHtml(qc.testo);
     return `<tr>
       <td class="col-n">${qi+1}</td>
@@ -2133,10 +2104,10 @@ function normSearch(s) {
 // Prima via i tag, poi decodifica delle entità (&lt; → <), che escHtml rifarà in uscita.
 const _entityDecoder = document.createElement("textarea");
 function plainText(s) {
-  _entityDecoder.innerHTML = String(s || "").replace(/<[^>]*>/g, " ");
+  _entityDecoder.innerHTML = String(s || "").replace(/<\/?[A-Za-z!][^>]*>/g, " ");
   return _entityDecoder.value
     .replace(/\[img:[^\]]*\]/g, " [immagine] ")
-    .replace(/\{\{\d+\}\}/g, " ___ ")
+    .replace(/\{\{[^{}]*\}\}/g, " ___ ")
     .replace(/\s+/g, " ").trim();
 }
 
@@ -2155,7 +2126,8 @@ function dataValues(raw) {
 
 function bancoIndex() {
   if (_bancoIndex && _bancoIndexFor === allQuestions) return _bancoIndex;
-  _bancoIndex = new Map(allQuestions.map(q => {
+  _bancoIndex = new Map(allQuestions.map(raw => {
+    const q = canon(raw);   // opzioni e soluzioni, qualunque formato usi la domanda
     const parts = [q.id, q.categoria, q.sottocateg, q.tags, TIPO_LABEL[q.tipo] || q.tipo,
                    plainText(q.testo), q.placeholder, ...(Array.isArray(q.options) ? q.options : []),
                    ...dataValues(q.data)];
@@ -2182,7 +2154,7 @@ async function initBancoTab() {
     loading.textContent = "Caricamento in corso…";
     loading.style.display = "block"; content.style.display = "none";
     try {
-      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded()]);
+      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded(), loadAdminBackend().catch(() => {})]);
     } catch(e) {
       loading.textContent = "Errore: " + e.message;
       return;
@@ -2275,7 +2247,7 @@ function renderBanco(keepSelection) {
       `onclick="bancoResetFilters()">Azzera ricerca e filtri</button></div>`;
   } else {
     list.innerHTML = _bancoFiltered.slice(0, BANCO_MAX_ROWS).map(q => {
-      const txt = plainText(q.testo);
+      const txt = plainText(canon(q).testo);   // senza le voci [[…]] né le liste dei menu
       const snippet = txt.length > 140 ? txt.slice(0, 140) + "…" : txt;
       const qs = q.stato || "verificato";
       const nTracce = (fixed[q.id] || []).length;
@@ -2441,9 +2413,11 @@ function renderBancoDetail() {
 // ---- EDITOR DOMANDE ----
 // Una modifica sovrascrive la domanda (updateQuestion) o la salva come domanda nuova e
 // indipendente (createQuestion). Niente versioni né legami fra le due.
-// Ogni tipo si modifica per intero; match, multi-fitb e cloze con la sintassi del foglio,
-// accompagnata da un esempio.
-let bancoEdit  = null;   // { id, original (copia), draft, initialFp, busy, imgTried:Set }
+// Ogni tipo si scrive nel testo (FORMATO NEL TESTO nello script): nel foglio finisce esattamente
+// ciò che si scrive qui, e le colonne I, J, M restano vuote. Le domande del formato vecchio si
+// aprono già convertite; se la conversione cambierebbe qualcosa di non ricostruibile, restano
+// nel formato vecchio.
+let bancoEdit  = null;   // { id, original (copia), draft, initialFp, converted, busy, imgTried:Set }
 let bancoFlash = null;   // { id, text } messaggio da mostrare una volta nel dettaglio
 
 function escAttr(s) { return escHtml(s).replace(/"/g, "&quot;"); }
@@ -2456,95 +2430,156 @@ function questionFingerprintAdmin(q) {
                          q.options, q.corretta, Number(q.punti), q.placeholder, q.data]);
 }
 
-// Stesse regole di validateQuestion nello script, che resta l'autorità: qui servono per
-// mostrare gli errori mentre si scrive.
+// Gli errori che il server rifiuterebbe: è la stessa funzione del server (validateQuestion).
+// Senza backend l'editor non blocca nulla, e decide il server al salvataggio.
 function validateQuestionAdmin(q) {
-  const err = [];
-  if (!TIPO_LABEL[q.tipo]) err.push("Tipo non valido: " + q.tipo);
-  if (!q.testo) err.push("Il testo è vuoto.");
-  if (!isFinite(q.punti) || q.punti <= 0) err.push("I punti devono essere un numero maggiore di zero.");
-  if (q.tipo === "mc" || q.tipo === "multi-mc") {
-    if (q.options.length < 2) err.push("Servono almeno due opzioni.");
-    if (q.options.length > 26) err.push("Al massimo 26 opzioni (A–Z).");
-    if (q.options.some(o => !o)) err.push("Ci sono opzioni vuote.");
-    const letters = q.tipo === "mc" ? (q.corretta ? [q.corretta] : []) : parseMultiCorrettaAdmin(q.corretta);
-    const fuori = letters.filter(l => !/^[A-Z]$/.test(l) || l.charCodeAt(0) - 65 >= q.options.length);
-    if (!letters.length) err.push(q.tipo === "mc" ? "Indica la risposta corretta." : "Indica almeno una risposta corretta.");
-    else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
-  }
-  if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
-  const risposteNelTesto = q.tipo === "multi-fitb" && /\[\[[^\]]*\]\]/.test(q.testo || "");
-  if ((q.tipo === "multi-fitb" || q.tipo === "cloze") && !risposteNelTesto) {
-    let d = null;
-    if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
-    else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
-    if (d !== null && (typeof d !== "object" || Array.isArray(d))) err.push("Il campo dati deve essere un oggetto JSON { … }.");
-  }
-  if (q.tipo === "match") {
-    let r = null;
-    try { r = JSON.parse(q.corretta || ""); } catch(e) {}
-    if (!Array.isArray(r)) err.push("La colonna destra del match deve essere un array JSON.");
-  }
-  return err;
+  const B = _adminBackend;
+  return B ? B.validateQuestion(B.normalizeIncomingQuestion(q)) : [];
 }
 
-// Bozza: opzioni e corrette per indice, così riordinare le opzioni si porta dietro la spunta
+function lintDraft(q) {
+  const B = _adminBackend;
+  return B ? B.lintQuestion(B.normalizeIncomingQuestion(q)) : [];
+}
+
+// Il testo usa la sintassi nuova del suo tipo? (è ciò che decide il server in canonicalForm)
+function usaFormatoNelTesto(q) {
+  const B = _adminBackend;
+  if (!B) return /\[\[|\{\{\s*[\wÀ-ÿ]+\s*[:=]/.test(q.testo || "");
+  return q.tipo === "cloze" ? B.isTextCloze(q.testo) : B.hasItems(q.testo);
+}
+
+// Domanda del formato vecchio (colonne I, J, M) riscritta nel formato nel testo.
+// note: cosa cambia rispetto a prima, se qualcosa cambia. legacy: colonne da conservare quando
+// la conversione non si può fare (voci che contengono [[, ]], => o iniziano con *).
+function questionToText(q) {
+  const B = _adminBackend;
+  const tieni = motivo => ({ testo: q.testo || "", note: [], motivo: motivo || "",
+                             legacy: { tipo: q.tipo, options: q.options || [], corretta: q.corretta || "", data: q.data || "" } });
+  if (!B) return tieni("lo script di backend non è disponibile per convertirla");
+  if (q.tipo === "free" || usaFormatoNelTesto(q)) return { testo: q.testo || "", note: [], legacy: null };
+  const c = B.canonicalForm(q), testo = String(c.testo || ""), note = [];
+  const vietato = x => /\[\[|\]\]/.test(String(x ?? ""));
+  const riordino = "Le caselle o i menu non comparivano una volta sola e in ordine nel testo: ora sono numerati " +
+                   "nell'ordine in cui compaiono. Nel dettaglio risultati degli esami passati le risposte potrebbero " +
+                   "risultare abbinate alla voce sbagliata; i voti già dati non cambiano.";
+  const segnaposti = () => { const m = []; testo.replace(/\{\{(\d+)\}\}/g, (_, k) => { m.push(+k); return ""; }); return m; };
+
+  if (q.tipo === "mc" || q.tipo === "multi-mc") {
+    const opts = (c.options || []).map(String);
+    if (!opts.length) return tieni("non ha opzioni");
+    if (opts.some(o => vietato(o) || o.trim().charAt(0) === "*")) return tieni("un'opzione contiene [[ o ]] o inizia con *");
+    // Come letterToIndex nello script: una lettera mancante o non valida vale "A"
+    const indici = (q.tipo === "mc" ? [c.corretta] : parseMultiCorrettaAdmin(c.corretta)).map(letterToIndexAdmin);
+    const giuste = new Set(indici.filter(i => i < opts.length));
+    if (indici.some(i => i >= opts.length)) {
+      note.push("Nel foglio la risposta giusta indicava un'opzione che non esiste, quindi non valeva punti: segna quella giusta con *.");
+    }
+    if (!String(c.corretta || "").trim()) note.push("Nel foglio non era indicata la risposta giusta, quindi all'esame valeva la prima opzione: controlla l'asterisco.");
+    return { testo: testo + "\n" + opts.map((o, i) => "[[" + (giuste.has(i) ? "*" : "") + o + "]]").join("\n"), note, legacy: null };
+  }
+  if (q.tipo === "match") {
+    const left = (c.options || []).map(String);
+    let right = null;
+    try { right = JSON.parse(c.corretta || "[]"); } catch(e) {}
+    if (!Array.isArray(right)) return tieni("la colonna destra non è leggibile");
+    if (left.concat(right).some(x => vietato(x) || String(x).includes("=>"))) return tieni("un elemento contiene [[, ]] o =>");
+    if (left.length !== right.length) note.push("Le due colonne avevano lunghezze diverse: le coppie incomplete restano senza abbinamento.");
+    const n = Math.max(left.length, right.length);
+    return { testo: testo + "\n" + Array.from({ length: n }, (_, i) => "[[" + (left[i] ?? "") + " => " + (right[i] ?? "") + "]]").join("\n"),
+             note, legacy: null };
+  }
+  if (q.tipo === "fitb") {
+    const risposta = String(c.corretta || "");
+    if (vietato(risposta)) return tieni("la risposta contiene [[ o ]]");
+    let fatto = false;
+    const t = B.mapTextSegments(testo, seg => seg.replace(/_{3,}/, m => { if (fatto) return m; fatto = true; return "[[" + risposta + "]]"; }));
+    if (fatto) return { testo: t, note, legacy: null };
+    note.push("La casella era sotto il testo: ora sta in fondo alla frase.");
+    return { testo: testo + " [[" + risposta + "]]", note, legacy: null };
+  }
+  let d;
+  try { d = JSON.parse(c.data || "{}") || {}; } catch(e) { return tieni("il campo dati non è leggibile"); }
+  if (q.tipo === "multi-fitb") {
+    const boxes = Array.isArray(d.boxes) ? d.boxes : [];
+    if (!boxes.length) return tieni("non ha caselle");
+    if (boxes.some(b => vietato(b.correct))) return tieni("una risposta contiene [[ o ]]");
+    const w = boxes.map(B.boxWeight);
+    if (w.some(x => x !== w[0])) note.push("Le caselle avevano pesi diversi: ora valgono tutte uguale.");
+    const m = segnaposti();
+    if (!m.length) {
+      note.push("Le caselle erano in griglia sotto il testo: ora sono righe in fondo al testo, con la loro etichetta.");
+      return { testo: testo + boxes.map(b => "<br>" + (b.label ? b.label + ": " : "") + "[[" + String(b.correct ?? "") + "]]").join(""),
+               note, legacy: null };
+    }
+    if (m.length !== boxes.length || m.some((k, i) => k !== i)) note.push(riordino);
+    if (boxes.some(b => b.label)) {
+      note.push("Le etichette delle caselle non fanno parte del testo e non vengono conservate: comparivano solo nel riepilogo dopo un'esercitazione.");
+    }
+    return { testo: testo.replace(/\{\{(\d+)\}\}/g, (_, k) => "[[" + String((boxes[+k] || {}).correct ?? "") + "]]"), note, legacy: null };
+  }
+  if (q.tipo === "cloze") {
+    const dds = Array.isArray(d.dropdowns) ? d.dropdowns : [];
+    if (!dds.length) return tieni("non ha menu");
+    if (dds.some(dd => (dd.options || []).some(o => vietato(o) || String(o).trim().charAt(0) === "*"))) {
+      return tieni("un'opzione contiene [[ o ]] o inizia con *");
+    }
+    const m = segnaposti();
+    if (m.length !== dds.length || m.some((k, i) => k !== i)) note.push(riordino);
+    dds.forEach((dd, i) => {
+      const g = dd.correct ?? 0;
+      if (!Number.isInteger(g) || g < 0 || g >= (dd.options || []).length) {
+        note.push("Nel foglio il menu " + (i + 1) + " indicava come giusta un'opzione che non esiste, quindi non valeva punti: segna quella giusta con *.");
+      }
+    });
+    // Menu con le stesse opzioni usati più volte diventano una lista con nome, dichiarata una volta
+    const uso = {};
+    m.forEach(k => { const dd = dds[k]; if (dd) { const key = JSON.stringify(dd.options || []); uso[key] = (uso[key] || 0) + 1; } });
+    const nomi = {};
+    let n = 0;
+    Object.keys(uso).forEach(key => {
+      const o = JSON.parse(key);
+      if (uso[key] > 1 && !o.some(x => /[{}]/.test(String(x))) && new Set(o).size === o.length) nomi[key] = "lista" + (++n > 1 ? n : "");
+    });
+    const dichiarazioni = Object.keys(nomi)
+      .map(key => "{{" + nomi[key] + " = " + JSON.parse(key).map(o => "[[" + o + "]]").join(" ") + "}}").join("\n");
+    const corpo = testo.replace(/\{\{(\d+)\}\}/g, (tutto, k) => {
+      const dd = dds[+k];
+      if (!dd) return tutto;
+      const opts = (dd.options || []).map(String), giusta = dd.correct ?? 0, key = JSON.stringify(dd.options || []);
+      if (nomi[key] && opts[giusta] !== undefined) return "{{" + nomi[key] + ": " + opts[giusta] + "}}";
+      return "{{" + opts.map((o, i) => "[[" + (i === giusta ? "*" : "") + o + "]]").join(" ") + "}}";
+    });
+    return { testo: (dichiarazioni ? dichiarazioni + "\n" : "") + corpo, note, legacy: null };
+  }
+  return tieni();
+}
+
 function questionToDraft(q) {
-  const opts = Array.isArray(q.options) ? q.options.map(String) : [];
-  const idx  = l => String(l).trim().toUpperCase().charCodeAt(0) - 65;
-  let correct = [];
-  if (q.tipo === "mc") correct = [idx(q.corretta)];
-  if (q.tipo === "multi-mc") correct = parseMultiCorrettaAdmin(q.corretta).map(idx);
-  correct = correct.filter(i => i >= 0 && i < opts.length);
-  // JSON leggibile nell'editor; se non è JSON valido resta com'è, e la validazione lo segnala
-  const pretty = raw => { try { return JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { return String(raw || ""); } };
-  let right = null;
-  try { right = JSON.parse(q.corretta || ""); } catch(e) {}
-  const isMc = q.tipo === "mc" || q.tipo === "multi-mc";
-  // Una multi-fitb esprimibile con le risposte nel testo si apre già così: una sola sintassi da leggere
-  const inline = q.tipo === "multi-fitb" ? multiFitbInlineText(q) : null;
-  // Un campo per tipo, così passare da un tipo all'altro e tornare indietro non perde niente
+  const conv = questionToText(q);
   return {
     corso: q.corso || "", categoria: q.categoria || "", sottocateg: q.sottocateg || "", tags: q.tags || "",
-    stato: q.stato || "verificato", tipo: q.tipo, testo: inline ?? (q.testo || ""), punti: String(q.punti ?? ""),
-    options: isMc && opts.length ? opts : ["", ""], correct: isMc ? correct : [],
-    corretta: q.tipo === "fitb" ? (q.corretta || "") : "",
-    placeholder: q.placeholder || "",
-    matchLeft:  q.tipo === "match" ? opts.join("\n") : "",
-    matchRight: q.tipo === "match" ? (Array.isArray(right) ? right.map(String).join("\n") : String(q.corretta || "")) : "",
-    dataFitb:   q.tipo === "multi-fitb" && inline === null ? pretty(q.data) : "",
-    dataCloze:  q.tipo === "cloze" ? pretty(q.data) : ""
+    stato: q.stato || "verificato", tipo: q.tipo, testo: conv.testo, punti: String(q.punti ?? ""),
+    placeholder: q.placeholder || "", legacy: conv.legacy, legacyMotivo: conv.motivo || "", conversione: conv.note
   };
 }
 
-function draftToQuestion(d, original) {
+function draftToQuestion(d) {
   const q = {
     corso: d.corso, categoria: d.categoria.trim(), sottocateg: d.sottocateg.trim(), tags: normTags(d.tags),
     stato: d.stato, tipo: d.tipo, testo: d.testo.trim(), punti: Number(String(d.punti).replace(",", ".")),
     options: [], corretta: "", placeholder: "", data: ""
   };
-  const lines   = t => String(t || "").split("\n").map(x => x.trim()).filter(Boolean);
-  const compact = t => { try { return JSON.stringify(JSON.parse(t)); } catch(e) { return String(t || "").trim(); } };
-  if (d.tipo === "match") {
-    q.options  = lines(d.matchLeft);
-    q.corretta = JSON.stringify(lines(d.matchRight));
-  } else if (d.tipo === "multi-fitb") {
-    q.data = compact(d.dataFitb);
-  } else if (d.tipo === "cloze") {
-    q.data = compact(d.dataCloze);
-  } else if (d.tipo === "mc" || d.tipo === "multi-mc") {
-    q.options = d.options.map(o => o.trim());
-    const letters = [...d.correct].sort((a, b) => a - b).map(i => String.fromCharCode(65 + i));
-    q.corretta = d.tipo === "mc" ? (letters[0] || "") : letters.join(",");
-  } else {
-    if (d.tipo === "fitb") q.corretta = d.corretta.trim();
-    q.placeholder = d.placeholder.trim();
+  if (d.tipo === "fitb" || d.tipo === "free") q.placeholder = d.placeholder.trim();
+  // Formato vecchio non convertibile: le colonne I, J, M restano finché il testo non usa la sintassi nuova
+  if (d.legacy && d.legacy.tipo === d.tipo && !usaFormatoNelTesto(q)) {
+    Object.assign(q, { options: d.legacy.options, corretta: d.legacy.corretta, data: d.legacy.data });
   }
   return q;
 }
 
 function bancoEditDirty() {
-  return !!bancoEdit && questionFingerprintAdmin(draftToQuestion(bancoEdit.draft, bancoEdit.original)) !== bancoEdit.initialFp;
+  return !!bancoEdit && questionFingerprintAdmin(draftToQuestion(bancoEdit.draft)) !== bancoEdit.initialFp;
 }
 
 // Esami aperti che possono assegnare q, come fissa o da uno slot casuale
@@ -2554,34 +2589,18 @@ function openExamsUsing(q) {
   return allEsami.filter(e => e.stato === "open" && tracce.has(e.traccia_id));
 }
 
-// Il backend in uno scope isolato, come nella prova: l'editor ne usa lintQuestion per gli
-// avvisi sul contenuto, senza tenere una copia sua di quelle regole. Se non si carica,
-// l'editor funziona lo stesso, solo senza avvisi.
-let _adminBackend = null, _adminBackendPromise = null, _adminBackendError = null;
-function loadAdminBackend() {
-  if (_adminBackend) return Promise.resolve(_adminBackend);
-  if (!_adminBackendPromise) {
-    _adminBackendPromise = fetch("quiz_apps_script_v2.js", { cache: "no-store" })
-      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
-      .then(src => (_adminBackend = new Function(src + "\n;return { lintQuestion, normalizeIncomingQuestion };")()))
-      .catch(e => { _adminBackendError = e.message; _adminBackendPromise = null; throw e; });
-  }
-  return _adminBackendPromise;
-}
-
-function lintDraft(q) {
-  return _adminBackend ? _adminBackend.lintQuestion(_adminBackend.normalizeIncomingQuestion(q)) : [];
-}
-
-function bancoEditStart() {
+async function bancoEditStart() {
   const q = allQuestions.find(x => x.id === bancoSelected);
   if (!q) return;
+  try { await loadAdminBackend(); } catch(e) {}   // serve per convertire e controllare
+  if (bancoSelected !== q.id || bancoEdit) return;
   const original = JSON.parse(JSON.stringify(q));
   const draft = questionToDraft(original);
   bancoEdit = { id: q.id, original, draft, busy: false, imgTried: new Set(),
-                initialFp: questionFingerprintAdmin(draftToQuestion(draft, original)) };
+                initialFp: questionFingerprintAdmin(draftToQuestion(draft)),
+                // aperta già convertita: si può salvare anche senza toccare nulla, per convertirla nel foglio
+                converted: draft.testo !== (original.testo || "") };
   renderBancoEditor();
-  loadAdminBackend().then(() => bancoEditRefresh()).catch(() => bancoEditRefresh());
 }
 
 function bancoEditCancel() {
@@ -2589,6 +2608,32 @@ function bancoEditCancel() {
   bancoEdit = null;
   renderBancoDetail();
 }
+
+const BE_SINTASSI = {
+  mc: { spiega: "La domanda, poi le opzioni una per riga tra doppie quadre. Un * all'inizio segna quella giusta. " +
+                 "Con lo shuffle attivo nell'esame, le opzioni si mescolano per ogni studente.",
+        esempio: "Perché il codice genetico è detto degenerato?\n[[*Più codoni codificano lo stesso amminoacido]]\n" +
+                 "[[Un codone codifica più amminoacidi]]\n[[Il codice cambia da specie a specie]]" },
+  "multi-mc": { spiega: "Come la scelta multipla, con un * su ogni opzione giusta. Punteggio parziale: ogni scelta " +
+                        "sbagliata toglie quanto ne dà una giusta, senza scendere sotto zero.",
+                esempio: "Quali di queste basi sono puriniche?\n[[*Adenina]]\n[[*Guanina]]\n[[Citosina]]\n[[Timina]]" },
+  fitb: { spiega: "Scrivi la risposta nel testo tra doppie quadre: lì compare la casella. Il confronto ignora spazi e maiuscole.",
+          esempio: "Il codone di inizio della traduzione è [[AUG]]." },
+  "multi-fitb": { spiega: "Ogni risposta tra doppie quadre diventa una casella al suo posto, anche dentro una tabella. " +
+                          "Le caselle valgono tutte uguale; il confronto ignora spazi e maiuscole.",
+                  esempio: "Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale." },
+  cloze: { spiega: "Un menu è {{…}} con le opzioni tra doppie quadre e un * sulla giusta. Per riusare le stesse opzioni, " +
+                   "dichiara una lista una volta, {{nome = [[…]] [[…]]}} (non compare allo studente), e poi scrivi " +
+                   "{{nome: risposta}} dove serve il menu. I menu valgono tutti uguale.",
+           esempio: "{{basi = [[A]] [[C]] [[G]] [[T]]}}\nNel DNA l'adenina si appaia con {{basi: T}} e la guanina con {{basi: C}}.\n" +
+                    "BLAST esegue allineamenti {{[[*locali]] [[globali]]}} contro il database." },
+  match: { spiega: "La consegna, poi le coppie una per riga: [[sinistra => destra]]. Con lo shuffle attivo nell'esame, " +
+                   "la colonna destra si mescola per ogni studente.",
+           esempio: "Abbina ogni base alla sua complementare:\n[[Adenina => Timina]]\n[[Guanina => Citosina]]\n" +
+                    "[[Citosina => Guanina]]\n[[Timina => Adenina]]" },
+  free: { spiega: "Solo il testo: la risposta è libera e si valuta a mano.",
+          esempio: "Descrivi il ruolo di BRCA1 nella riparazione del DNA." }
+};
 
 function renderBancoEditor() {
   const e = bancoEdit, d = e.draft, q = e.original;
@@ -2598,13 +2643,24 @@ function renderBancoEditor() {
   const chiusi = allEsami.filter(x => x.stato !== "open" && tracceIds.has(x.traccia_id));
   let nota = "";
   if (aperti.length) {
-    nota = `<div class="be-note aperto">In uso in ${aperti.length === 1 ? "un esame aperto" : aperti.length + " esami aperti"} ` +
+    nota += `<div class="be-note aperto">In uso in ${aperti.length === 1 ? "un esame aperto" : aperti.length + " esami aperti"} ` +
       `(${aperti.map(x => escHtml(x.exam_id)).join(", ")}). Chi ha già iniziato vede la versione vecchia ma alla ` +
       `consegna viene corretto con quella nuova: cambiare opzioni o soluzione può falsare i voti.</div>`;
   } else if (chiusi.length) {
-    nota = `<div class="be-note">Usata in ${chiusi.length === 1 ? "un esame chiuso" : chiusi.length + " esami chiusi"}. ` +
+    nota += `<div class="be-note">Usata in ${chiusi.length === 1 ? "un esame chiuso" : chiusi.length + " esami chiusi"}. ` +
       `I voti già assegnati non cambiano, ma il dettaglio dei risultati mostrerà la versione nuova. ` +
       `Per conservare quella vecchia, usa "Salva come nuova domanda".</div>`;
+  }
+  if (d.conversione.length) {
+    nota += `<div class="be-note be-avviso"><strong>Aperta nel formato nel testo.</strong> Rispetto a com'era nel foglio, salvando cambia:` +
+            d.conversione.map(x => `<div>• ${escHtml(x)}</div>`).join("") + `</div>`;
+  } else if (e.converted) {
+    nota += `<div class="be-note">Era scritta nel formato vecchio: qui è già convertita, identica per lo studente. Salvando, ` +
+            `nel foglio finisce questo testo e le colonne I, J, M si svuotano.</div>`;
+  }
+  if (d.legacy) {
+    nota += `<div class="be-note">Resta nel formato vecchio (colonne I, J, M)${d.legacyMotivo ? ": " + escHtml(d.legacyMotivo) : ""}. ` +
+            `Qui si modificano testo e metadati; per convertirla, riscrivila con la sintassi nuova.</div>`;
   }
   const uniq = f => [...new Set(allQuestions.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
 
@@ -2614,7 +2670,7 @@ function renderBancoEditor() {
     <div class="be-grid">
       <label class="be-field">Tipo
         <select id="be-tipo" onchange="bancoEditTipo(this.value)">
-          ${Object.keys(TIPO_LABEL).map(t => `<option value="${t}" ${t === d.tipo ? "selected" : ""}>${escHtml(TIPO_LABEL[t] || t)}</option>`).join("")}
+          ${Object.keys(TIPO_LABEL).map(t => `<option value="${t}" ${t === d.tipo ? "selected" : ""}>${escHtml(TIPO_LABEL[t])}</option>`).join("")}
         </select></label>
       <label class="be-field">Punti
         <input type="text" inputmode="decimal" value="${escAttr(d.punti)}" oninput="bancoEditSet('punti', this.value)"></label>
@@ -2631,9 +2687,11 @@ function renderBancoEditor() {
         <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
     </div>
     <label class="be-field">Testo
-      <textarea rows="6" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
-      <small id="be-testo-hint"></small></label>
+      <textarea rows="9" id="be-testo" oninput="bancoEditSet('testo', this.value)">${escHtml(d.testo)}</textarea>
+      <small>HTML ammesso · [img:ID o link Drive] per un'immagine</small></label>
+    <div id="be-parse" class="be-parse"></div>
     <div class="be-json-actions">
+      <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
       <label class="be-mini be-upload">Inserisci immagine…
         <input type="file" accept="image/*" hidden onchange="bancoEditImage(this)"></label>
     </div>
@@ -2655,122 +2713,36 @@ function renderBancoEditor() {
   bancoEditRefresh();
 }
 
-// Sintassi dei tipi complessi: è quella delle colonne del foglio, con un esempio accanto
-const BE_ESEMPI = {
-  "multi-fitb": {
-    campo: "dataFitb",
-    json: {
-      cols: 2,
-      boxes: [
-        { label: "Algoritmo locale",  correct: "Smith-Waterman",   pts: 1 },
-        { label: "Algoritmo globale", correct: "Needleman-Wunsch", pts: 1 }
-      ]
-    },
-    testo: "Nel testo, {{0}}, {{1}}, … mettono le caselle al loro posto, anche dentro una tabella " +
-           "(&lt;table class=\"dp-table\"&gt; per le matrici). Oppure scrivi ___ al posto di ogni casella, tanti " +
-           "quante le caselle, e vengono usati nell'ordine. Senza segnaposto le caselle compaiono in griglia sotto il testo.",
-    campi: [["correct", "risposta attesa; il confronto ignora spazi e maiuscole"],
-            ["pts", "peso relativo della casella, facoltativo (1 se manca): i punti della domanda si dividono in proporzione"],
-            ["label", "etichetta della casella, mostrata solo nella griglia"],
-            ["cols", "colonne della griglia, facoltativo"]]
-  },
-  cloze: {
-    campo: "dataCloze",
-    json: {
-      dropdowns: [
-        { options: ["locali", "globali", "multipli"], correct: 0 },
-        { options: ["casuale", "vuoto", "reale"], correct: 0 }
-      ]
-    },
-    testo: "Nel testo, {{0}}, {{1}}, … mettono i menu a tendina al loro posto, nell'ordine dei dropdown.",
-    campi: [["options", "le scelte del menu, nell'ordine in cui compaiono"],
-            ["correct", "posizione della scelta giusta, contando da 0 (0 = la prima)"]]
+// Sintassi del tipo scelto, con un esempio, e i campi che valgono solo per alcuni tipi
+function renderBancoEditTipo() {
+  const d = bancoEdit.draft, s = BE_SINTASSI[d.tipo] || BE_SINTASSI.free;
+  let html = `<div class="be-note"><strong>Come si scrive:</strong> ${escHtml(s.spiega)}<pre class="be-esempio">${escHtml(s.esempio)}</pre></div>`;
+  if (d.tipo === "fitb" || d.tipo === "free") {
+    html += `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo, colonna L</small>
+               <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
   }
-};
-
-function beEsempioHtml(tipo) {
-  const ex = BE_ESEMPI[tipo];
-  return `<details class="be-example"><summary>Sintassi ed esempio</summary>
-      <p>${ex.testo}</p>
-      <pre>${escHtml(JSON.stringify(ex.json, null, 2))}</pre>
-      <table>${ex.campi.map(([k, v]) => `<tr><td><code>${k}</code></td><td>${escHtml(v)}</td></tr>`).join("")}</table>
-    </details>`;
+  if (d.tipo === "multi-fitb") {
+    html += `<details class="be-avanzate" id="be-ed">
+        <summary>Genera una matrice di edit distance</summary>
+        <div class="be-ed-form">
+          <label class="be-field">Stringa s1 (righe)<input type="text" id="be-ed-s1" placeholder="es. GCAT" autocomplete="off"></label>
+          <label class="be-field">Stringa s2 (colonne)<input type="text" id="be-ed-s2" placeholder="es. GCG" autocomplete="off"></label>
+          <label class="be-check"><input type="checkbox" id="be-ed-bordi"> da completare anche prima riga e prima colonna</label>
+          <button class="btn btn-sm" onclick="bancoEditGeneraED()">Genera</button>
+        </div>
+        <small>Scrive testo e matrice di Levenshtein (inserimento, cancellazione e sostituzione costano 1),
+          con le soluzioni come [[n]]: poi puoi ritoccare il testo. Ogni cella vale uguale.</small>
+      </details>`;
+  }
+  document.getElementById("be-tipo-fields").innerHTML = html;
 }
 
-function renderBancoEditTipo() {
-  const d = bancoEdit.draft, box = document.getElementById("be-tipo-fields");
-  const hint = {
-    fitb: "Il primo ___ (almeno tre trattini bassi) diventa la casella dentro la frase; senza, la casella va sotto il testo.",
-    cloze: "Scrivi {{0}}, {{1}}, … dove vanno i menu a tendina."
-  }[d.tipo];
-  document.getElementById("be-testo-hint").innerHTML =
-    "HTML ammesso · [img:ID o link Drive] per un'immagine" + (hint ? " · " + escHtml(hint) : "");
-
-  if (d.tipo === "mc" || d.tipo === "multi-mc") {
-    const multi = d.tipo === "multi-mc", n = d.options.length;
-    box.innerHTML = `<div class="be-field" style="margin-bottom:4px;">Opzioni <small>${multi ? "spunta tutte le corrette" : "seleziona la corretta"}</small></div>` +
-      d.options.map((o, i) => `<div class="be-opt">
-        <input type="${multi ? "checkbox" : "radio"}" name="be-correct" ${d.correct.includes(i) ? "checked" : ""}
-               onchange="bancoEditCorrect(${i}, this.checked)" title="Corretta">
-        <span class="be-letter">${String.fromCharCode(65 + i)}</span>
-        <input type="text" value="${escAttr(o)}" oninput="bancoEditOption(${i}, this.value)">
-        <button class="be-mini" onclick="bancoEditMove(${i}, -1)" ${i === 0 ? "disabled" : ""} title="Sposta su">▲</button>
-        <button class="be-mini" onclick="bancoEditMove(${i}, 1)" ${i === n - 1 ? "disabled" : ""} title="Sposta giù">▼</button>
-        <button class="be-mini" onclick="bancoEditRemove(${i})" ${n <= 2 ? "disabled" : ""} title="Elimina">✕</button>
-      </div>`).join("") +
-      `<button class="btn btn-sm btn-outline" style="margin-top:4px;" onclick="bancoEditAdd()" ${n >= 26 ? "disabled" : ""}>+ Aggiungi opzione</button>`;
-  } else if (d.tipo === "match") {
-    box.innerHTML = `<div class="be-two">
-        <label class="be-field">Colonna sinistra <small>un elemento per riga</small>
-          <textarea rows="6" class="be-code" oninput="bancoEditSet('matchLeft', this.value)">${escHtml(d.matchLeft)}</textarea></label>
-        <label class="be-field">Colonna destra <small>sulla stessa riga, l'abbinamento giusto</small>
-          <textarea rows="6" class="be-code" oninput="bancoEditSet('matchRight', this.value)">${escHtml(d.matchRight)}</textarea></label>
-      </div>
-      <details class="be-example"><summary>Esempio</summary>
-        <p>Riga per riga, a sinistra l'elemento e a destra ciò con cui va abbinato:</p>
-        <pre>Adenina      Timina\nGuanina      Citosina\nCitosina     Guanina\nTimina       Adenina</pre>
-        <p>Nel foglio diventano due array JSON: colonna I la sinistra, colonna J la destra. Le righe vuote vengono ignorate.</p>
-      </details>`;
-  } else if (d.tipo === "multi-fitb" || d.tipo === "cloze") {
-    const campo = BE_ESEMPI[d.tipo].campo;
-    const fitb = d.tipo === "multi-fitb";
-    const editor = `<label class="be-field">${fitb ? "Caselle" : "Menu a tendina"} <small>JSON, come nella colonna M del foglio</small>
-        <textarea rows="10" class="be-code" id="be-json" oninput="bancoEditSet('${campo}', this.value)">${escHtml(d[campo])}</textarea></label>
-      <div class="be-json-actions">
-        <button class="be-mini" onclick="bancoEditFormat()">Formatta</button>
-        <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
-      </div>
-      ${beEsempioHtml(d.tipo)}`;
-    box.innerHTML = fitb
-      ? `<div class="be-note">Scrivi ogni risposta nel testo tra doppie quadre: diventa una casella al suo posto.<br>
-           <code>Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale.</code><br>
-           Funziona anche nelle celle di una tabella. Le caselle valgono tutte uguale.
-           <div id="be-fitb-mode" style="margin-top:6px;"></div></div>
-         <details class="be-avanzate" id="be-ed">
-           <summary>Genera una matrice di edit distance</summary>
-           <div class="be-ed-form">
-             <label class="be-field">Stringa s1 (righe)<input type="text" id="be-ed-s1" placeholder="es. GCAT" autocomplete="off"></label>
-             <label class="be-field">Stringa s2 (colonne)<input type="text" id="be-ed-s2" placeholder="es. GCG" autocomplete="off"></label>
-             <label class="be-check"><input type="checkbox" id="be-ed-bordi"> da completare anche prima riga e prima colonna</label>
-             <button class="btn btn-sm" onclick="bancoEditGeneraED()">Genera</button>
-           </div>
-           <small>Scrive testo e matrice di Levenshtein (inserimento, cancellazione e sostituzione costano 1),
-             con le soluzioni come [[n]]: poi puoi ritoccare il testo. Ogni cella vale uguale.</small>
-         </details>
-         <details class="be-avanzate" ${d.dataFitb.trim() && !/\[\[/.test(d.testo) ? "open" : ""}>
-           <summary>Avanzato: caselle in JSON, per pesi diversi, etichette o griglia sotto il testo</summary>
-           ${editor}
-         </details>`
-      : editor;
-  } else {
-    box.innerHTML =
-      (d.tipo === "fitb" ? `<label class="be-field">Risposta corretta
-          <input type="text" value="${escAttr(d.corretta)}" oninput="bancoEditSet('corretta', this.value)">
-          <small>Il confronto ignora spazi e maiuscole: "Homo sapiens" accetta anche "homosapiens".</small></label>`
-        : `<div class="be-note">Risposta aperta: non viene corretta automaticamente.</div>`) +
-      `<label class="be-field">Suggerimento nel campo di risposta <small>facoltativo</small>
-         <input type="text" value="${escAttr(d.placeholder)}" oninput="bancoEditSet('placeholder', this.value)"></label>`;
-  }
+function bancoEditExample() {
+  const d = bancoEdit.draft, s = BE_SINTASSI[d.tipo] || BE_SINTASSI.free;
+  if (d.testo.trim() && !confirm("Sostituire il testo attuale con l'esempio?")) return;
+  d.testo = s.esempio;
+  document.getElementById("be-testo").value = d.testo;
+  bancoEditRefresh();
 }
 
 // Un'immagine oltre il limite del server viene rimpicciolita qui (lato più lungo 1600 px,
@@ -2872,97 +2844,62 @@ function bancoEditGeneraED() {
   const d = bancoEdit.draft;
   if (d.testo.trim() && !confirm("Sostituire il testo attuale con la matrice generata?")) return;
   d.testo = editDistanceTesto(s1, s2, document.getElementById("be-ed-bordi").checked);
-  d.dataFitb = "";
   document.getElementById("be-testo").value = d.testo;
-  const json = document.getElementById("be-json");
-  if (json) json.value = "";
   bancoEditRefresh();
   const n = (d.testo.match(/\[\[/g) || []).length;
   msg.style.color = "#2e7d32";
   msg.textContent = "✓ Matrice generata: " + n + " celle da completare, edit distance = " + editDistanceMatrix(s1, s2)[s1.length][s2.length] + ".";
 }
 
-function bancoEditFormat() {
-  const campo = BE_ESEMPI[bancoEdit.draft.tipo].campo;
-  try {
-    bancoEdit.draft[campo] = JSON.stringify(JSON.parse(bancoEdit.draft[campo]), null, 2);
-    document.getElementById("be-json").value = bancoEdit.draft[campo];
-    bancoEditRefresh();
-  } catch(e) {} // l'errore di sintassi è già tra gli errori, con la posizione
-}
-
-function bancoEditExample() {
-  const ex = BE_ESEMPI[bancoEdit.draft.tipo];
-  if (bancoEdit.draft[ex.campo].trim() && !confirm("Sostituire il contenuto attuale con l'esempio?")) return;
-  bancoEdit.draft[ex.campo] = JSON.stringify(ex.json, null, 2);
-  document.getElementById("be-json").value = bancoEdit.draft[ex.campo];
-  bancoEditRefresh();
-}
-
 function bancoEditSet(field, value) { bancoEdit.draft[field] = value; bancoEditRefresh(); }
 
 function bancoEditTipo(tipo) {
-  const d = bancoEdit.draft;
-  d.tipo = tipo;
-  if (tipo === "mc" && d.correct.length > 1) d.correct = [d.correct[0]];
+  bancoEdit.draft.tipo = tipo;
   renderBancoEditTipo();
   bancoEditRefresh();
 }
 
-function bancoEditCorrect(i, checked) {
-  const d = bancoEdit.draft;
-  if (d.tipo === "mc") d.correct = [i];
-  else d.correct = checked ? [...new Set([...d.correct, i])] : d.correct.filter(x => x !== i);
-  bancoEditRefresh();
-}
-
-// Senza ridisegnare le opzioni: il campo che si sta scrivendo non perde il focus
-function bancoEditOption(i, value) { bancoEdit.draft.options[i] = value; bancoEditRefresh(); }
-
-function bancoEditMove(i, dir) {
-  const d = bancoEdit.draft, j = i + dir;
-  [d.options[i], d.options[j]] = [d.options[j], d.options[i]];
-  d.correct = d.correct.map(x => x === i ? j : x === j ? i : x);
-  renderBancoEditTipo();
-  bancoEditRefresh();
-}
-
-function bancoEditRemove(i) {
-  const d = bancoEdit.draft;
-  d.options.splice(i, 1);
-  d.correct = d.correct.filter(x => x !== i).map(x => x > i ? x - 1 : x);
-  renderBancoEditTipo();
-  bancoEditRefresh();
-}
-
-function bancoEditAdd() {
-  bancoEdit.draft.options.push("");
-  renderBancoEditTipo();
-  const inputs = document.querySelectorAll("#be-tipo-fields .be-opt input[type=text]");
-  if (inputs.length) inputs[inputs.length - 1].focus();
-  bancoEditRefresh();
+// Cosa il server ricava dal testo, in una riga: conferma subito che la sintassi è stata capita
+function beRiepilogo(q) {
+  if (!_adminBackend) return _adminBackendError ? "Riconoscimento non disponibile: " + _adminBackendError : "";
+  const c = canon(q);
+  let r;
+  try {
+    if (q.tipo === "mc" || q.tipo === "multi-mc") {
+      const g = q.tipo === "mc" ? (c.corretta ? [c.corretta] : []) : parseMultiCorrettaAdmin(c.corretta);
+      r = c.options.length + (c.options.length === 1 ? " opzione" : " opzioni") + ", giusta: " + (g.join(", ") || "nessuna");
+    } else if (q.tipo === "fitb") {
+      r = c.corretta ? "casella con risposta «" + c.corretta + "»" : "nessuna casella";
+    } else if (q.tipo === "multi-fitb") {
+      const n = (JSON.parse(c.data || "{}").boxes || []).length;
+      r = n ? n + (n === 1 ? " casella" : " caselle") : "nessuna casella";
+    } else if (q.tipo === "cloze") {
+      const n = (JSON.parse(c.data || "{}").dropdowns || []).length;
+      r = n ? n + " menu" : "nessun menu";
+    } else if (q.tipo === "match") {
+      r = c.options.length + (c.options.length === 1 ? " coppia" : " coppie");
+    } else {
+      r = "risposta aperta";
+    }
+  } catch(e) { r = "dati non leggibili"; }
+  return "Riconosciuto: " + r + (q.tipo !== "free" && !usaFormatoNelTesto(q) ? " · formato vecchio (colonne I, J, M)" : "");
 }
 
 function bancoEditRefresh() {
   const e = bancoEdit;
   if (!e) return;
-  const q = draftToQuestion(e.draft, e.original);
+  const q = draftToQuestion(e.draft);
   const errs = validateQuestionAdmin(q);
   const dirty = questionFingerprintAdmin(q) !== e.initialFp;
   document.getElementById("be-errors").innerHTML = errs.map(x => `<div>• ${escHtml(x)}</div>`).join("");
-  const modo = document.getElementById("be-fitb-mode");
-  if (modo) {
-    const n = (q.testo.match(/\[\[[^\]]*\]\]/g) || []).length;
-    modo.innerHTML = n ? `<strong style="color:#2e7d32;">${n} ${n === 1 ? "casella" : "caselle"} nel testo.</strong>` +
-                         (bancoEdit.draft.dataFitb.trim() ? " Il JSON avanzato viene ignorato." : "") : "";
-  }
-  // Gli avvisi hanno senso solo su una domanda leggibile: con errori di sintassi ripeterebbero lo stesso problema
+  document.getElementById("be-save").disabled     = e.busy || !!errs.length || !(dirty || e.converted);
+  document.getElementById("be-save-new").disabled = e.busy || !!errs.length;
+  document.getElementById("be-parse").textContent = beRiepilogo(q);
+  // Gli avvisi hanno senso solo su una domanda leggibile: con errori ripeterebbero lo stesso problema
   const warns = errs.length ? [] : lintDraft(q);
   document.getElementById("be-warn").innerHTML = warns.length
     ? `<div class="be-note be-avviso"><strong>Da controllare:</strong>${warns.map(x => `<div>• ${escHtml(x)}</div>`).join("")}</div>`
-    : (_adminBackendError ? `<div class="be-note">Avvisi sul contenuto non disponibili: ${escHtml(_adminBackendError)}</div>` : "");
-  document.getElementById("be-save").disabled     = e.busy || !!errs.length || !dirty;
-  document.getElementById("be-save-new").disabled = e.busy || !!errs.length;
+    : (_adminBackendError ? `<div class="be-note">Controlli sul contenuto non disponibili: ${escHtml(_adminBackendError)}</div>` : "");
 
   // getImagesAdmin serve le immagini già citate nel banco e quelle della cartella immagini di
   // QuizForge (dove finiscono le caricate). Un file altrove nel Drive, citato solo in questa
@@ -3071,7 +3008,7 @@ async function initDomandeTab() {
     document.getElementById("domande-loading").style.display = "block";
     document.getElementById("domande-content").style.display = "none";
     try {
-      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded()]);
+      await Promise.all([ensureQuestionsLoaded(), ensureTracksLoaded(), loadAdminBackend().catch(() => {})]);
     } catch(e) {
       document.getElementById("domande-loading").textContent = "Errore: " + e.message;
       return;
@@ -3213,6 +3150,11 @@ async function exportTraccia() {
   if (!currentTraccia || trackItems.length === 0) {
     alert("Seleziona una traccia con almeno una domanda per esportare."); return;
   }
+  // Serve la conversione del backend: le risposte scritte nel testo non devono finire nella traccia
+  try { await loadAdminBackend(); } catch(e) {
+    alert("Impossibile caricare lo script di backend (" + e.message + "): l'export non può separare le risposte dal testo.");
+    return;
+  }
   const qMap = allQuestions ? Object.fromEntries(allQuestions.map(q => [q.id, q])) : {};
   const nome  = currentTraccia.nome || currentTraccia.track_id;
   const questions = trackItems
@@ -3262,7 +3204,7 @@ async function exportTraccia() {
   function renderQ(item, withKey) {
     const { num, ep } = item;
     // Forma canonica: le risposte scritte nel testo ([[...]]) non devono finire nella traccia
-    const q = canonicalMultiFitbAdmin(item.q);
+    const q = canon(item.q);
     const pts   = ep !== undefined ? ep : q.punti;
     const testo = q.testo || "";
     let body    = `<div class="q-header">Domanda ${num}<span class="q-pts">[${pts} pt]</span></div>`;
@@ -3639,7 +3581,8 @@ function renderQBrowser() {
   const usedIds = new Set(trackItems.filter(i => i.type === "fixed").map(i => i.id));
 
   browser.innerHTML = filtered.map(q => {
-    const shortText = q.testo.length > 110 ? q.testo.substring(0, 110) + "…" : q.testo;
+    const testoQ = canon(q).testo;
+    const shortText = testoQ.length > 110 ? testoQ.substring(0, 110) + "…" : testoQ;
     const qs = q.stato || "verificato";
     const statoLabel = qs === "bozza" ? "✎ bozza" : "✓";
     const isUsed = usedIds.has(q.id);
@@ -3764,7 +3707,8 @@ function renderItemsList() {
       if (!q) return `<div class="sel-row"><span class="sel-num">${i+1}.</span><span class="sel-text" style="color:#b00;">ID non trovato: ${escHtml(item.id)}</span>${arrows}</div>`;
       const ep = item.punti !== undefined ? item.punti : q.punti;
       totalPt += ep;
-      const shortText = q.testo.length > 90 ? q.testo.substring(0, 90) + "…" : q.testo;
+      const testoQ = canon(q).testo;
+      const shortText = testoQ.length > 90 ? testoQ.substring(0, 90) + "…" : testoQ;
       const ptsOverride = item.punti !== undefined && item.punti !== q.punti;
       return `<div class="sel-row" style="cursor:pointer;" onclick="previewQuestion('${item.id}',event)" title="Anteprima">
         <span class="sel-num">${i+1}.</span>

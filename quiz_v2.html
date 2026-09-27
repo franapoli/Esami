@@ -300,7 +300,7 @@ function multiFitbShareHint(q) {
 // dove gli ID Drive possono contenere trattini bassi. null se il testo non ne ha: la casella
 // resta sotto, come per le domande scritte senza segnaposto.
 function splitFitbBlank(text) {
-  const parts = String(text || "").split(/(<[^>]*>|\[img:[^\]]*\])/); // pari: testo, dispari: tag
+  const parts = String(text || "").split(/(<\/?[A-Za-z!][^>]*>|\[img:[^\]]*\])/); // pari: testo, dispari: tag
   for (let i = 0; i < parts.length; i += 2) {
     const m = parts[i].match(/_{3,}/);
     if (m) return [parts.slice(0, i).join("") + parts[i].slice(0, m.index),

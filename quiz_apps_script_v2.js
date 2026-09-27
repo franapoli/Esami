@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "2.29.0"; // aggiornare ad ogni deploy
+const VERSION = "3.0.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -386,30 +386,38 @@ function normalizeIncomingQuestion(d) {
 // multi-fitb e cloze sono avvisi di lintQuestion.
 function validateQuestion(q) {
   const err = [];
-  if (TIPI_DOMANDA.indexOf(q.tipo) === -1) err.push("Tipo non valido: " + q.tipo);
+  if (TIPI_DOMANDA.indexOf(q.tipo) === -1) { err.push("Tipo non valido: " + q.tipo); return err; }
   if (!q.testo) err.push("Il testo è vuoto.");
   if (!isFinite(q.punti) || q.punti <= 0) err.push("I punti devono essere un numero maggiore di zero.");
-  if (q.tipo === "mc" || q.tipo === "multi-mc") {
-    if (q.options.length < 2) err.push("Servono almeno due opzioni.");
-    if (q.options.length > 26) err.push("Al massimo 26 opzioni (A–Z).");
-    if (q.options.some(o => !o)) err.push("Ci sono opzioni vuote.");
-    const letters = q.tipo === "mc" ? (q.corretta ? [q.corretta] : []) : parseMultiCorretta(q.corretta);
-    const fuori = letters.filter(l => !/^[A-Z]$/.test(l) || l.charCodeAt(0) - 65 >= q.options.length);
-    if (!letters.length) err.push(q.tipo === "mc" ? "Indica la risposta corretta." : "Indica almeno una risposta corretta.");
+  const c = canonicalForm(q);
+  if (c.tipo === "mc" || c.tipo === "multi-mc") {
+    if (c.options.length < 2) err.push("Servono almeno due opzioni: scrivile nel testo, una per riga, come [[opzione]].");
+    if (c.options.length > 26) err.push("Al massimo 26 opzioni (A–Z).");
+    if (c.options.some(o => !o)) err.push("Ci sono opzioni vuote.");
+    const letters = c.tipo === "mc" ? (c.corretta ? [c.corretta] : []) : parseMultiCorretta(c.corretta);
+    const fuori = letters.filter(l => !/^[A-Z]$/.test(l) || l.charCodeAt(0) - 65 >= c.options.length);
+    if (!letters.length) err.push(c.tipo === "mc" ? "Indica la risposta corretta: un * all'inizio della voce, [[*giusta]]."
+                                                   : "Indica almeno una risposta corretta: un * all'inizio della voce, [[*giusta]].");
     else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
   }
-  if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
-  const risposteNelTesto = q.tipo === "multi-fitb" && /\[\[[^\]]*\]\]/.test(q.testo || "");
-  if ((q.tipo === "multi-fitb" || q.tipo === "cloze") && !risposteNelTesto) {
-    let d = null;
-    if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
-    else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
-    if (d !== null && (typeof d !== "object" || Array.isArray(d))) err.push("Il campo dati deve essere un oggetto JSON { … }.");
+  if (c.tipo === "fitb") {
+    if (!c.corretta) err.push("Indica la risposta: scrivila nel testo tra doppie quadre, [[risposta]].");
+    if (textItems(q.testo).length > 1) err.push("Una risposta breve ha una sola casella: per più risposte scegli il tipo caselle multiple.");
   }
-  if (q.tipo === "match") {
+  if (c.tipo === "multi-fitb" || c.tipo === "cloze") {
+    let d = null;
+    if (!String(c.data || "").trim()) {
+      err.push(c.tipo === "cloze" ? "Nessun menu: scrivili nel testo, {{[[*giusta]] [[sbagliata]]}}."
+                                  : "Nessuna casella: scrivi le risposte nel testo tra doppie quadre, [[risposta]].");
+    } else {
+      try { d = JSON.parse(c.data); } catch(e) { err.push("Il campo dati (colonna M) non è JSON valido: " + e.message); }
+      if (d !== null && (typeof d !== "object" || Array.isArray(d))) err.push("Il campo dati (colonna M) deve essere un oggetto JSON.");
+    }
+  }
+  if (c.tipo === "match") {
     let r = null;
-    try { r = JSON.parse(q.corretta || ""); } catch(e) {}
-    if (!Array.isArray(r)) err.push("La colonna destra del match deve essere un array JSON.");
+    try { r = JSON.parse(c.corretta || ""); } catch(e) {}
+    if (!Array.isArray(r) || !c.options.length) err.push("Nessuna coppia: scrivile nel testo, una per riga, come [[sinistra => destra]].");
   }
   return err;
 }
@@ -421,8 +429,48 @@ function validateQuestion(q) {
 // coerenti: per esempio una casella senza soluzione dà il punto a chi la lascia vuota.
 function lintQuestion(q) {
   const warn = [];
-  const scritta = q;               // come l'ha scritta l'autore, prima della forma canonica
-  q = canonicalMultiFitb(q);
+  const scritta = q;               // come l'ha scritta l'autore, prima della forma interna
+  q = canonicalForm(q);
+  const nelTesto = scritta.tipo === "cloze" ? isTextCloze(scritta.testo) : hasItems(scritta.testo);
+
+  // ---- errori di scrittura del formato nel testo ----
+  if (nelTesto && scritta.tipo === "mc" && textItems(scritta.testo).filter(x => x.charAt(0) === "*").length > 1) {
+    warn.push("Più opzioni segnate con *, ma una scelta multipla semplice ne ha una giusta sola: conta la prima. " +
+              "Per più risposte giuste scegli il tipo con più risposte.");
+  }
+  if (nelTesto && scritta.tipo === "match") {
+    textItems(scritta.testo).forEach((x, i) => {
+      if (x.indexOf("=>") === -1) warn.push("La coppia " + (i + 1) + " non ha =>: scrivila come [[sinistra => destra]].");
+    });
+  }
+  if (nelTesto && scritta.tipo === "cloze") {
+    const liste = clozeLists(scritta.testo), usate = {};
+    let n = 0, fuori = 0;
+    mapTextSegments(scritta.testo, seg => {
+      const resto = seg.replace(new RegExp(CLOZE_DECL_SRC, "g"), "").replace(new RegExp(CLOZE_MENU_SRC, "g"), (_, nome, risposta, corpo) => {
+        n++;
+        if (corpo !== undefined) {
+          const stelle = itemsIn(corpo).filter(x => x.charAt(0) === "*").length;
+          if (!stelle) warn.push("Il menu " + n + " non ha l'opzione giusta: segnala con un * all'inizio, [[*giusta]].");
+          if (stelle > 1) warn.push("Il menu " + n + " ha più opzioni con *: conta la prima.");
+        } else {
+          usate[nome] = true;
+          if (!liste[nome]) warn.push("Il menu " + n + " usa la lista «" + nome + "», che non è definita: aggiungi {{" + nome + " = [[…]] [[…]]}}.");
+          else if (liste[nome].indexOf(String(risposta).trim()) === -1) {
+            warn.push("Nel menu " + n + " la risposta «" + String(risposta).trim() + "» non è tra le voci della lista «" + nome + "».");
+          }
+        }
+        return "";
+      });
+      fuori += itemsIn(resto).length;
+      if (/\{\{\d+\}\}/.test(resto)) warn.push("Il testo mescola menu scritti per esteso con segnaposto {{N}}: usa un solo modo.");
+      return seg;
+    });
+    Object.keys(liste).forEach(nome => { if (!usate[nome]) warn.push("La lista «" + nome + "» è definita ma non viene usata."); });
+    if (fuori) warn.push("Nel testo c'è [[…]] fuori da un menu: allo studente appare come ___.");
+  }
+
+  // ---- controlli sulla forma interna, qualunque sia il formato ----
   const markers = [];
   String(q.testo || "").replace(/\{\{(\d+)\}\}/g, (_, n) => { markers.push(parseInt(n, 10)); return ""; });
   const checkMarkers = (n, cosa) => {
@@ -441,7 +489,7 @@ function lintQuestion(q) {
     if (!boxes.length) warn.push("Nessuna casella definita.");
     boxes.forEach((b, i) => {
       if (b.correct === undefined || b.correct === null || String(b.correct).trim() === "") {
-        warn.push("La casella " + i + " non ha una soluzione: prenderebbe il punto chi la lascia vuota.");
+        warn.push("La casella " + (i + 1) + " non ha una soluzione: prenderebbe il punto chi la lascia vuota.");
       }
     });
     if (boxes.length && boxes.every(b => boxWeight(b) === 0)) warn.push("Tutte le caselle hanno peso zero: la domanda darebbe sempre 0.");
@@ -460,19 +508,20 @@ function lintQuestion(q) {
     dds.forEach((dd, i) => {
       const opts = Array.isArray(dd.options) ? dd.options : [];
       const c = dd.correct === undefined || dd.correct === null ? 0 : dd.correct;
-      if (opts.length < 2) warn.push("Il menu " + i + " ha meno di due opzioni.");
+      if (opts.length < 2) warn.push("Il menu " + (i + 1) + " ha meno di due opzioni.");
+      if (nelTesto && c === -1) return;   // già segnalato sopra, nei termini del formato nel testo
       if (!Number.isInteger(c) || c < 0 || c >= opts.length) {
-        warn.push("Il menu " + i + " indica come corretta l'opzione " + c + ", ma le opzioni vanno da 0 a " + (opts.length - 1) + ".");
+        warn.push("Il menu " + (i + 1) + " indica come corretta l'opzione " + c + ", ma le opzioni vanno da 0 a " + (opts.length - 1) + ".");
       }
     });
-    checkMarkers(dds.length, "menu");
+    if (!nelTesto) checkMarkers(dds.length, "menu");
   }
-  if (q.tipo === "fitb") {
+  if (q.tipo === "fitb" && !nelTesto) {
     // Il primo "___" diventa la casella (quiz_v2.html, splitFitbBlank); gli altri restano testo
-    const blanks = String(q.testo || "").replace(/<[^>]*>|\[img:[^\]]*\]/g, " ").match(/_{3,}/g) || [];
+    const blanks = String(q.testo || "").replace(/<\/?[A-Za-z!][^>]*>|\[img:[^\]]*\]/g, " ").match(/_{3,}/g) || [];
     if (blanks.length > 1) {
-      warn.push("Il testo ha " + blanks.length + " spazi da completare, ma una fitb ha una sola casella: " +
-                "solo il primo diventa la casella. Per più risposte usa multi-fitb.");
+      warn.push("Il testo ha " + blanks.length + " spazi da completare, ma una risposta breve ha una sola casella: " +
+                "solo il primo diventa la casella. Per più risposte scegli il tipo caselle multiple.");
     }
   }
   if (q.tipo === "match") {
@@ -481,9 +530,9 @@ function lintQuestion(q) {
     try { right = JSON.parse(q.corretta || ""); } catch(e) {}
     if (!Array.isArray(right)) warn.push("La colonna destra (colonna J) non è un array JSON.");
     else {
-      if (left.length < 2) warn.push("Servono almeno due elementi a sinistra.");
+      if (left.length < 2) warn.push("Servono almeno due coppie.");
       if (right.length !== left.length) warn.push("Ci sono " + left.length + " elementi a sinistra e " + right.length + " a destra.");
-      const doppi = right.filter((r, i) => right.indexOf(r) !== i);
+      const doppi = right.filter((r, i) => r && right.indexOf(r) !== i);
       if (doppi.length) warn.push("Elementi ripetuti a destra (" + doppi.join(", ") + "): più abbinamenti risultano corretti.");
     }
   }
@@ -558,24 +607,101 @@ function readEsame(examId) {
 // Costruisce l'oggetto domanda pronto per il client.
 // withCorrect=false (default): omette le risposte corrette — usato per getTrack (studenti).
 // withCorrect=true: include le risposte corrette — usato solo internamente per scoring o admin.
+// ============================================================
+// FORMATO NEL TESTO
+// Una domanda si può scrivere tutta nella colonna Testo, così il foglio contiene esattamente
+// ciò che si legge nell'editor:
+//   [[…]]                      una risposta o una voce; "*" all'inizio segna quella giusta
+//   fitb        Il codone di inizio è [[AUG]].
+//   multi-fitb  l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] …
+//   mc          la domanda, poi le opzioni: [[*giusta]] [[sbagliata]] … (multi-mc: più "*")
+//   match       la consegna, poi le coppie: [[Adenina => Timina]] [[Guanina => Citosina]] …
+//   cloze       menu nella frase: {{[[*locali]] [[globali]]}}; liste riusabili:
+//               {{basi = [[A]] [[C]] [[G]] [[T]]}} una volta, poi {{basi: T}} dove serve
+// canonicalForm la riduce alla forma interna di sempre (opzioni, lettere, JSON dei dati), la
+// stessa delle domande scritte nel formato vecchio con le colonne I, J e M, che continuano a
+// funzionare. Chi prepara, corregge o controlla una domanda passa di qui: i segni delle
+// risposte giuste non arrivano mai allo studente.
+// ============================================================
+
 // Applica fn solo al testo di una stringa HTML: non ai tag, né ai segnaposto [img:…]
-// (gli ID Drive possono contenere trattini bassi).
+// (gli ID Drive possono contenere trattini bassi). Un tag è "<" seguito da lettera, "/" o "!",
+// come per il browser: "p < 0,05" è testo, e prenderlo per un tag spezzerebbe le voci [[…]].
 function mapTextSegments(html, fn) {
-  return String(html || "").split(/(<[^>]*>|\[img:[^\]]*\])/).map((p, i) => i % 2 ? p : fn(p)).join("");
+  return String(html || "").split(/(<\/?[A-Za-z!][^>]*>|\[img:[^\]]*\])/).map((p, i) => i % 2 ? p : fn(p)).join("");
 }
 
-// Forma canonica di una multi-fitb: testo con {{N}} e caselle nel campo dati. Due scritture
-// più semplici vi si riducono qui:
-//   - risposte nel testo: "l'algoritmo di [[Smith-Waterman]] è locale" (il campo dati è ignorato);
-//   - "___" nel testo, tanti quante le caselle del campo dati: diventano {{0}}, {{1}}, … in ordine.
-// Chi prepara o corregge la domanda passa di qui, così le risposte scritte nel testo non
-// arrivano mai allo studente. Identica a canonicalMultiFitbAdmin in admin_v2.html.
+const ITEM_SRC = "\\[\\[([\\s\\S]*?)\\]\\]";
+
+function hasItems(testo) {
+  let found = false;
+  mapTextSegments(testo, seg => { if (new RegExp(ITEM_SRC).test(seg)) found = true; return seg; });
+  return found;
+}
+
+function itemsIn(s) {
+  const out = [];
+  String(s || "").replace(new RegExp(ITEM_SRC, "g"), (_, x) => { out.push(x.trim()); return ""; });
+  return out;
+}
+
+// Le voci [[…]] del testo, esclusi tag HTML e segnaposto [img:…]
+function textItems(testo) {
+  const out = [];
+  mapTextSegments(testo, seg => { out.push.apply(out, itemsIn(seg)); return seg; });
+  return out;
+}
+
+// "*voce" → giusta
+function starred(x) {
+  return x.charAt(0) === "*" ? { star: true, text: x.slice(1).trim() } : { star: false, text: x };
+}
+
+// Il testo senza le voci [[…]] (per mc e match stanno in coda, una per riga): via anche gli
+// a capo e i <br> rimasti in fondo
+function withoutItems(testo) {
+  return mapTextSegments(testo, seg => seg.replace(new RegExp(ITEM_SRC, "g"), ""))
+    .replace(/(\s|<br\s*\/?>)+$/i, "").replace(/\n{3,}/g, "\n\n");
+}
+
+function canonicalChoice(q) {
+  if (!hasItems(q.testo)) return q;
+  const opts = textItems(q.testo).map(starred);
+  const letters = opts.map((o, i) => o.star ? String.fromCharCode(65 + i) : null).filter(Boolean);
+  return Object.assign({}, q, { testo: withoutItems(q.testo), options: opts.map(o => o.text),
+                                corretta: q.tipo === "mc" ? (letters[0] || "") : letters.join(",") });
+}
+
+function canonicalMatch(q) {
+  if (!hasItems(q.testo)) return q;
+  const pairs = textItems(q.testo).map(x => {
+    const k = x.indexOf("=>");
+    return k === -1 ? [x.trim(), ""] : [x.slice(0, k).trim(), x.slice(k + 2).trim()];
+  });
+  return Object.assign({}, q, { testo: withoutItems(q.testo), options: pairs.map(p => p[0]),
+                                corretta: JSON.stringify(pairs.map(p => p[1])) });
+}
+
+// La casella della fitb è il primo "___" del testo (quiz_v2.html, splitFitbBlank). Le voci in
+// più diventano "___" anche loro, senza contenuto: nessuna risposta trapela.
+function canonicalFitb(q) {
+  if (!hasItems(q.testo)) return q;
+  let first = null;
+  const t = mapTextSegments(q.testo, seg => seg.replace(new RegExp(ITEM_SRC, "g"), (_, x) => {
+    if (first === null) first = x.trim();
+    return "___";
+  }));
+  return Object.assign({}, q, { testo: t, corretta: first || "" });
+}
+
+// Multi-fitb: [[risposta]] nel testo, oppure (formato vecchio) "___" tanti quante le caselle del
+// campo dati, che diventano {{0}}, {{1}}, … nell'ordine.
 function canonicalMultiFitb(q) {
   if (!q || q.tipo !== "multi-fitb") return q;
   const testo = String(q.testo || "");
-  if (/\[\[[^\]]*\]\]/.test(testo)) {
+  if (hasItems(testo)) {
     const boxes = [];
-    const t = mapTextSegments(testo, seg => seg.replace(/\[\[([^\]]*)\]\]/g,
+    const t = mapTextSegments(testo, seg => seg.replace(new RegExp(ITEM_SRC, "g"),
       (_, ans) => "{{" + (boxes.push({ correct: ans.trim() }) - 1) + "}}"));
     return Object.assign({}, q, { testo: t, data: JSON.stringify({ boxes: boxes }) });
   }
@@ -593,6 +719,57 @@ function canonicalMultiFitb(q) {
   return q;
 }
 
+// Cloze: tre forme di {{…}}, tutte distinte dai segnaposto {{0}} della forma interna:
+//   {{nome = [[a]] [[b]]}}   dichiara una lista (non viene mostrata)
+//   {{nome: risposta}}       menu con le voci della lista, "risposta" è la giusta
+//   {{[[*a]] [[b]]}}         menu scritto per intero
+const CLOZE_DECL_SRC = "\\{\\{\\s*([\\wÀ-ÿ]+)\\s*=\\s*((?:\\s*\\[\\[[\\s\\S]*?\\]\\])+)\\s*\\}\\}";
+const CLOZE_MENU_SRC = "\\{\\{\\s*(?:([\\wÀ-ÿ]+)\\s*:\\s*([^{}]*?)|((?:\\s*\\[\\[[\\s\\S]*?\\]\\])+))\\s*\\}\\}";
+
+function isTextCloze(testo) {
+  return new RegExp(CLOZE_DECL_SRC).test(String(testo || "")) || new RegExp(CLOZE_MENU_SRC).test(String(testo || ""));
+}
+
+function clozeLists(testo) {
+  const liste = {};
+  String(testo || "").replace(new RegExp(CLOZE_DECL_SRC, "g"), (_, nome, corpo) => { liste[nome] = itemsIn(corpo); return ""; });
+  return liste;
+}
+
+function canonicalCloze(q) {
+  if (!q || q.tipo !== "cloze" || !isTextCloze(q.testo)) return q;
+  const liste = clozeLists(q.testo);
+  const dropdowns = [];
+  let t = mapTextSegments(q.testo, seg => seg
+    .replace(new RegExp(CLOZE_DECL_SRC, "g"), "")
+    .replace(new RegExp(CLOZE_MENU_SRC, "g"), (_, nome, risposta, corpo) => {
+      let dd;
+      if (corpo !== undefined) {
+        const o = itemsIn(corpo).map(starred);
+        dd = { options: o.map(x => x.text), correct: o.findIndex(x => x.star) };
+      } else {
+        const opts = (liste[nome] || []).slice();
+        dd = { options: opts, correct: opts.indexOf(String(risposta).trim()) };
+      }
+      return "{{" + (dropdowns.push(dd) - 1) + "}}";
+    })
+    // [[…]] fuori dai menu: allo studente arriverebbero in chiaro
+    .replace(new RegExp(ITEM_SRC, "g"), "___"));
+  t = t.replace(/^(\s|<br\s*\/?>)+/i, "");   // le dichiarazioni in cima lasciano righe vuote
+  return Object.assign({}, q, { testo: t, data: JSON.stringify({ dropdowns: dropdowns }) });
+}
+
+// Forma interna di qualunque domanda. Il formato vecchio (colonne I, J, M) passa invariato.
+function canonicalForm(q) {
+  if (!q) return q;
+  if (q.tipo === "mc" || q.tipo === "multi-mc") return canonicalChoice(q);
+  if (q.tipo === "match")      return canonicalMatch(q);
+  if (q.tipo === "fitb")       return canonicalFitb(q);
+  if (q.tipo === "multi-fitb") return canonicalMultiFitb(q);
+  if (q.tipo === "cloze")      return canonicalCloze(q);
+  return q;
+}
+
 // Peso relativo di una casella multi-fitb. Il punteggio della domanda è Q_PUNTI, ripartito
 // fra le caselle in proporzione ai pesi. Senza "pts" la casella pesa 1: prima pesava 0, e una
 // domanda senza pesi dava sempre 0 punti anche con tutte le risposte giuste.
@@ -603,7 +780,7 @@ function boxWeight(b) {
 }
 
 function buildQuestionObj(q, pos, withCorrect) {
-  q = canonicalMultiFitb(q);
+  q = canonicalForm(q);
   const obj = {
     id:   q.id,
     pos:  pos,
@@ -664,7 +841,7 @@ function normalizeText(s) {
 // q è l'oggetto domanda grezzo dal repository (allQ[id]); ans è la risposta grezza dello studente.
 function scoreAnswer(q, ans) {
   if (!q) return 0; // domanda inesistente → 0 (protezione contro ID iniettati)
-  q = canonicalMultiFitb(q);
+  q = canonicalForm(q);
   if (q.tipo === "mc") {
     const correct = letterToIndex(q.corretta);
     return (parseInt(ans, 10) === correct) ? q.punti : 0;
