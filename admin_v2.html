@@ -889,7 +889,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "5455d16";
+const BUILD = "03ecbe2";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2537,17 +2537,14 @@ function questionToText(q) {
     m.forEach(k => { const dd = dds[k]; if (dd) { const key = JSON.stringify(dd.options || []); uso[key] = (uso[key] || 0) + 1; } });
     const nomi = {};
     let n = 0;
-    Object.keys(uso).forEach(key => {
-      const o = JSON.parse(key);
-      if (uso[key] > 1 && !o.some(x => /[{}]/.test(String(x))) && new Set(o).size === o.length) nomi[key] = "lista" + (++n > 1 ? n : "");
-    });
+    Object.keys(uso).forEach(key => { if (uso[key] > 1) nomi[key] = "lista" + (++n > 1 ? n : ""); });
     const dichiarazioni = Object.keys(nomi)
       .map(key => "{{" + nomi[key] + " = " + JSON.parse(key).map(o => "[[" + o + "]]").join(" ") + "}}").join("\n");
     const corpo = testo.replace(/\{\{(\d+)\}\}/g, (tutto, k) => {
       const dd = dds[+k];
       if (!dd) return tutto;
       const opts = (dd.options || []).map(String), giusta = dd.correct ?? 0, key = JSON.stringify(dd.options || []);
-      if (nomi[key] && opts[giusta] !== undefined) return "{{" + nomi[key] + ": " + opts[giusta] + "}}";
+      if (nomi[key] && opts[giusta] !== undefined) return "{{" + nomi[key] + ": " + (giusta + 1) + "}}";
       return "{{" + opts.map((o, i) => "[[" + (i === giusta ? "*" : "") + o + "]]").join(" ") + "}}";
     });
     return { testo: (dichiarazioni ? dichiarazioni + "\n" : "") + corpo, note, legacy: null };
@@ -2624,8 +2621,9 @@ const BE_SINTASSI = {
                   esempio: "Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale." },
   cloze: { spiega: "Un menu è {{…}} con le opzioni tra doppie quadre e un * sulla giusta. Per riusare le stesse opzioni, " +
                    "dichiara una lista una volta, {{nome = [[…]] [[…]]}} (non compare allo studente), e poi scrivi " +
-                   "{{nome: risposta}} dove serve il menu. I menu valgono tutti uguale.",
-           esempio: "{{basi = [[A]] [[C]] [[G]] [[T]]}}\nNel DNA l'adenina si appaia con {{basi: T}} e la guanina con {{basi: C}}.\n" +
+                   "{{nome: 4}} dove serve il menu: il numero è la posizione della risposta giusta nella lista, da 1. " +
+                   "I menu valgono tutti uguale.",
+           esempio: "{{basi = [[A]] [[C]] [[G]] [[T]]}}\nNel DNA l'adenina si appaia con {{basi: 4}} e la guanina con {{basi: 2}}.\n" +
                     "BLAST esegue allineamenti {{[[*locali]] [[globali]]}} contro il database." },
   match: { spiega: "La consegna, poi le coppie una per riga: [[sinistra => destra]]. Con lo shuffle attivo nell'esame, " +
                    "la colonna destra si mescola per ogni studente.",

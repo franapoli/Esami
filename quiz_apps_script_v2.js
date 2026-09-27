@@ -455,9 +455,12 @@ function lintQuestion(q) {
           if (stelle > 1) warn.push("Il menu " + n + " ha più opzioni con *: conta la prima.");
         } else {
           usate[nome] = true;
+          const pos = String(risposta).trim();
           if (!liste[nome]) warn.push("Il menu " + n + " usa la lista «" + nome + "», che non è definita: aggiungi {{" + nome + " = [[…]] [[…]]}}.");
-          else if (liste[nome].indexOf(String(risposta).trim()) === -1) {
-            warn.push("Nel menu " + n + " la risposta «" + String(risposta).trim() + "» non è tra le voci della lista «" + nome + "».");
+          else if (!/^\d+$/.test(pos)) {
+            warn.push("Nel menu " + n + " «" + pos + "» non è una posizione: scrivi il numero della risposta giusta nella lista «" + nome + "», come {{" + nome + ": 1}} per la prima.");
+          } else if (+pos < 1 || +pos > liste[nome].length) {
+            warn.push("Nel menu " + n + " la posizione " + pos + " non esiste: la lista «" + nome + "» ha " + liste[nome].length + " voci.");
           }
         }
         return "";
@@ -617,7 +620,8 @@ function readEsame(examId) {
 //   mc          la domanda, poi le opzioni: [[*giusta]] [[sbagliata]] … (multi-mc: più "*")
 //   match       la consegna, poi le coppie: [[Adenina => Timina]] [[Guanina => Citosina]] …
 //   cloze       menu nella frase: {{[[*locali]] [[globali]]}}; liste riusabili:
-//               {{basi = [[A]] [[C]] [[G]] [[T]]}} una volta, poi {{basi: T}} dove serve
+//               {{basi = [[A]] [[C]] [[G]] [[T]]}} una volta, poi {{basi: 4}} dove serve
+//               (posizione della risposta giusta nella lista, da 1)
 // canonicalForm la riduce alla forma interna di sempre (opzioni, lettere, JSON dei dati), la
 // stessa delle domande scritte nel formato vecchio con le colonne I, J e M, che continuano a
 // funzionare. Chi prepara, corregge o controlla una domanda passa di qui: i segni delle
@@ -721,7 +725,9 @@ function canonicalMultiFitb(q) {
 
 // Cloze: tre forme di {{…}}, tutte distinte dai segnaposto {{0}} della forma interna:
 //   {{nome = [[a]] [[b]]}}   dichiara una lista (non viene mostrata)
-//   {{nome: risposta}}       menu con le voci della lista, "risposta" è la giusta
+//   {{nome: 4}}              menu con le voci della lista; il numero è la posizione della giusta,
+//                            da 1. Una posizione e non il testo: le voci possono essere lunghe o
+//                            contenere parentesi, e con voci numeriche il testo sarebbe ambiguo.
 //   {{[[*a]] [[b]]}}         menu scritto per intero
 const CLOZE_DECL_SRC = "\\{\\{\\s*([\\wÀ-ÿ]+)\\s*=\\s*((?:\\s*\\[\\[[\\s\\S]*?\\]\\])+)\\s*\\}\\}";
 const CLOZE_MENU_SRC = "\\{\\{\\s*(?:([\\wÀ-ÿ]+)\\s*:\\s*([^{}]*?)|((?:\\s*\\[\\[[\\s\\S]*?\\]\\])+))\\s*\\}\\}";
@@ -749,7 +755,8 @@ function canonicalCloze(q) {
         dd = { options: o.map(x => x.text), correct: o.findIndex(x => x.star) };
       } else {
         const opts = (liste[nome] || []).slice();
-        dd = { options: opts, correct: opts.indexOf(String(risposta).trim()) };
+        const pos = String(risposta).trim();
+        dd = { options: opts, correct: /^\d+$/.test(pos) && +pos >= 1 && +pos <= opts.length ? +pos - 1 : -1 };
       }
       return "{{" + (dropdowns.push(dd) - 1) + "}}";
     })
