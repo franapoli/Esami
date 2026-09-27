@@ -141,6 +141,26 @@
   #preview-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
                      z-index:1000; align-items:center; justify-content:center; padding:20px; }
   #preview-overlay.open { display:flex; }
+  #folder-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+                    z-index:1001; align-items:center; justify-content:center; padding:20px; }
+  #folder-overlay.open { display:flex; }
+  #folder-box { background:#fff; border:1px solid #ccc; max-width:480px; width:100%; max-height:80vh;
+                overflow-y:auto; padding:26px 28px; position:relative; }
+  #folder-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em; color:#888;
+                   margin-bottom:12px; font-weight:normal; }
+  #folder-close { position:absolute; top:12px; right:16px; background:none; border:none;
+                  font-size:1.3em; cursor:pointer; color:#888; line-height:1; }
+  .folder-path { font-size:0.88em; margin-bottom:10px; line-height:1.6; }
+  .folder-path a { color:#1a1a1a; }
+  .folder-list { border:1px solid #eee; max-height:40vh; overflow-y:auto; margin-bottom:14px; }
+  .folder-row { padding:8px 12px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:0.9em;
+                display:flex; justify-content:space-between; }
+  .folder-row:hover { background:#f8f8f4; }
+  .folder-row span { color:#aaa; }
+  .folder-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .folder-actions .btn { margin-top:0; }
+  .folder-upload { cursor:pointer; }
+  #folder-msg { font-size:0.84em; }
   #preview-box { background:#fff; border:1px solid #ccc; max-width:680px; width:100%;
                  max-height:85vh; overflow-y:auto; padding:32px 36px; position:relative; }
   #preview-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em;
@@ -833,6 +853,22 @@
 </div>
 
 <!-- MODAL PREVIEW DOMANDA -->
+<!-- SCELTA DELLA CARTELLA PER LE IMMAGINI (solo dentro la cartella QuizForge) -->
+<div id="folder-overlay" onclick="if (event.target === this) closeFolderPicker()">
+  <div id="folder-box">
+    <button id="folder-close" onclick="closeFolderPicker()" title="Chiudi">✕</button>
+    <h3>Dove caricare l'immagine</h3>
+    <div id="folder-path" class="folder-path"></div>
+    <div id="folder-list" class="folder-list"></div>
+    <div class="folder-actions">
+      <button class="btn btn-sm btn-outline" onclick="folderNew()">Nuova cartella</button>
+      <label class="btn btn-sm btn-green folder-upload">Carica qui…
+        <input type="file" accept="image/*" hidden onchange="folderUpload(this)"></label>
+      <span id="folder-msg"></span>
+    </div>
+  </div>
+</div>
+
 <div id="preview-overlay" onclick="closePreview(event)">
   <div id="preview-box">
     <button id="preview-close" onclick="closePreview()">✕</button>
@@ -889,7 +925,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "11c4f05";
+const BUILD = "a4c4706";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2699,8 +2735,7 @@ function renderBancoEditor() {
     <div id="be-parse" class="be-parse"></div>
     <div class="be-json-actions">
       <button class="be-mini" onclick="bancoEditExample()">Inserisci l'esempio</button>
-      <label class="be-mini be-upload">Inserisci immagine…
-        <input type="file" accept="image/*" hidden onchange="bancoEditImage(this)"></label>
+      <button class="be-mini" onclick="openFolderPicker()">Inserisci immagine…</button>
     </div>
     <div id="be-tipo-fields"></div>
     <div id="be-errors" class="be-errors"></div>
@@ -2780,7 +2815,7 @@ async function shrinkImage(file) {
   throw new Error("non riesco a portarla sotto " + fmtMB(IMG_UPLOAD_MAX) + ".");
 }
 
-async function bancoEditImage(input) {
+async function bancoEditImage(input, folder) {
   const file = input.files && input.files[0];
   input.value = "";
   if (!file || !bancoEdit) return;
@@ -2792,9 +2827,10 @@ async function bancoEditImage(input) {
     const uri = await blobToDataUri(blob);
     // Ridotta diventa JPEG: il nome nel Drive deve dirlo
     const name = blob === file ? file.name : file.name.replace(/\.[^.]*$/, "") + ".jpg";
-    const res = await callScript({ action: "uploadImage", password: adminPassword, name,
+    const res = await callScript({ action: "uploadImage", password: adminPassword, name, folderId: folder ? folder.id : "",
                                    mime: blob.type || file.type, base64: uri.slice(uri.indexOf(",") + 1) });
     if (!res || res.status !== "ok") throw new Error((res && res.message) || "risposta non valida");
+    if (folder) rememberFolder(folder.id);
     if (bancoEdit !== e) return;
     adminImages[res.id] = uri;   // già in mano: niente seconda richiesta per vederla
     // Il segnaposto va dove c'è il cursore nel testo
@@ -2806,10 +2842,71 @@ async function bancoEditImage(input) {
     e.provaFp = null;
     bancoEditRefresh();
     msg.style.color = "#2e7d32";
-    msg.textContent = "✓ Immagine caricata" + (blob !== file ? " (ridotta a " + fmtMB(blob.size) + ")" : "") + " e inserita nel testo.";
+    msg.innerHTML = "✓ Immagine caricata" + (folder ? " in «" + escHtml(folder.name) + "»" : "") +
+      (blob !== file ? " (ridotta a " + fmtMB(blob.size) + ")" : "") + " e inserita nel testo. " +
+      `<a href="https://drive.google.com/file/d/${encodeURIComponent(res.id)}/view" target="_blank" rel="noopener">Apri nel Drive</a>`;
   } catch(err) {
     if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Caricamento non riuscito: " + err.message + versioneScriptHint(); }
   }
+}
+
+// ---- CARTELLA DI DESTINAZIONE DELLE IMMAGINI ----
+// Si sfoglia solo dentro la cartella QuizForge (lo script rifiuta il resto del Drive). L'ultima
+// cartella usata si ricorda, separata fra test e produzione, che possono avere Drive diversi.
+const IMG_FOLDER_KEY = "qf_img_folder" + (_isTestMode ? "_test" : "");
+let imgFolder = null;   // { id, name } cartella mostrata nello sfogliatore
+
+function rememberedFolderId() { try { return localStorage.getItem(IMG_FOLDER_KEY) || ""; } catch(e) { return ""; } }
+function rememberFolder(id)   { try { localStorage.setItem(IMG_FOLDER_KEY, id); } catch(e) {} }
+
+function openFolderPicker() {
+  if (!bancoEdit) return;
+  document.getElementById("folder-overlay").classList.add("open");
+  folderGo(rememberedFolderId(), true);
+}
+
+function closeFolderPicker() { document.getElementById("folder-overlay").classList.remove("open"); }
+
+function folderMsg(text, color) {
+  const m = document.getElementById("folder-msg");
+  m.style.color = color || "#555"; m.textContent = text;
+}
+
+// ripiego: se la cartella ricordata non c'è più (o è stata spostata fuori), si riparte dalla radice
+async function folderGo(id, ripiego) {
+  const list = document.getElementById("folder-list");
+  list.innerHTML = '<div class="banco-empty">Caricamento…</div>';
+  folderMsg("");
+  let res;
+  try { res = await callScript({ action: "listFolders", password: adminPassword, folderId: id || "" }); }
+  catch(e) { res = { status: "error", message: e.message }; }
+  if (res.status !== "ok" && id && ripiego) return folderGo("", false);
+  if (res.status !== "ok") { list.innerHTML = ""; folderMsg((res.message || "Errore") + versioneScriptHint(), "#b00"); return; }
+  imgFolder = res.folder;
+  document.getElementById("folder-path").innerHTML = res.path.map((p, i) => i === res.path.length - 1
+    ? `<strong>${escHtml(p.name)}</strong>`
+    : `<a href="#" onclick="folderGo('${escAttr(p.id)}'); return false;">${escHtml(p.name)}</a>`).join(" › ");
+  list.innerHTML = res.folders.length
+    ? res.folders.map(f => `<div class="folder-row" onclick="folderGo('${escAttr(f.id)}')">${escHtml(f.name)}<span>›</span></div>`).join("")
+    : '<div class="banco-empty">Nessuna sottocartella.</div>';
+}
+
+async function folderNew() {
+  if (!imgFolder) return;
+  const name = prompt("Nome della nuova cartella dentro «" + imgFolder.name + "»:");
+  if (!name || !name.trim()) return;
+  folderMsg("Creo la cartella…");
+  let res;
+  try { res = await callScript({ action: "createFolder", password: adminPassword, parentId: imgFolder.id, name: name.trim() }); }
+  catch(e) { res = { status: "error", message: e.message }; }
+  if (res.status !== "ok") { folderMsg((res.message || "Errore") + versioneScriptHint(), "#b00"); return; }
+  folderGo(res.folder.id);
+}
+
+function folderUpload(input) {
+  const folder = imgFolder;
+  closeFolderPicker();
+  bancoEditImage(input, folder);
 }
 
 // ---- GENERATORE: EDIT DISTANCE ----
