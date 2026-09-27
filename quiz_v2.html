@@ -115,6 +115,14 @@
   .dp-table th { background:#f5f5f0; font-weight:bold; }
   .dp-table td.static { color:#444; }
   .multi-fitb-table-input { width:3em; text-align:center; padding:4px 6px; border:1px solid #1a1a1a; font-family:monospace; font-size:0.95em; background:#fffbe6; }
+  /* Caselle in una frase: la regola generale input[type=text] {width:100%} è più specifica
+     della classe e le allargherebbe a tutta la riga. Nelle celle delle matrici restano strette. */
+  .q-text input.multi-fitb-table-input { display:inline-block; width:12ch; max-width:100%; margin:0 3px; vertical-align:baseline; }
+  .q-text td input.multi-fitb-table-input, .q-text th input.multi-fitb-table-input { width:4em; margin:0; }
+  @supports (field-sizing: content) {
+    .q-text input.multi-fitb-table-input { field-sizing:content; width:auto; min-width:8ch; }
+    .q-text td input.multi-fitb-table-input, .q-text th input.multi-fitb-table-input { min-width:3em; }
+  }
   .nav { display: flex; justify-content: space-between; margin-top: 28px; }
 
 

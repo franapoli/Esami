@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "2.27.0"; // aggiornare ad ogni deploy
+const VERSION = "2.28.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -379,7 +379,8 @@ function validateQuestion(q) {
     else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
   }
   if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
-  if (q.tipo === "multi-fitb" || q.tipo === "cloze") {
+  const risposteNelTesto = q.tipo === "multi-fitb" && /\[\[[^\]]*\]\]/.test(q.testo || "");
+  if ((q.tipo === "multi-fitb" || q.tipo === "cloze") && !risposteNelTesto) {
     let d = null;
     if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
     else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
@@ -400,6 +401,8 @@ function validateQuestion(q) {
 // coerenti: per esempio una casella senza soluzione dà il punto a chi la lascia vuota.
 function lintQuestion(q) {
   const warn = [];
+  const scritta = q;               // come l'ha scritta l'autore, prima della forma canonica
+  q = canonicalMultiFitb(q);
   const markers = [];
   String(q.testo || "").replace(/\{\{(\d+)\}\}/g, (_, n) => { markers.push(parseInt(n, 10)); return ""; });
   const checkMarkers = (n, cosa) => {
@@ -423,6 +426,13 @@ function lintQuestion(q) {
     });
     if (boxes.length && boxes.every(b => boxWeight(b) === 0)) warn.push("Tutte le caselle hanno peso zero: la domanda darebbe sempre 0.");
     if (markers.length) checkMarkers(boxes.length, "caselle");
+    else {
+      let blanks = 0;
+      mapTextSegments(scritta.testo, seg => { blanks += (seg.match(/_{3,}/g) || []).length; return seg; });
+      if (blanks && boxes.length && blanks !== boxes.length) {
+        warn.push("Il testo ha " + blanks + " spazi ___ ma ci sono " + boxes.length + " caselle: le caselle restano in griglia sotto il testo.");
+      }
+    }
   }
   if (q.tipo === "cloze") {
     const dds = Array.isArray(d.dropdowns) ? d.dropdowns : [];
@@ -528,6 +538,41 @@ function readEsame(examId) {
 // Costruisce l'oggetto domanda pronto per il client.
 // withCorrect=false (default): omette le risposte corrette — usato per getTrack (studenti).
 // withCorrect=true: include le risposte corrette — usato solo internamente per scoring o admin.
+// Applica fn solo al testo di una stringa HTML: non ai tag, né ai segnaposto [img:…]
+// (gli ID Drive possono contenere trattini bassi).
+function mapTextSegments(html, fn) {
+  return String(html || "").split(/(<[^>]*>|\[img:[^\]]*\])/).map((p, i) => i % 2 ? p : fn(p)).join("");
+}
+
+// Forma canonica di una multi-fitb: testo con {{N}} e caselle nel campo dati. Due scritture
+// più semplici vi si riducono qui:
+//   - risposte nel testo: "l'algoritmo di [[Smith-Waterman]] è locale" (il campo dati è ignorato);
+//   - "___" nel testo, tanti quante le caselle del campo dati: diventano {{0}}, {{1}}, … in ordine.
+// Chi prepara o corregge la domanda passa di qui, così le risposte scritte nel testo non
+// arrivano mai allo studente. Identica a canonicalMultiFitbAdmin in admin_v2.html.
+function canonicalMultiFitb(q) {
+  if (!q || q.tipo !== "multi-fitb") return q;
+  const testo = String(q.testo || "");
+  if (/\[\[[^\]]*\]\]/.test(testo)) {
+    const boxes = [];
+    const t = mapTextSegments(testo, seg => seg.replace(/\[\[([^\]]*)\]\]/g,
+      (_, ans) => "{{" + (boxes.push({ correct: ans.trim() }) - 1) + "}}"));
+    return Object.assign({}, q, { testo: t, data: JSON.stringify({ boxes: boxes }) });
+  }
+  if (!/\{\{\d+\}\}/.test(testo)) {
+    let d;
+    try { d = JSON.parse(q.data || "{}") || {}; } catch(e) { return q; }
+    const n = Array.isArray(d.boxes) ? d.boxes.length : 0;
+    let count = 0;
+    mapTextSegments(testo, seg => { count += (seg.match(/_{3,}/g) || []).length; return seg; });
+    if (n && count === n) {
+      let k = 0;
+      return Object.assign({}, q, { testo: mapTextSegments(testo, seg => seg.replace(/_{3,}/g, () => "{{" + (k++) + "}}")) });
+    }
+  }
+  return q;
+}
+
 // Peso relativo di una casella multi-fitb. Il punteggio della domanda è Q_PUNTI, ripartito
 // fra le caselle in proporzione ai pesi. Senza "pts" la casella pesa 1: prima pesava 0, e una
 // domanda senza pesi dava sempre 0 punti anche con tutte le risposte giuste.
@@ -538,6 +583,7 @@ function boxWeight(b) {
 }
 
 function buildQuestionObj(q, pos, withCorrect) {
+  q = canonicalMultiFitb(q);
   const obj = {
     id:   q.id,
     pos:  pos,
@@ -598,6 +644,7 @@ function normalizeText(s) {
 // q è l'oggetto domanda grezzo dal repository (allQ[id]); ans è la risposta grezza dello studente.
 function scoreAnswer(q, ans) {
   if (!q) return 0; // domanda inesistente → 0 (protezione contro ID iniettati)
+  q = canonicalMultiFitb(q);
   if (q.tipo === "mc") {
     const correct = letterToIndex(q.corretta);
     return (parseInt(ans, 10) === correct) ? q.punti : 0;

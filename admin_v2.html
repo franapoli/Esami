@@ -879,7 +879,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "1d8cea0";
+const BUILD = "9074afe";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -946,6 +946,36 @@ function formatDateIt(dateStr) {
 
 function escHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---- MULTI-FITB: FORMA CANONICA ----
+// Copia identica di mapTextSegments/canonicalMultiFitb dello script: risposte scritte nel testo
+// ([[Smith-Waterman]]) o "___" allineati alle caselle diventano testo con {{N}} più caselle.
+// Serve dove l'admin mostra o stampa la domanda senza passare dal server (export, risultati).
+function mapTextSegments(html, fn) {
+  return String(html || "").split(/(<[^>]*>|\[img:[^\]]*\])/).map((p, i) => i % 2 ? p : fn(p)).join("");
+}
+function canonicalMultiFitbAdmin(q) {
+  if (!q || q.tipo !== "multi-fitb") return q;
+  const testo = String(q.testo || "");
+  if (/\[\[[^\]]*\]\]/.test(testo)) {
+    const boxes = [];
+    const t = mapTextSegments(testo, seg => seg.replace(/\[\[([^\]]*)\]\]/g,
+      (_, ans) => "{{" + (boxes.push({ correct: ans.trim() }) - 1) + "}}"));
+    return Object.assign({}, q, { testo: t, data: JSON.stringify({ boxes: boxes }) });
+  }
+  if (!/\{\{\d+\}\}/.test(testo)) {
+    let d;
+    try { d = JSON.parse(q.data || "{}") || {}; } catch(e) { return q; }
+    const n = Array.isArray(d.boxes) ? d.boxes.length : 0;
+    let count = 0;
+    mapTextSegments(testo, seg => { count += (seg.match(/_{3,}/g) || []).length; return seg; });
+    if (n && count === n) {
+      let k = 0;
+      return Object.assign({}, q, { testo: mapTextSegments(testo, seg => seg.replace(/_{3,}/g, () => "{{" + (k++) + "}}")) });
+    }
+  }
+  return q;
 }
 
 // ---- IMMAGINI ----
@@ -1839,13 +1869,11 @@ function formatCorrectHtml(q) {
       ).join("");
     }
     if (q.tipo === "multi-fitb") {
-      const correct = JSON.parse(q.corretta || "[]");
+      // Le soluzioni stanno nelle caselle (q.corretta per questo tipo è vuota)
       const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
-      const boxes = d.boxes || [];
-      return correct.map((c, i) => {
-        const lbl = escHtml(String((boxes[i] && boxes[i].label) || (i+1)));
-        return `<div class="detail-ans-ok">${lbl}: ${escHtml(String(c))}</div>`;
-      }).join("");
+      return (d.boxes || []).map((b, i) =>
+        `<div class="detail-ans-ok">${escHtml(String(b.label || (i + 1)))}: ${escHtml(String(b.correct ?? ""))}</div>`
+      ).join("");
     }
     if (q.tipo === "cloze") {
       const d = typeof q.data === "string" ? JSON.parse(q.data || "{}") : (q.data || {});
@@ -1914,13 +1942,14 @@ async function showStudentDetail(rowIdx) {
         <td class="col-pt">${pt}</td>
       </tr>`;
     }
-    const testo = q.testo.length > 120 ? escHtml(q.testo.slice(0, 120)) + "…" : escHtml(q.testo);
+    const qc = canonicalMultiFitbAdmin(q);   // le soluzioni scritte nel testo stanno nelle caselle
+    const testo = qc.testo.length > 120 ? escHtml(qc.testo.slice(0, 120)) + "…" : escHtml(qc.testo);
     return `<tr>
       <td class="col-n">${qi+1}</td>
       <td class="col-tipo"><span class="detail-tipo-badge">${escHtml(q.tipo)}</span></td>
-      <td class="detail-q-text" title="${escHtml(q.testo)}">${testo}</td>
-      <td class="detail-ans">${formatAnswerHtml(q, ans)}</td>
-      <td>${formatCorrectHtml(q)}</td>
+      <td class="detail-q-text" title="${escHtml(qc.testo)}">${testo}</td>
+      <td class="detail-ans">${formatAnswerHtml(qc, ans)}</td>
+      <td>${formatCorrectHtml(qc)}</td>
       <td class="col-pt ${ptCls}">${isFree ? pt+"*" : pt+"/"+maxPt}</td>
     </tr>`;
   });
@@ -2411,7 +2440,8 @@ function validateQuestionAdmin(q) {
     else if (fuori.length) err.push("Risposta corretta fuori dalle opzioni: " + fuori.join(", "));
   }
   if (q.tipo === "fitb" && !q.corretta) err.push("Indica la risposta corretta.");
-  if (q.tipo === "multi-fitb" || q.tipo === "cloze") {
+  const risposteNelTesto = q.tipo === "multi-fitb" && /\[\[[^\]]*\]\]/.test(q.testo || "");
+  if ((q.tipo === "multi-fitb" || q.tipo === "cloze") && !risposteNelTesto) {
     let d = null;
     if (!String(q.data || "").trim()) err.push("Il campo dati è vuoto: scrivilo, oppure parti dall'esempio.");
     else try { d = JSON.parse(q.data); } catch(e) { err.push("Il campo dati non è JSON valido: " + e.message); }
@@ -2598,7 +2628,8 @@ const BE_ESEMPI = {
       ]
     },
     testo: "Nel testo, {{0}}, {{1}}, … mettono le caselle al loro posto, anche dentro una tabella " +
-           "(&lt;table class=\"dp-table\"&gt; per le matrici). Senza {{N}} le caselle compaiono in griglia sotto il testo.",
+           "(&lt;table class=\"dp-table\"&gt; per le matrici). Oppure scrivi ___ al posto di ogni casella, tanti " +
+           "quante le caselle, e vengono usati nell'ordine. Senza segnaposto le caselle compaiono in griglia sotto il testo.",
     campi: [["correct", "risposta attesa; il confronto ignora spazi e maiuscole"],
             ["pts", "peso relativo della casella, facoltativo (1 se manca): i punti della domanda si dividono in proporzione"],
             ["label", "etichetta della casella, mostrata solo nella griglia"],
@@ -2631,7 +2662,7 @@ function renderBancoEditTipo() {
   const d = bancoEdit.draft, box = document.getElementById("be-tipo-fields");
   const hint = {
     fitb: "Il primo ___ (almeno tre trattini bassi) diventa la casella dentro la frase; senza, la casella va sotto il testo.",
-    "multi-fitb": "Scrivi {{0}}, {{1}}, … dove vanno le caselle, oppure niente per averle in griglia sotto il testo.",
+    "multi-fitb": "Scrivi la risposta di ogni casella tra doppie quadre: l'algoritmo di [[Smith-Waterman]] è locale.",
     cloze: "Scrivi {{0}}, {{1}}, … dove vanno i menu a tendina."
   }[d.tipo];
   document.getElementById("be-testo-hint").innerHTML =
@@ -2664,7 +2695,13 @@ function renderBancoEditTipo() {
       </details>`;
   } else if (d.tipo === "multi-fitb" || d.tipo === "cloze") {
     const campo = BE_ESEMPI[d.tipo].campo;
-    box.innerHTML = `<label class="be-field">${d.tipo === "cloze" ? "Menu a tendina" : "Caselle"} <small>JSON, come nella colonna M del foglio</small>
+    const fitb = d.tipo === "multi-fitb";
+    box.innerHTML = (fitb ? `<div class="be-note">
+        <strong>Modo semplice:</strong> scrivi le risposte nel testo tra doppie quadre, e ognuna diventa una casella al suo posto:<br>
+        <code>Completa: l'algoritmo di [[Smith-Waterman]] è locale, quello di [[Needleman-Wunsch]] è globale.</code><br>
+        Le caselle valgono tutte uguale, e il campo qui sotto non serve. Usalo solo per pesi diversi, etichette o la griglia.
+        <div id="be-fitb-mode" style="margin-top:6px;"></div></div>` : "") +
+      `<label class="be-field">${d.tipo === "cloze" ? "Menu a tendina" : "Caselle (avanzato)"} <small>JSON, come nella colonna M del foglio</small>
         <textarea rows="10" class="be-code" id="be-json" oninput="bancoEditSet('${campo}', this.value)">${escHtml(d[campo])}</textarea></label>
       <div class="be-json-actions">
         <button class="be-mini" onclick="bancoEditFormat()">Formatta</button>
@@ -2750,6 +2787,12 @@ function bancoEditRefresh() {
   const errs = validateQuestionAdmin(q);
   const dirty = questionFingerprintAdmin(q) !== e.initialFp;
   document.getElementById("be-errors").innerHTML = errs.map(x => `<div>• ${escHtml(x)}</div>`).join("");
+  const modo = document.getElementById("be-fitb-mode");
+  if (modo) {
+    const n = (q.testo.match(/\[\[[^\]]*\]\]/g) || []).length;
+    modo.innerHTML = n ? `<strong style="color:#2e7d32;">In uso: ${n} ${n === 1 ? "casella scritta" : "caselle scritte"} nel testo. ` +
+                         `Il campo JSON viene ignorato.</strong>` : "";
+  }
   // Gli avvisi hanno senso solo su una domanda leggibile: con errori di sintassi ripeterebbero lo stesso problema
   const warns = errs.length ? [] : lintDraft(q);
   document.getElementById("be-warn").innerHTML = warns.length
@@ -3040,6 +3083,7 @@ async function exportTraccia() {
     .blank{display:inline-block;border-bottom:1px solid #333;min-width:120px;height:1.2em;margin:0 4px;}
     .answer-box{border:1px solid #ccc;min-height:60px;margin-top:4px;padding:6px;}
     .match-table{border-collapse:collapse;margin-top:4px;}
+    .inline-key{text-decoration:underline;}
     .dp-table{border-collapse:collapse;margin:12px 0;font-family:monospace;}
     .dp-table th,.dp-table td{border:1px solid #bbb;padding:6px 10px;text-align:center;min-width:2.5em;}
     .dp-table th{background:#f5f5f0;font-weight:bold;}
@@ -3050,13 +3094,33 @@ async function exportTraccia() {
   `;
 
   function renderQ(item, withKey) {
-    const { q, num, ep } = item;
+    const { num, ep } = item;
+    // Forma canonica: le risposte scritte nel testo ([[...]]) non devono finire nella traccia
+    const q = canonicalMultiFitbAdmin(item.q);
     const pts   = ep !== undefined ? ep : q.punti;
     const testo = q.testo || "";
     let body    = `<div class="q-header">Domanda ${num}<span class="q-pts">[${pts} pt]</span></div>`;
 
-    // testo: cloze con {{N}} e multi-fitb con {{N}} sono già inline → mostra così com'è
-    body += `<div class="q-text">${renderImagesAdmin(testo)}</div>`;
+    // {{N}} di multi-fitb e cloze: uno spazio da riempire nella traccia, la risposta nel correttore
+    let dati = {};
+    try { dati = JSON.parse(q.data || "{}") || {}; } catch(e) {}
+    const blank = `<span class="blank"></span>`;
+    const testoStampa = testo.replace(/\{\{(\d+)\}\}/g, (m, n) => {
+      const i = parseInt(n, 10);
+      if (q.tipo === "multi-fitb") {
+        const b = (dati.boxes || [])[i];
+        return withKey && b ? `<strong class="inline-key">${escHtml(String(b.correct ?? ""))}</strong>` : blank;
+      }
+      if (q.tipo === "cloze") {
+        const dd = (dati.dropdowns || [])[i];
+        if (!dd) return blank;
+        const opts = dd.options || [];
+        return withKey ? `<strong class="inline-key">${escHtml(String(opts[dd.correct ?? 0] ?? ""))}</strong>`
+                       : `[ ${opts.map(o => escHtml(String(o))).join(" / ")} ]`;
+      }
+      return m;
+    });
+    body += `<div class="q-text">${renderImagesAdmin(testoStampa)}</div>`;
 
     const tipo = q.tipo;
     const opts = Array.isArray(q.options) ? q.options : [];
