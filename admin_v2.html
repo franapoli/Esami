@@ -889,7 +889,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "03ecbe2";
+const BUILD = "11c4f05";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -970,10 +970,19 @@ function loadAdminBackend() {
     _adminBackendPromise = fetch("quiz_apps_script_v2.js", { cache: "no-store" })
       .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
       .then(src => (_adminBackend = new Function(src + "\n;return { canonicalForm, validateQuestion, lintQuestion, " +
-        "normalizeIncomingQuestion, hasItems, isTextCloze, mapTextSegments, boxWeight };")()))
+        "normalizeIncomingQuestion, hasItems, isTextCloze, mapTextSegments, boxWeight, VERSION };")()))
       .catch(e => { _adminBackendError = e.message; _adminBackendPromise = null; throw e; });
   }
   return _adminBackendPromise;
+}
+
+// Se lo script deployato è più vecchio di questa pagina, le funzioni nuove falliscono con errori
+// poco chiari: questa frase lo spiega, da aggiungere ai messaggi d'errore delle azioni recenti.
+function versioneScriptHint() {
+  const pagina = _adminBackend && _adminBackend.VERSION;
+  if (!deployedScriptVersion || !pagina || deployedScriptVersion === pagina) return "";
+  return " Lo script deployato " + (_isTestMode ? "per il test " : "") + "è la " + deployedScriptVersion +
+         ", mentre questa pagina richiede la " + pagina + ": serve un nuovo deploy dello script.";
 }
 
 // Forma interna di una domanda (opzioni, soluzioni, caselle e menu), qualunque formato usi
@@ -2799,7 +2808,7 @@ async function bancoEditImage(input) {
     msg.style.color = "#2e7d32";
     msg.textContent = "✓ Immagine caricata" + (blob !== file ? " (ridotta a " + fmtMB(blob.size) + ")" : "") + " e inserita nel testo.";
   } catch(err) {
-    if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Caricamento non riuscito: " + err.message; }
+    if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Caricamento non riuscito: " + err.message + versioneScriptHint(); }
   }
 }
 
@@ -2977,7 +2986,7 @@ async function bancoSave(asNew) {
     } else if (res.status === "invalid") {
       msg.style.color = "#b00"; msg.textContent = "Il server ha rifiutato: " + (res.errors || []).join(" ");
     } else {
-      msg.style.color = "#b00"; msg.textContent = "Errore: " + (res.message || res.status);
+      msg.style.color = "#b00"; msg.textContent = "Errore: " + (res.message || res.status) + versioneScriptHint();
     }
   } catch(err) {
     if (bancoEdit === e) { msg.style.color = "#b00"; msg.textContent = "Errore di rete: " + err.message; }

@@ -1869,6 +1869,13 @@ function doPost(e) {
     // Quiz actions: init, update, finalize
     // ----------------------------------------------------------------
     const examId = data.examId;
+    // Qui arriva anche un'azione che questa versione non conosce (pagina più nuova dello script):
+    // dirlo chiaramente, invece di un "examId mancante" che fa cercare il problema altrove
+    const AZIONI_ESAME = ["init", "update", "finalize", "resetPractice", "abandon", "resume", "getImages"];
+    if (AZIONI_ESAME.indexOf(data.action) === -1) {
+      return corsResponse({ status: "error", message: "Azione «" + data.action + "» non disponibile nello script " + VERSION +
+                                                       ": probabilmente serve un deploy più recente." });
+    }
     if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
 
     const resolved = resolveEsame(examId);
