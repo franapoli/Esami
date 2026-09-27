@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.2.0"; // aggiornare ad ogni deploy
+const VERSION = "3.3.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1572,6 +1572,66 @@ function doPost(e) {
         }
         writeQuestionRow(sheet, rowIndex, q);
         return corsResponse({ status: "ok", question: rowToQuestion(sheet.getRange(rowIndex, 1, 1, Q_DATA + 1).getValues()[0]) });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
+      }
+    }
+
+    // updateQuestionsMeta — modifica in blocco dal tab Domande. Tocca solo i metadati
+    // (categoria, sottocategoria, tag, stato, punti), mai testo e soluzioni: niente da validare
+    // oltre ai punti. I tag si aggiungono/tolgono rispetto al valore attuale nel foglio, così
+    // non si perdono quelli messi nel frattempo. Scrive solo le righe che cambiano davvero.
+    if (data.action === "updateQuestionsMeta") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const set = data.set || {};
+      const splitTags = v => (Array.isArray(v) ? v : String(v || "").split(",")).map(t => String(t).trim()).filter(Boolean);
+      const addTags = splitTags(data.addTags), removeTags = splitTags(data.removeTags);
+      if (set.categoria !== undefined && !String(set.categoria).trim()) {
+        return corsResponse({ status: "error", message: "La categoria non può essere vuota." });
+      }
+      if (set.stato !== undefined && ["bozza", "verificato"].indexOf(set.stato) === -1) {
+        return corsResponse({ status: "error", message: "Stato non valido: " + set.stato });
+      }
+      if (set.punti !== undefined && !(isFinite(Number(set.punti)) && Number(set.punti) > 0)) {
+        return corsResponse({ status: "error", message: "I punti devono essere un numero maggiore di zero." });
+      }
+      const ids = {};
+      (data.ids || []).forEach(id => { ids[String(id).trim()] = true; });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const sheet  = getQuestionsSheet();
+        const values = sheet.getDataRange().getValues();
+        const changed = [], trovate = {};
+        for (let i = 1; i < values.length; i++) {
+          const id = String(values[i][Q_ID]).trim();
+          if (!ids[id]) continue;
+          trovate[id] = true;
+          const q = rowToQuestion(values[i]);
+          q.tags = splitTags(q.tags).join(",");   // "a, b" e "a,b" sono la stessa cosa
+          const prima = questionFingerprint(q);
+          if (set.categoria  !== undefined) q.categoria  = String(set.categoria).trim();
+          if (set.sottocateg !== undefined) q.sottocateg = String(set.sottocateg).trim();
+          if (set.stato      !== undefined) q.stato      = set.stato;
+          if (set.punti      !== undefined) q.punti      = Number(set.punti);
+          let tags = splitTags(q.tags).filter(t => removeTags.indexOf(t) === -1);
+          addTags.forEach(t => { if (tags.indexOf(t) === -1) tags.push(t); });
+          q.tags = tags.join(",");
+          if (questionFingerprint(q) !== prima) changed.push({ row: i + 1, q: q });
+        }
+        // Righe consecutive in un'unica scrittura: C..F (categoria, sottocategoria, tag, stato) e K (punti)
+        for (let a = 0; a < changed.length; ) {
+          let b = a;
+          while (b + 1 < changed.length && changed[b + 1].row === changed[b].row + 1) b++;
+          const run = changed.slice(a, b + 1);
+          const r1 = sheet.getRange(run[0].row, Q_CATEGORIA + 1, run.length, Q_STATO - Q_CATEGORIA + 1);
+          r1.setNumberFormat("@");
+          r1.setValues(run.map(x => [x.q.categoria, x.q.sottocateg, x.q.tags, x.q.stato].map(sheetText)));
+          sheet.getRange(run[0].row, Q_PUNTI + 1, run.length, 1).setValues(run.map(x => [x.q.punti]));
+          a = b + 1;
+        }
+        return corsResponse({ status: "ok", questions: changed.map(x => x.q),
+                              missing: Object.keys(ids).filter(id => !trovate[id]) });
       } finally {
         try { lock.releaseLock(); } catch(e) {}
       }

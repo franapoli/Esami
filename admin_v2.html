@@ -144,6 +144,32 @@
   #folder-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
                     z-index:1001; align-items:center; justify-content:center; padding:20px; }
   #folder-overlay.open { display:flex; }
+  #bulk-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+                  z-index:1001; align-items:center; justify-content:center; padding:20px; }
+  #bulk-overlay.open { display:flex; }
+  #bulk-box { background:#fff; border:1px solid #ccc; max-width:640px; width:100%; max-height:85vh;
+              overflow-y:auto; padding:26px 28px; position:relative; }
+  #bulk-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em; color:#888;
+                 margin-bottom:12px; font-weight:normal; }
+  .bulk-now { font-size:0.82em; color:#666; line-height:1.6; margin-bottom:14px; }
+  .bulk-fields { display:grid; grid-template-columns:auto 1fr; gap:8px 12px; align-items:center; font-size:0.86em; }
+  .bulk-fields label.chk { display:flex; gap:6px; align-items:center; white-space:nowrap; cursor:pointer; }
+  .bulk-fields input[type=text], .bulk-fields input[type=number], .bulk-fields select {
+    padding:6px 8px; border:1px solid #bbb; font:inherit; width:100%; box-sizing:border-box; background:#fff; }
+  .bulk-fields input:disabled, .bulk-fields select:disabled { background:#f6f6f6; color:#aaa; }
+  .bulk-fields small { grid-column:2; color:#999; font-size:0.86em; margin-top:-4px; }
+  .bulk-tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .bulk-tag { font-size:0.84em; padding:2px 8px; border:1px solid #ccc; background:#f6f6f6; cursor:pointer; border-radius:10px; }
+  .bulk-tag.via { text-decoration:line-through; background:#fdecea; border-color:#e8a0a0; color:#b00; }
+  #bulk-effect { font-size:0.84em; line-height:1.6; margin:16px 0 10px; }
+  #bulk-effect .warn { background:#fff8e1; color:#7b5e00; padding:8px 10px; margin-top:8px; }
+  #bulk-effect .warn.forte { background:#fdecea; color:#b00; }
+  #bulk-msg { font-size:0.84em; }
+  .banco-bulkbar { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+                   padding:8px 14px; background:#fafaf7; border-bottom:1px solid #e4e4e0; font-size:0.8em; color:#555; }
+  .banco-bulkbar.attiva { background:#eef4fb; }
+  .banco-bulkbar .btn { margin-top:0; }
+  .banco-bulkbar .flash { color:#2e7d32; }
   #import-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
                     z-index:1001; align-items:center; justify-content:center; padding:20px; }
   #import-overlay.open { display:flex; }
@@ -151,7 +177,7 @@
                 overflow-y:auto; padding:26px 28px; position:relative; }
   #import-box h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:.05em; color:#888;
                    margin-bottom:12px; font-weight:normal; }
-  #import-close { position:absolute; top:12px; right:16px; background:none; border:none;
+  #import-close, #bulk-close { position:absolute; top:12px; right:16px; background:none; border:none;
                   font-size:1.3em; cursor:pointer; color:#888; line-height:1; }
   .import-intro { font-size:0.86em; color:#555; line-height:1.6; margin-bottom:12px; }
   .import-file { cursor:pointer; margin-top:0; }
@@ -880,6 +906,36 @@
 
 <!-- MODAL PREVIEW DOMANDA -->
 <!-- IMPORTAZIONE DA MOODLE (XML) -->
+<div id="bulk-overlay" onclick="if (event.target === this) closeBulkEdit()">
+  <div id="bulk-box">
+    <button id="bulk-close" onclick="closeBulkEdit()" title="Chiudi">✕</button>
+    <h3>Modifica in blocco</h3>
+    <div id="bulk-now" class="bulk-now"></div>
+    <div class="bulk-fields">
+      <label class="chk"><input type="checkbox" id="bulk-on-cat" onchange="bulkRefresh()"> Categoria</label>
+      <input type="text" id="bulk-cat" list="bulk-cats" autocomplete="off" disabled oninput="bulkRefresh()">
+      <label class="chk"><input type="checkbox" id="bulk-on-sub" onchange="bulkRefresh()"> Sottocategoria</label>
+      <input type="text" id="bulk-sub" list="bulk-subs" autocomplete="off" disabled oninput="bulkRefresh()">
+      <small>Lasciata vuota, toglie la sottocategoria.</small>
+      <label class="chk"><input type="checkbox" id="bulk-on-stato" onchange="bulkRefresh()"> Stato</label>
+      <select id="bulk-stato" disabled onchange="bulkRefresh()">
+        <option value="verificato">✓ verificata</option><option value="bozza">✎ bozza</option></select>
+      <label class="chk"><input type="checkbox" id="bulk-on-punti" onchange="bulkRefresh()"> Punti</label>
+      <input type="number" id="bulk-punti" min="0.1" step="0.1" disabled oninput="bulkRefresh()">
+      <span>Togli tag</span>
+      <div class="bulk-tags" id="bulk-tags"></div>
+      <span>Aggiungi tag</span>
+      <input type="text" id="bulk-addtags" autocomplete="off" placeholder="separati da virgola" oninput="bulkRefresh()">
+    </div>
+    <datalist id="bulk-cats"></datalist><datalist id="bulk-subs"></datalist>
+    <div id="bulk-effect"></div>
+    <div class="folder-actions">
+      <button class="btn btn-sm btn-green" id="bulk-go" onclick="bulkApply()" disabled>Applica</button>
+      <span id="bulk-msg"></span>
+    </div>
+  </div>
+</div>
+
 <div id="import-overlay" onclick="if (event.target === this) closeImportMoodle()">
   <div id="import-box">
     <button id="import-close" onclick="closeImportMoodle()" title="Chiudi">✕</button>
@@ -977,7 +1033,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "bcd78cc";
+const BUILD = "fad0743";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2196,6 +2252,9 @@ const TIPO_LABEL = {mc:"scelta multipla","multi-mc":"scelta multipla (più rispo
 const BANCO_MAX_ROWS = 300;       // oltre, l'elenco diventa pesante da ridisegnare a ogni tasto
 let bancoSelected   = null;
 let _bancoFiltered  = [];
+const bancoChecked  = new Set();   // domande spuntate per la modifica in blocco
+let _bancoLastCheck = null;        // per la selezione di un intervallo con Maiusc
+let bancoBulkFlash  = "";
 let _bancoIndex     = null;       // id → testo normalizzato su cui cercare
 let _bancoIndexFor  = null;       // l'array allQuestions per cui l'indice è valido
 
@@ -2348,6 +2407,10 @@ function renderBanco(keepSelection) {
     bancoSelected = n ? _bancoFiltered[0].id : null;
   }
 
+  // Le spuntate sopravvivono ai filtri, ma non a una domanda sparita dal foglio
+  const esistenti = new Set(allQuestions.map(q => q.id));
+  [...bancoChecked].forEach(id => { if (!esistenti.has(id)) bancoChecked.delete(id); });
+
   const list = document.getElementById("banco-list");
   if (!allQuestions.length) {
     list.innerHTML = '<div class="banco-empty">Il foglio domande non contiene domande.</div>';
@@ -2368,6 +2431,8 @@ function renderBanco(keepSelection) {
       const qs = q.stato || "verificato";
       const nTracce = (fixed[q.id] || []).length;
       return `<div class="q-row${q.id === bancoSelected ? " selected" : ""}" data-id="${q.id}" onclick="selectBanco('${q.id}')">
+        <input type="checkbox" title="Seleziona per la modifica in blocco (Maiusc: intervallo)"${bancoChecked.has(q.id) ? " checked" : ""}
+               onclick="bancoCheck(event, '${q.id}')">
         <div class="q-row-body">
           <div>${escHtml(snippet) || "<em style='color:#aaa'>(testo vuoto)</em>"}</div>
           <div class="q-row-meta">${escHtml(q.id)} &nbsp;·&nbsp; ${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}
@@ -2378,7 +2443,205 @@ function renderBanco(keepSelection) {
       </div>`;
     }).join("");
   }
+  if (n) list.insertAdjacentHTML("afterbegin", '<div class="banco-bulkbar" id="banco-bulkbar"></div>');
+  renderBulkBar();
   if (!bancoEdit) renderBancoDetail();
+}
+
+// ---- MODIFICA IN BLOCCO ----
+function renderBulkBar() {
+  const bar = document.getElementById("banco-bulkbar");
+  if (!bar) return;
+  const k = bancoChecked.size, n = _bancoFiltered.length;
+  const inVista = _bancoFiltered.filter(q => bancoChecked.has(q.id)).length;
+  bar.classList.toggle("attiva", k > 0);
+  bar.innerHTML = `<input type="checkbox" id="banco-checkall" title="Seleziona o deseleziona tutte quelle filtrate"
+      onclick="bancoCheckAll(this.checked)"${n && inVista === n ? " checked" : ""}>` +
+    (k ? `<span><strong>${k}</strong> selezionat${k === 1 ? "a" : "e"}` +
+           (k > inVista ? ` (${k - inVista} nascost${k - inVista === 1 ? "a" : "e"} dai filtri)` : "") + `</span>
+         <button class="btn btn-sm" onclick="openBulkEdit()">Modifica in blocco…</button>
+         <button class="btn btn-sm btn-outline" onclick="bancoCheckAll(false, true)">Deseleziona</button>`
+       : `<span>Seleziona tutte le ${n} ${n === 1 ? "domanda filtrata" : "domande filtrate"}` +
+           (n > BANCO_MAX_ROWS ? ", anche quelle non mostrate" : "") + `</span>`) +
+    (bancoBulkFlash ? `<span class="flash">${escHtml(bancoBulkFlash)}</span>` : "");
+  document.getElementById("banco-checkall").indeterminate = inVista > 0 && inVista < n;
+}
+
+function bancoCheck(ev, id) {
+  ev.stopPropagation();   // la spunta non cambia la domanda aperta nel dettaglio
+  const on = ev.target.checked, visible = _bancoFiltered.slice(0, BANCO_MAX_ROWS).map(q => q.id);
+  const a = visible.indexOf(_bancoLastCheck), b = visible.indexOf(id);
+  const ids = ev.shiftKey && a !== -1 && b !== -1 ? visible.slice(Math.min(a, b), Math.max(a, b) + 1) : [id];
+  ids.forEach(x => {
+    on ? bancoChecked.add(x) : bancoChecked.delete(x);
+    const box = document.querySelector(`#banco-list .q-row[data-id="${x}"] input[type=checkbox]`);
+    if (box) box.checked = on;
+  });
+  _bancoLastCheck = id;
+  bancoBulkFlash = "";
+  renderBulkBar();
+}
+
+// tutte: anche le spuntate nascoste dai filtri (pulsante "Deseleziona")
+function bancoCheckAll(on, tutte) {
+  if (tutte) bancoChecked.clear();
+  else _bancoFiltered.forEach(q => on ? bancoChecked.add(q.id) : bancoChecked.delete(q.id));
+  document.querySelectorAll("#banco-list .q-row input[type=checkbox]").forEach(box => box.checked = bancoChecked.has(box.closest(".q-row").dataset.id));
+  bancoBulkFlash = "";
+  renderBulkBar();
+}
+
+let bulkRemove = new Set();   // tag da togliere, scelti cliccando
+
+function bulkSelected() { return allQuestions.filter(q => bancoChecked.has(q.id)); }
+const splitTagList = v => String(v || "").split(",").map(t => t.trim()).filter(Boolean);
+const conteggio = arr => { const m = new Map(); arr.forEach(v => m.set(v, (m.get(v) || 0) + 1)); return [...m].sort((a, b) => b[1] - a[1]); };
+
+function openBulkEdit() {
+  const sel = bulkSelected();
+  if (!sel.length) return;
+  if (bancoEdit && bancoChecked.has(bancoEdit.id)) {
+    alert("L'editor è aperto su " + bancoEdit.id + ", che è tra le selezionate: salva o annulla prima di modificare in blocco.");
+    return;
+  }
+  const cats = conteggio(sel.map(q => q.categoria + (q.sottocateg ? " › " + q.sottocateg : "")));
+  const stati = conteggio(sel.map(q => (q.stato || "verificato") === "bozza" ? "bozze" : "verificate"));
+  const punti = conteggio(sel.map(q => String(q.punti).replace(".", ",") + " pt"));
+  const elenco = arr => arr.slice(0, 6).map(([v, c]) => escHtml(v || "(senza categoria)") + (arr.length > 1 ? ` (${c})` : "")).join(" · ") +
+                        (arr.length > 6 ? ` · e altre ${arr.length - 6}` : "");
+  document.getElementById("bulk-now").innerHTML =
+    `<strong>${sel.length}</strong> ${sel.length === 1 ? "domanda selezionata" : "domande selezionate"}. ` +
+    `Cambiano solo i campi spuntati; testo e soluzioni restano come sono.<br>` +
+    `Categorie: ${elenco(cats)}<br>Stato: ${elenco(stati)} &nbsp;·&nbsp; Punti: ${elenco(punti)}`;
+  const uno = arr => arr.length === 1 ? arr[0] : "";
+  const catVals = [...new Set(sel.map(q => q.categoria))], subVals = [...new Set(sel.map(q => q.sottocateg))];
+  const statoVals = [...new Set(sel.map(q => q.stato || "verificato"))], puntiVals = [...new Set(sel.map(q => q.punti))];
+  ["cat", "sub", "stato", "punti"].forEach(f => document.getElementById("bulk-on-" + f).checked = false);
+  document.getElementById("bulk-cat").value   = uno(catVals);
+  document.getElementById("bulk-sub").value   = uno(subVals);
+  document.getElementById("bulk-stato").value = uno(statoVals) || "verificato";
+  document.getElementById("bulk-punti").value = uno(puntiVals);
+  document.getElementById("bulk-addtags").value = "";
+  document.getElementById("bulk-cats").innerHTML = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort()
+    .map(v => `<option value="${escAttr(v)}">`).join("");
+  bulkRemove = new Set();
+  const tags = conteggio(sel.flatMap(q => splitTagList(q.tags)));
+  document.getElementById("bulk-tags").innerHTML = tags.length
+    ? tags.map(([t, c]) => `<span class="bulk-tag" data-tag="${escAttr(t)}" onclick="bulkToggleTag(this)" title="Clic per togliere questo tag">${escHtml(t)} (${c})</span>`).join("")
+    : '<span style="color:#aaa;font-size:0.9em;">nessun tag</span>';
+  document.getElementById("bulk-msg").textContent = "";
+  document.getElementById("bulk-overlay").classList.add("open");
+  bulkRefresh();
+}
+
+function closeBulkEdit() {
+  if (document.getElementById("bulk-go").dataset.busy) return;
+  document.getElementById("bulk-overlay").classList.remove("open");
+}
+
+function bulkToggleTag(el) {
+  const t = el.dataset.tag;
+  bulkRemove.has(t) ? bulkRemove.delete(t) : bulkRemove.add(t);
+  el.classList.toggle("via", bulkRemove.has(t));
+  bulkRefresh();
+}
+
+// Le modifiche richieste, nella forma dell'azione updateQuestionsMeta
+function bulkChanges() {
+  const on = f => document.getElementById("bulk-on-" + f).checked, val = id => document.getElementById(id).value;
+  const set = {};
+  if (on("cat"))   set.categoria  = val("bulk-cat").trim();
+  if (on("sub"))   set.sottocateg = val("bulk-sub").trim();
+  if (on("stato")) set.stato      = val("bulk-stato");
+  if (on("punti")) set.punti      = Number(String(val("bulk-punti")).replace(",", "."));
+  return { set, addTags: splitTagList(val("bulk-addtags")), removeTags: [...bulkRemove] };
+}
+
+// Stessa logica del server: la domanda dopo le modifiche
+function bulkApplyTo(q, ch) {
+  const r = Object.assign({}, q, ch.set);
+  const tags = splitTagList(q.tags).filter(t => !ch.removeTags.includes(t));
+  ch.addTags.forEach(t => { if (!tags.includes(t)) tags.push(t); });
+  r.tags = tags.join(",");
+  return r;
+}
+
+function bulkRefresh() {
+  ["cat", "sub", "stato", "punti"].forEach(f => {
+    const on = document.getElementById("bulk-on-" + f).checked;
+    document.getElementById("bulk-" + f).disabled = !on;
+  });
+  const cat = document.getElementById("bulk-on-cat").checked ? document.getElementById("bulk-cat").value.trim() : "";
+  const sel = bulkSelected(), selCats = new Set(sel.map(q => q.categoria));
+  document.getElementById("bulk-subs").innerHTML = [...new Set(allQuestions.filter(q => cat ? q.categoria === cat : selCats.has(q.categoria))
+    .map(q => q.sottocateg).filter(Boolean))].sort().map(v => `<option value="${escAttr(v)}">`).join("");
+
+  const ch = bulkChanges(), eff = document.getElementById("bulk-effect"), go = document.getElementById("bulk-go");
+  const errori = [];
+  if ("categoria" in ch.set && !ch.set.categoria) errori.push("La categoria non può essere vuota.");
+  if ("punti" in ch.set && !(ch.set.punti > 0)) errori.push("I punti devono essere un numero maggiore di zero.");
+  const key = q => JSON.stringify([q.categoria, q.sottocateg, splitTagList(q.tags).join(","), q.stato || "verificato", Number(q.punti)]);
+  const after = new Map(sel.map(q => [q.id, bulkApplyTo(q, ch)]));
+  const cambiano = sel.filter(q => key(q) !== key(after.get(q.id)));
+  go.disabled = !!errori.length || !cambiano.length;
+  go.textContent = cambiano.length ? `Applica a ${cambiano.length} ${cambiano.length === 1 ? "domanda" : "domande"}` : "Applica";
+  if (errori.length) { eff.innerHTML = `<div class="warn forte">${errori.map(escHtml).join("<br>")}</div>`; return; }
+  if (!cambiano.length) { eff.innerHTML = `<span style="color:#888;">Nessuna modifica: spunta un campo, togli o aggiungi un tag.</span>`; return; }
+
+  let html = `Cambiano <strong>${cambiano.length}</strong> di ${sel.length} domande.`;
+  // Esami aperti che usano queste domande (prima o dopo la modifica)
+  const aperti = new Map();
+  cambiano.forEach(q => [...openExamsUsing(q), ...openExamsUsing(after.get(q.id))].forEach(e => aperti.set(e.exam_id, e)));
+  if (aperti.size) html += `<div class="warn forte">${aperti.size === 1 ? "Un esame aperto usa" : aperti.size + " esami aperti usano"} ` +
+    `alcune di queste domande (${[...aperti.keys()].map(escHtml).join(", ")}): ` +
+    ("punti" in ch.set ? "chi deve ancora consegnare verrà corretto con i punti nuovi, e " : "") +
+    `chi inizia da adesso può ricevere domande diverse.</div>`;
+  // Slot casuali delle tracce il cui insieme di domande estraibili cambia
+  const nuove = allQuestions.map(q => after.get(q.id) || q);
+  const slot = [];
+  allTracks.forEach(t => (t.items || []).forEach(it => {
+    if (it.type !== "random") return;
+    const prima = allQuestions.filter(q => slotAccepts(it, q)).length, dopo = nuove.filter(q => slotAccepts(it, q)).length;
+    if (prima !== dopo) slot.push({ t, it, prima, dopo });
+  }));
+  if (slot.length) {
+    const desc = it => [it.categoria, it.sottocateg, it.tag && "tag " + it.tag, it.punti != null && it.punti + " pt"].filter(Boolean).join(", ") || "qualsiasi";
+    const vuoti = slot.filter(x => !x.dopo).length;
+    html += `<div class="warn${vuoti ? " forte" : ""}">Cambiano le domande estraibili da ${slot.length === 1 ? "uno slot casuale" : slot.length + " slot casuali"}:<br>` +
+      slot.slice(0, 8).map(x => `${escHtml(x.t.nome || x.t.track_id)} — ${escHtml(desc(x.it))}: da ${x.prima} a <strong>${x.dopo}</strong>` +
+        (x.dopo ? "" : " (resterebbe vuoto: lo slot verrebbe saltato)")).join("<br>") +
+      (slot.length > 8 ? `<br>e altri ${slot.length - 8}` : "") + `</div>`;
+  }
+  eff.innerHTML = html;
+}
+
+async function bulkApply() {
+  const go = document.getElementById("bulk-go"), msg = document.getElementById("bulk-msg");
+  const ch = bulkChanges(), ids = [...bancoChecked];
+  if (document.querySelector("#bulk-effect .warn.forte") &&
+      !confirm("Le modifiche toccano esami aperti o svuotano degli slot casuali (vedi gli avvisi). Applicarle comunque?")) return;
+  go.disabled = true; go.dataset.busy = "1";
+  msg.style.color = "#555"; msg.textContent = "Salvataggio…";
+  try {
+    const res = await callScript({ action: "updateQuestionsMeta", password: adminPassword, ids, ...ch });
+    if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
+    res.questions.forEach(fresh => {
+      const i = allQuestions.findIndex(x => x.id === fresh.id);
+      if (i !== -1) allQuestions[i] = Object.assign({}, allQuestions[i], fresh);
+    });
+    _bancoIndex = null;
+    delete go.dataset.busy;
+    closeBulkEdit();
+    bancoBulkFlash = `✓ ${res.questions.length} ${res.questions.length === 1 ? "domanda modificata" : "domande modificate"}` +
+      (res.missing && res.missing.length ? ` (${res.missing.length} non più nel foglio)` : "");
+    populateBancoFilters();
+    renderBanco(true);
+    renderQBrowser();
+  } catch(e) {
+    delete go.dataset.busy;
+    go.disabled = false;
+    msg.style.color = "#b00"; msg.textContent = "Non riuscito: " + e.message;
+  }
 }
 
 function bancoResetFilters() {
