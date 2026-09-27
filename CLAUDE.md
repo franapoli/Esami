@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-QuizForge is a serverless online quiz platform for university exams (Applicazioni di Bioinformatica — Genetica Umana — MedTec, Università del Sannio). It runs entirely on Google Sheets + Google Apps Script with static HTML frontends hosted on GitHub Pages. There is no build step, no package manager, and no local server.
+QuizForge is a serverless online quiz platform for university exams (Applicazioni di Bioinformatica — Genetica Umana — MedTec, Università del Sannio). It runs entirely on Google Sheets + Google Apps Script with static HTML frontends hosted on GitHub Pages. There is no build step and no package manager.
 
 **Live URL:** `https://franapoli.github.io/Esami/`
 **GitHub remote:** `https://github.com/franapoli/Esami.git`
@@ -15,7 +15,16 @@ Open HTML files directly in a browser, or use the local Python server:
 ```
 python3 -m http.server 3456
 ```
-Then open `http://localhost:3456/quiz_v2.html?id=<EXAM_ID>` or `admin_v2.html`.
+Then open `http://localhost:3456/quiz_v2.html?id=<EXAM_ID>` or `admin_v2.html`. Always add `?test` when testing (see below), and a throwaway `&nocache=…` parameter: the Python server sends no cache headers and browsers happily serve stale pages.
+
+## Two deployments: production and test
+
+| env | script URL | used by |
+|-----|-----------|---------|
+| production | `config.json` → `script_url` | pages **without** `?test` |
+| test | `TEST_SCRIPT_URL` constant in both HTML files | pages **with** `?test` (red "AMBIENTE DI TEST" banner) |
+
+They are independent Apps Script deployments and drift apart easily. **Never touch production data while testing** — use `?test`. The version shown in the Apps Script editor is not necessarily the live one: `doGet` returns it on a plain GET (`curl -sL "<script url>"` → `{"version":"…"}`). When the page needs an action the deployed script lacks, the fallthrough answers "Azione «X» non disponibile nello script N" and the admin appends a "serve un nuovo deploy" hint (`versioneScriptHint()`).
 
 ## Pushing to GitHub (required to test live)
 
@@ -35,7 +44,10 @@ The Apps Script backend must be deployed manually via the Google Apps Script web
 - Paste/update `quiz_apps_script_v2.js`
 - Bump `VERSION` constant before deploying
 - Deploy as **Web App**: execute as *Me*, accessible by *Anyone*
-- Copy the new deployment URL into `SCRIPT_URL` in both HTML files
+- To update an existing deployment: Deploy → Gestisci deployment → pencil → Versione "Nuova versione". Creating a new deployment changes the URL (then `config.json` / `TEST_SCRIPT_URL` must be updated).
+- `finalize` freezes scores with the code live at submission time: redeploying during an exam splits the cohort between two versions.
+
+**The backend file is also loaded in the browser.** `admin_v2.html` (`loadAdminBackend()`) and `quiz_v2.html?preview` fetch `quiz_apps_script_v2.js` and evaluate it in an isolated scope to reuse `canonicalForm`, `buildQuestionObj`, `scoreAnswer`, `validateQuestion`, `lintQuestion`, `normalizeIncomingQuestion`. Top-level code must therefore stay browser-safe (no Apps Script calls outside functions). The browser uses the file published on GitHub Pages, so previews can differ from the deployed script until it is redeployed — the admin warns about version mismatch.
 
 The two HTML files (`quiz_v2.html`, `admin_v2.html`) are standalone static pages.
 
@@ -55,8 +67,15 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 - `getAllTracks` / `setTrack` / `createTrack` — admin: list/update/create **tracce** (templates)
 - `getAllEsami` / `setEsame` / `createEsame` — admin: list/update/create **esami** (sessions)
 - `getQuestions` — admin: full question repository
-- `addQuestion` — admin: append a question
+- `addQuestion` — admin: append a question as-is (legacy, no validation)
+- `createQuestion` — admin: append a **validated** question (`{question}` → `{status:"ok",question}` or `{status:"invalid",errors}`); used by the editor ("salva come nuova") and the Moodle import
+- `updateQuestion` — admin: overwrite a question; `expected` = the question as opened, returns `conflict` + current row if the sheet changed meanwhile
+- `updateQuestionsMeta` — admin bulk edit (3.3.0+): `{ids, set:{categoria?,sottocateg?,stato?,punti?}, addTags?, removeTags?}`; writes only columns C–F and K of rows that actually change, never text/answers; returns `{questions, missing}`
 - `setQuestionStato` — admin: toggle `bozza`/`verificato` on a single question
+- `getQuestionStats` — admin: per-question answer statistics
+- `getImages` — student: base64 images of the questions **assigned to that student** only (needs their row)
+- `getImagesAdmin` — admin: images referenced by the bank or files inside the QuizForge Drive tree
+- `listFolders` / `createFolder` / `uploadImage` — admin: browse/create folders and upload images, restricted to the QuizForge Drive tree (`folderPathInTree`, `folderInTree`)
 - `getMonitor` / `getResults` — admin: read student progress/scores
 - `init` — assigns questions **server-side** (ignores any client-sent IDs), stores them in `COL_QIDS`, returns the question objects (without correct answers) to render
 - `update` — saves only the raw answer (no points); rejected after finalization; response includes `extra_minutes_individual` for per-student extra time
@@ -72,7 +91,7 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 
 The exam is built so a student cannot extract answers or forge a score from the browser:
 
-- **Correct answers never reach the client during an exam.** `buildQuestionObj(q, pos, withCorrect)` omits the `correct` field unless `withCorrect=true`. For `match` questions, `q.right` (the list of right-side display labels) is **always** sent — it is needed to render the UI. Only `q.correct` (the integer index mapping left→right) is withheld. `getTrack` returns no question content at all.
+- **Correct answers never reach the client during an exam.** `buildQuestionObj(q, pos, withCorrect)` omits the `correct` field unless `withCorrect=true`. For `match` questions, `q.right` (the list of right-side display labels) is **always** sent — it is needed to render the UI. Only `q.correct` (the right-side labels, same as `q.right`) is withheld. `getTrack` returns no question content at all.
 - **Questions are assigned server-side.** The client does not choose which questions are scored; `init`/`resetPractice` resolve the traccia on the server, store the IDs in `COL_QIDS`, and return the set. The client renders exactly that set and persists it in `localStorage` for resume (needed for random tracce).
 - **Scoring is server-side.** `update` stores only raw answers; `finalize` recomputes the score from `COL_QIDS` via `scoreAnswer()`. Client-sent `score`/`pts` are ignored.
 - **No score oracle.** In exam mode the score is frozen on first `finalize`; re-submitting different answers always returns the same stored score (idempotent), so a student cannot binary-search the answers by reading the score.
@@ -85,6 +104,7 @@ The exam is built so a student cannot extract answers or forge a score from the 
 - The client time limit is enforced softly (flagged, not a hard server cutoff) — a student disabling the JS timer keeps working, but the overrun is recorded for the instructor.
 - `abandon` lets a student reroll random questions (fresh draw, no answer knowledge).
 - `free` questions are not auto-scored (manual grading by design).
+- Images are private Drive files served as base64 by the script (`getImages`, cached in `CacheService` in chunks); a student only receives images of their assigned questions.
 
 ## Esami vs Tracce (v2.11+)
 
@@ -103,13 +123,15 @@ The exam is built so a student cannot extract answers or forge a score from the 
 | `Q_SOTTOCATEG` | D | Subcategory |
 | `Q_TAGS` | E | Comma-separated tags for random-pick filtering |
 | `Q_STATO` | F | `bozza` \| `verificato` (default `verificato` for empty cells) |
-| `Q_TIPO` | G | `mc` \| `fitb` \| `match` \| `free` \| `multi-fitb` \| `cloze` |
-| `Q_TESTO` | H | Question text |
-| `Q_OPTIONS` | I | JSON array of options (mc/match left-side); `[]` for other types |
-| `Q_CORRETTA` | J | Letter A–Z (mc), exact string (fitb), JSON array of right-side answers (match) |
+| `Q_TIPO` | G | `mc` \| `multi-mc` \| `fitb` \| `match` \| `free` \| `multi-fitb` \| `cloze` |
+| `Q_TESTO` | H | Question text — in the text format (below) it holds the whole question, answers included |
+| `Q_OPTIONS` | I | Legacy: JSON array of options (mc/match left-side); `[]` in the text format |
+| `Q_CORRETTA` | J | Legacy: letter A–Z (mc), letters `A,C` (multi-mc), exact string (fitb), JSON array of right-side answers (match); empty in the text format |
 | `Q_PUNTI` | K | Points (default 1) |
 | `Q_PLACEHOLDER` | L | Hint text shown in fitb input |
-| `Q_DATA` | M | JSON for complex types: `multi-fitb` (`{boxes:[],cols}`) and `cloze` (`{dropdowns:[]}`) |
+| `Q_DATA` | M | Legacy JSON for complex types: `multi-fitb` (`{boxes:[],cols}`) and `cloze` (`{dropdowns:[]}`); empty in the text format |
+
+Text columns are written with number format `@` and a leading `'` before `= + - @` (`sheetText`) so Sheets does not turn answers into dates, numbers or formulas.
 
 **Tracce sheet** (0-based, 3 columns):
 
@@ -119,7 +141,7 @@ The exam is built so a student cannot extract answers or forge a score from the 
 | `T_NOME` | B | Track name |
 | `T_ITEMS` | C | JSON array of `{type:"fixed",id}` or `{type:"random",categoria?,sottocateg?,tag?,punti?}` |
 
-**Esami sheet** (0-based, 9 columns):
+**Esami sheet** (0-based, 10 columns):
 
 | Const | Col | Content |
 |-------|-----|---------|
@@ -132,6 +154,7 @@ The exam is built so a student cannot extract answers or forge a score from the 
 | `E_MODALITA` | G | `exam` \| `practice` |
 | `E_STATO` | H | `open` \| `closed` |
 | `E_PASSWORD` | I | Per-exam access password (exam only; empty = no password) |
+| `E_SHUFFLE` | J | `"no"` = shuffle opzioni disabilitato; vuoto o `"si"` = abilitato (default) |
 
 **Results sheet** (1-based for `getRange`):
 
@@ -150,16 +173,37 @@ Answers are stored as raw index (mc), text (fitb/free/multi-fitb), or JSON (matc
 | `extra_time:EXAM_ID:all` | Extra minutes for all students in that exam (cumulative; can be negative) |
 | `extra_time:EXAM_ID:MATRICOLA` | Extra minutes for a specific student (cumulative; on top of "all") |
 
+## Question text format (v3.0.0+)
+
+A question can be written entirely in the Testo column; the editor shows and saves exactly this. `[[…]]` is an answer or an item, `*` at its start marks the correct one:
+
+| Type | Syntax |
+|------|--------|
+| `mc` | question, then one option per line: `[[*giusta]]` `[[sbagliata]]` … |
+| `multi-mc` | as mc, with `*` on every correct option |
+| `fitb` | `Il codone di inizio è [[AUG]].` — the box appears in place |
+| `multi-fitb` | every `[[risposta]]` becomes an inline box (also inside HTML tables); boxes weigh the same |
+| `match` | instructions, then one pair per line: `[[Adenina => Timina]]` |
+| `cloze` | inline menu `{{[[*locali]] [[globali]]}}`; reusable list `{{basi = [[A]] [[C]] [[G]] [[T]]}}` declared once (not shown), then `{{basi: 4}}` = menu from that list whose correct answer is item **4** (1-based position, never the text) |
+| `free` | plain text |
+
+Images: `[img:DRIVE_ID]` or `[img:DRIVE_ID|400]` (width in px), anywhere in the text. Text may contain HTML; tags are detected browser-style (`<` + letter, `/` or `!`), so `p < 0,05` is text.
+
+`canonicalForm(q)` (server, also loaded in the browser) reduces the text format to the internal form (options / corretta / data) — the same form legacy rows already have, so **old rows with columns I, J, M keep working unchanged**. Everything that prepares, scores, validates or lints a question goes through it; the `*` markers never reach students. The editor converts legacy questions to the text format when opened (`questionToText`) only if the round trip is exact; otherwise it keeps the legacy form.
+
 ## Question types
 
 | Type | `correct` field | Notes |
 |------|----------------|-------|
 | `mc` | option index 0-N (after shuffle) | Options stored as JSON array; supports any number of options; shuffled client-side |
+| `multi-mc` | indices of the correct options | Checkboxes. Score = max(0, (right − wrong) / n_correct × punti) |
 | `fitb` | exact string | Single text input |
-| `match` | integer indices mapping left→right | `q.right` (display labels) always sent; `q.correct` (indices) withheld during exam |
+| `match` | right-side labels (same as `q.right`) | `q.right` always sent; `q.correct` withheld during exam. Scoring: proportional — client sends indices into `right[]`, each correct match scores `punti/n`. Sheet `corretta` = JSON array of right-side label strings. |
 | `free` | `null` | Large textarea; not auto-scored |
-| `multi-fitb` | array of correct strings | Layout defined by `boxes[].cols` in Q_DATA |
-| `cloze` | array of correct option indices | Text stored with `{{N}}` markers; split into text + `<select>` at render; **do not add `q.text` separately for cloze** |
+| `multi-fitb` | array of correct strings | Legacy `Q_DATA` = `{cols, boxes:[{label,cols,pts,correct},...]}`. Box `pts` are **relative weights** (`boxWeight`, default 1): score = Σ weights of correct boxes / Σ weights × punti. |
+| `cloze` | array of correct option indices | Internal text has `{{N}}` markers; split into text (rendered as HTML) + `<select>` at render; **do not add `q.text` separately for cloze** |
+
+Partial scores (multi-mc, match, multi-fitb, cloze) are rounded to 2 decimals; `punti` (and a traccia slot's `punti` override) can be fractional. Text comparisons ignore case and surrounding spaces.
 
 ## Track items (T_ITEMS)
 
@@ -223,10 +267,14 @@ Two separate selectors in the header bar: **Esame** (exam session) and, in the T
 - **Monitor tab**: auto-refreshes every 30s. Extra time bar below stats: `[N] min [+ Tutti] [+ Studente selezionato]`. Click a student row to select them (highlighted blue) and enable the per-student button. `doAddExtraTime(scope)` calls `addExtraTime`.
 - Header row 2: Drive folder input + "Carica lista" + Domande/Risultati sheet selectors with "+ Nuovo" buttons + Apps Script link.
 - `saveTrack()` sends `track_password` (not `password`) to avoid collision with the admin auth field.
+- **Domande tab** (`banco`): browser of the whole bank. Toolbar: full-text search (`bancoIndex`, over canonical text/options/answers), filters tipo / categoria / sottocategoria (depends on categoria) / stato / uso, "Importa da Moodle…", "↻ Ricarica dal foglio". Right pane: details, usage in tracce/esami, interactive **prova** (iframe `quiz_v2.html?preview&v=BUILD`, driven via `postMessage`, see `makeProva`) with "inserisci la risposta giusta".
+  - **Editor**: edit in the text format with per-type syntax help (`BE_SINTASSI`); "Salva" overwrites (`updateQuestion`), "Salva come nuova" creates an independent copy (`createQuestion`). **No versioning by design.** Warns when the question is used by open exams (they are graded with the version current at submission). Image upload (shrunk client-side) with a folder picker limited to the QuizForge Drive tree (last folder in `localStorage` `qf_img_folder[_test]`).
+  - **Bulk edit**: checkbox on each row (Shift = range), sticky bar with "select all filtered" (including rows past `BANCO_MAX_ROWS`). "Modifica in blocco…" changes categoria, sottocategoria, stato, punti, removes/adds tags (`updateQuestionsMeta`). Before applying it lists open exams affected and random slots whose eligible pool changes (via `slotAccepts`), flagging slots that would become empty.
+  - **Moodle import**: reads a Moodle XML export in the browser, converts to the text format (`convertiMoodle`), uploads images to `QuizForge › categoria › sottocategoria`, creates questions as `bozza` with tag `moodle-<id>` (reimport skips them). Destination categoria/sottocategoria are editable, prefilled from the file when it has a single category. Unsupported questions are discarded with the reason.
 
-## BUILD auto-update (pre-push hook)
+## BUILD auto-update
 
-`.git/hooks/pre-push` updates `const BUILD = "…"` in `admin_v2.html` to the current short commit hash, then auto-commits. The BUILD in admin reflects the commit *before* the current push (inherent limitation — hash is only known after commit).
+See "Pushing to GitHub": the pre-commit hook writes the parent commit hash into `const BUILD` in `admin_v2.html`. BUILD is also appended to the preview iframe URL so an update is never served from cache.
 
 ## Admin authentication
 
