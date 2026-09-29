@@ -157,6 +157,8 @@
   .bulk-fields input[type=text], .bulk-fields input[type=number], .bulk-fields select {
     padding:6px 8px; border:1px solid #bbb; font:inherit; width:100%; box-sizing:border-box; background:#fff; }
   .bulk-fields input:disabled, .bulk-fields select:disabled { background:#f6f6f6; color:#aaa; }
+  .cp-cell { display:flex; flex-direction:column; gap:6px; }
+  .be-field select + input[type=text] { margin-top:6px; }
   .bulk-fields small { grid-column:2; color:#999; font-size:0.86em; margin-top:-4px; }
   .bulk-tags { display:flex; flex-wrap:wrap; gap:6px; }
   .bulk-tag { font-size:0.84em; padding:2px 8px; border:1px solid #ccc; background:#f6f6f6; cursor:pointer; border-radius:10px; }
@@ -232,6 +234,8 @@
   .banco-toolbar input[type=search] { flex:1; min-width:240px; padding:7px 10px; border:1px solid #bbb; font:inherit; font-size:0.92em; }
   .banco-toolbar select { width:auto; padding:6px 8px; border:1px solid #bbb; font:inherit; font-size:0.86em; background:#fff; }
   #banco-count { font-size:0.8em; color:#888; }
+  select.cat-tree { max-width:320px; }
+  .banco-toolbar select.cat-tree { min-width:200px; }
   .banco-layout { display:flex; gap:18px; align-items:flex-start; }
   .banco-list { flex:0 0 42%; padding:0; max-height:calc(100vh - 230px); overflow-y:auto; outline:none; }
   .banco-detail { flex:1; min-width:0; }
@@ -749,17 +753,9 @@
             <div style="padding:16px 20px;border-bottom:1px solid #eee;">
               <h2 style="margin:0;padding:0;border:none;">Domande nel database</h2>
               <div class="row2" style="margin-top:12px;flex-wrap:nowrap;">
-                <div class="field" style="min-width:0;flex:2;">
-                  <label for="f-cat">Categoria</label>
-                  <select id="f-cat" onchange="onCatChange()">
-                    <option value="">— tutte —</option>
-                  </select>
-                </div>
-                <div class="field" style="min-width:0;flex:2;">
-                  <label for="f-subcat">Sottocategoria</label>
-                  <select id="f-subcat" onchange="filterQuestions()">
-                    <option value="">— tutte —</option>
-                  </select>
+                <div class="field" style="min-width:0;flex:3;">
+                  <label for="f-cattree">Categoria › sottocategoria</label>
+                  <select id="f-cattree" class="cat-tree" onchange="filterQuestions()"></select>
                 </div>
                 <div class="field" style="min-width:0;flex:1;">
                   <label for="f-tag">Tag</label>
@@ -808,8 +804,7 @@
         <input type="search" id="banco-q" placeholder="Cerca in testo, opzioni, soluzioni, ID, tag…  (↑ ↓ per scorrere)"
                oninput="renderBanco()" onkeydown="bancoKey(event)" autocomplete="off">
         <select id="banco-tipo" autocomplete="off"  onchange="renderBanco()"><option value="">Tutti i tipi</option></select>
-        <select id="banco-cat" autocomplete="off"   onchange="populateBancoSubcat(); renderBanco()"><option value="">Tutte le categorie</option></select>
-        <select id="banco-subcat" autocomplete="off" onchange="renderBanco()"><option value="">Tutte le sottocategorie</option></select>
+        <select id="banco-cattree" class="cat-tree" autocomplete="off" onchange="renderBanco()" title="Categoria › sottocategoria"></select>
         <select id="banco-stato" autocomplete="off" onchange="renderBanco()">
           <option value="">Ogni stato</option>
           <option value="verificato">Verificate</option>
@@ -919,10 +914,10 @@
     <div id="bulk-now" class="bulk-now"></div>
     <div class="bulk-fields">
       <label class="chk"><input type="checkbox" id="bulk-on-cat" onchange="bulkRefresh()"> Categoria</label>
-      <input type="text" id="bulk-cat" list="bulk-cats" autocomplete="off" disabled oninput="bulkRefresh()">
+      <div class="cp-cell" id="bulk-cp-cat"></div>
       <label class="chk"><input type="checkbox" id="bulk-on-sub" onchange="bulkRefresh()"> Sottocategoria</label>
-      <input type="text" id="bulk-sub" list="bulk-subs" autocomplete="off" disabled oninput="bulkRefresh()">
-      <small>Lasciata vuota, toglie la sottocategoria.</small>
+      <div class="cp-cell" id="bulk-cp-sub"></div>
+      <small>"(nessuna)" toglie la sottocategoria.</small>
       <label class="chk"><input type="checkbox" id="bulk-on-stato" onchange="bulkRefresh()"> Stato</label>
       <select id="bulk-stato" disabled onchange="bulkRefresh()">
         <option value="verificato">✓ verificata</option><option value="bozza">✎ bozza</option></select>
@@ -933,7 +928,6 @@
       <span>Aggiungi tag</span>
       <input type="text" id="bulk-addtags" autocomplete="off" placeholder="separati da virgola" oninput="bulkRefresh()">
     </div>
-    <datalist id="bulk-cats"></datalist><datalist id="bulk-subs"></datalist>
     <div id="bulk-effect"></div>
     <div class="folder-actions">
       <button class="btn btn-sm btn-green" id="bulk-go" onclick="bulkApply()" disabled>Applica</button>
@@ -1039,7 +1033,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "c111e8e";
+const BUILD = "ddb0a3b";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2083,7 +2077,8 @@ async function showStudentDetail(rowIdx) {
   // Per leggere opzioni e soluzioni delle domande scritte nel formato nel testo
   try { await loadAdminBackend(); } catch(e) {}
 
-  const qMap = Object.fromEntries(allQuestions.map(q => [q.id, q]));
+  // Anche le domande eliminate, dal cestino: il dettaglio di un esame passato deve restare leggibile
+  const qMap = Object.fromEntries(deletedQuestions.concat(allQuestions).map(q => [q.id, q]));
   const qids = Array.isArray(r.qids) ? r.qids : (r.qids ? String(r.qids).split(";")[0].split(",").map(x => x.trim()).filter(Boolean) : []);
   const nome  = escHtml(String(r.nominativo || r.matricola));
   const score = Number(r.score) || 0;
@@ -2217,6 +2212,7 @@ document.addEventListener("keydown", e => {
 // TAB: DOMANDE
 // ============================================================
 let allQuestions        = null;  // array caricato una volta sola
+let deletedQuestions    = [];    // cestino: per il dettaglio dei risultati di esami passati
 let _allQuestionsPromise = null; // fetch in-flight — evita doppi round-trip
 let trackItems     = [];    // [{type:"fixed",id} | {type:"random",categoria,sottocateg,tag}]
 let isEditingItems = true;  // false = sola lettura (traccia chiusa)
@@ -2231,6 +2227,7 @@ function ensureQuestionsLoaded() {
     .then(res => {
       if (res.status !== "ok") throw new Error(res.message || "getQuestions error");
       allQuestions = res.questions || [];
+      deletedQuestions = res.deleted || [];
       buildCategoryFilters();
     })
     .finally(() => { _allQuestionsPromise = null; });
@@ -2330,7 +2327,7 @@ async function initBancoTab() {
     }
   }
   loading.style.display = "none"; content.style.display = "block";
-  populateBancoFilters();
+  refreshCategoryMenus();
   renderBanco();
 }
 
@@ -2350,9 +2347,126 @@ async function reloadBanco() {
     return;
   }
   document.getElementById("banco-count").style.color = "";
-  populateBancoFilters();
+  refreshCategoryMenus();
   renderBanco();
   renderQBrowser(); // il browser del tab Tracce usa lo stesso allQuestions
+}
+
+// ---- SCELTA DI CATEGORIA E SOTTOCATEGORIA (editor, modifica in blocco) ----
+// Menu con le categorie esistenti e "Nuova categoria…", che apre un campo per scriverla; la
+// sottocategoria offre quelle della categoria scelta, "(nessuna)" e "Nuova sottocategoria…".
+// catPicker restituisce l'HTML dei due controlli; onChange(cat, sub) a ogni modifica.
+const CP_NUOVA = "__nuova__";
+const _cp = {};
+
+const cpCats = () => [...new Set((allQuestions || []).map(q => q.categoria).filter(Boolean))].sort(cmpIt);
+const cpSubs = cat => [...new Set((allQuestions || []).filter(q => q.categoria === cat).map(q => q.sottocateg).filter(Boolean))].sort(cmpIt);
+
+function catPicker(p, cat, sub, onChange) {
+  cat = cat || ""; sub = sub || "";
+  const st = _cp[p] = { cat, sub, onChange };
+  st.nuovaCat = !!cat && !cpCats().includes(cat);
+  st.nuovaSub = !!sub && (st.nuovaCat || !cpSubs(cat).includes(sub));
+  return {
+    cat: `<select id="${p}-cat" onchange="cpCat('${p}')">${cpCatOptions(p)}</select>
+          <input type="text" id="${p}-cat-new" value="${escAttr(st.nuovaCat ? cat : "")}" placeholder="Nome della nuova categoria"
+                 autocomplete="off" oninput="cpCatNew('${p}')"${st.nuovaCat ? "" : ' style="display:none"'}>`,
+    sub: `<select id="${p}-sub" onchange="cpSub('${p}')">${cpSubOptions(p)}</select>
+          <input type="text" id="${p}-sub-new" value="${escAttr(st.nuovaSub ? sub : "")}" placeholder="Nome della nuova sottocategoria"
+                 autocomplete="off" oninput="cpSubNew('${p}')"${st.nuovaSub ? "" : ' style="display:none"'}>`
+  };
+}
+
+function cpCatOptions(p) {
+  const st = _cp[p], o = (v, t, sel) => `<option value="${escAttr(v)}"${sel ? " selected" : ""}>${escHtml(t)}</option>`;
+  return (!st.cat && !st.nuovaCat ? o("", "— scegli —", true) : "") +
+    cpCats().map(c => o(c, c, !st.nuovaCat && c === st.cat)).join("") + o(CP_NUOVA, "＋ Nuova categoria…", st.nuovaCat);
+}
+
+function cpSubOptions(p) {
+  const st = _cp[p], o = (v, t, sel) => `<option value="${escAttr(v)}"${sel ? " selected" : ""}>${escHtml(t)}</option>`;
+  return o("", "(nessuna)", !st.nuovaSub && !st.sub) +
+    (st.nuovaCat ? [] : cpSubs(st.cat)).map(sc => o(sc, sc, !st.nuovaSub && sc === st.sub)).join("") +
+    o(CP_NUOVA, "＋ Nuova sottocategoria…", st.nuovaSub);
+}
+
+function cpShow(id, on) { const el = document.getElementById(id); el.style.display = on ? "" : "none"; if (on) el.focus(); }
+
+function cpCat(p) {
+  const st = _cp[p], v = document.getElementById(p + "-cat").value;
+  st.nuovaCat = v === CP_NUOVA;
+  st.cat = st.nuovaCat ? document.getElementById(p + "-cat-new").value.trim() : v;
+  cpShow(p + "-cat-new", st.nuovaCat);
+  // La sottocategoria resta solo se esiste anche nella nuova categoria (o se è nuova anche lei)
+  if (!st.nuovaSub && !(!st.nuovaCat && cpSubs(st.cat).includes(st.sub))) st.sub = "";
+  document.getElementById(p + "-sub").innerHTML = cpSubOptions(p);
+  st.onChange(st.cat, st.sub);
+}
+
+function cpCatNew(p) { _cp[p].cat = document.getElementById(p + "-cat-new").value.trim(); _cp[p].onChange(_cp[p].cat, _cp[p].sub); }
+
+function cpSub(p) {
+  const st = _cp[p], v = document.getElementById(p + "-sub").value;
+  st.nuovaSub = v === CP_NUOVA;
+  st.sub = st.nuovaSub ? document.getElementById(p + "-sub-new").value.trim() : v;
+  cpShow(p + "-sub-new", st.nuovaSub);
+  st.onChange(st.cat, st.sub);
+}
+
+function cpSubNew(p) { _cp[p].sub = document.getElementById(p + "-sub-new").value.trim(); _cp[p].onChange(_cp[p].cat, _cp[p].sub); }
+
+function cpDisable(p, off) {
+  ["-cat", "-cat-new", "-sub", "-sub-new"].forEach(x => { const el = document.getElementById(p + x); if (el) el.disabled = off; });
+}
+
+// ---- MENU AD ALBERO CATEGORIA › SOTTOCATEGORIA ----
+// Un solo <select>: le categorie, e sotto ciascuna le sue sottocategorie rientrate, con il numero
+// di domande di ogni ramo. Il valore è "" (tutte) o JSON [categoria, sottocategoria|null].
+// senzaSub: aggiunge "(senza sottocategoria)" dove una categoria ne ha anche di con sottocategoria.
+const cmpIt = (a, b) => a.localeCompare(b, "it");
+
+function catTreeFill(sel, tutte, senzaSub) {
+  const prev = sel.value, tree = new Map();
+  (allQuestions || []).forEach(q => {
+    const c = q.categoria || "", sc = q.sottocateg || "";
+    if (!tree.has(c)) tree.set(c, new Map());
+    tree.get(c).set(sc, (tree.get(c).get(sc) || 0) + 1);
+  });
+  const opt = (v, label) => `<option value="${escAttr(v === "" ? "" : JSON.stringify(v))}">${label}</option>`;
+  let html = opt("", `${escHtml(tutte)} (${(allQuestions || []).length})`);
+  [...tree.keys()].sort(cmpIt).forEach(c => {
+    const subs = tree.get(c), tot = [...subs.values()].reduce((a, b) => a + b, 0);
+    html += opt([c, null], `${escHtml(c || "(senza categoria)")} (${tot})`);
+    const nomi = [...subs.keys()].filter(Boolean).sort(cmpIt);
+    nomi.forEach(sc => { html += opt([c, sc], `\u00a0\u00a0\u00a0└ ${escHtml(sc)} (${subs.get(sc)})`); });
+    if (senzaSub && nomi.length && subs.get("")) html += opt([c, ""], `\u00a0\u00a0\u00a0└ <i>(senza sottocategoria)</i> (${subs.get("")})`);
+  });
+  sel.innerHTML = html;
+  sel.value = [...sel.options].some(o => o.value === prev) ? prev : "";
+}
+
+// {cat, sub}: null = qualsiasi
+function catTreeValue(sel) {
+  if (!sel.value) return { cat: null, sub: null };
+  const [cat, sub] = JSON.parse(sel.value);
+  return { cat, sub };
+}
+
+function catTreeSet(sel, cat, sub) {
+  const v = cat === null || cat === undefined ? "" : JSON.stringify([cat, sub === undefined || sub === "" ? null : sub]);
+  sel.value = [...sel.options].some(o => o.value === v) ? v
+            : [...sel.options].some(o => o.value === JSON.stringify([cat, null])) ? JSON.stringify([cat, null]) : "";
+}
+
+function catTreeMatch(v, q) {
+  return (v.cat === null || (q.categoria || "") === v.cat) && (v.sub === null || (q.sottocateg || "") === v.sub);
+}
+
+// Tutti i menu che elencano categorie, dopo che le domande sono cambiate: una categoria rimasta
+// senza domande sparisce da sola, perché le categorie esistono solo come valori delle domande
+function refreshCategoryMenus() {
+  populateBancoFilters();
+  buildCategoryFilters();
 }
 
 function populateBancoFilters() {
@@ -2366,18 +2480,7 @@ function populateBancoFilters() {
   const tipi = Object.keys(TIPO_LABEL).filter(t => tipiPresenti.has(t))
     .concat([...tipiPresenti].filter(t => !TIPO_LABEL[t]));
   fill("banco-tipo", tipi, t => TIPO_LABEL[t] || t);
-  const cats = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
-  fill("banco-cat", cats, c => c);
-  populateBancoSubcat();
-}
-
-// Sottocategorie della categoria scelta (di tutte, se nessuna è scelta)
-function populateBancoSubcat() {
-  const el = document.getElementById("banco-subcat"), prev = el.value, cat = document.getElementById("banco-cat").value;
-  const subs = [...new Set(allQuestions.filter(q => !cat || q.categoria === cat).map(q => q.sottocateg).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "it"));
-  el.innerHTML = el.options[0].outerHTML + subs.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join("");
-  el.value = subs.includes(prev) ? prev : "";
+  catTreeFill(document.getElementById("banco-cattree"), "Tutte le categorie", true);
 }
 
 // keepSelection: non spostare la selezione anche se i filtri la escludono (dopo un salvataggio)
@@ -2385,8 +2488,7 @@ function renderBanco(keepSelection) {
   if (!allQuestions) return;
   const terms = normSearch(document.getElementById("banco-q").value).split(/\s+/).filter(Boolean);
   const tipo  = document.getElementById("banco-tipo").value;
-  const cat   = document.getElementById("banco-cat").value;
-  const sub   = document.getElementById("banco-subcat").value;
+  const ramo  = catTreeValue(document.getElementById("banco-cattree"));
   const stato = document.getElementById("banco-stato").value;
   const uso   = document.getElementById("banco-uso").value;
   const index = bancoIndex();
@@ -2394,8 +2496,7 @@ function renderBanco(keepSelection) {
 
   _bancoFiltered = allQuestions.filter(q => {
     if (tipo  && q.tipo !== tipo) return false;
-    if (cat   && q.categoria !== cat) return false;
-    if (sub   && q.sottocateg !== sub) return false;
+    if (!catTreeMatch(ramo, q)) return false;
     if (stato && (q.stato || "verificato") !== stato) return false;
     if (uso === "fissa" && !fixed[q.id]) return false;
     if (uso === "mai"   &&  fixed[q.id]) return false;
@@ -2423,9 +2524,9 @@ function renderBanco(keepSelection) {
   } else if (!n) {
     const attivi = [];
     if (terms.length) attivi.push("ricerca «" + document.getElementById("banco-q").value.trim() + "»");
-    [["banco-tipo", "tipo"], ["banco-cat", "categoria"], ["banco-subcat", "sottocategoria"], ["banco-stato", "stato"], ["banco-uso", "uso"]].forEach(([id, nome]) => {
+    [["banco-tipo", "tipo"], ["banco-cattree", "categoria"], ["banco-stato", "stato"], ["banco-uso", "uso"]].forEach(([id, nome]) => {
       const el = document.getElementById(id);
-      if (el.value) attivi.push(nome + ": " + el.options[el.selectedIndex].text);
+      if (el.value) attivi.push(nome + ": " + el.options[el.selectedIndex].text.replace(/^[\s└]+|\s*\(\d+\)$/g, ""));
     });
     list.innerHTML = `<div class="banco-empty">Nessuna delle ${allQuestions.length} domande corrisponde a ` +
       `${escHtml(attivi.join(", "))}.<br><button class="btn btn-sm btn-outline" style="margin-top:10px;" ` +
@@ -2466,6 +2567,7 @@ function renderBulkBar() {
     (k ? `<span><strong>${k}</strong> selezionat${k === 1 ? "a" : "e"}` +
            (k > inVista ? ` (${k - inVista} nascost${k - inVista === 1 ? "a" : "e"} dai filtri)` : "") + `</span>
          <button class="btn btn-sm" onclick="openBulkEdit()">Modifica in blocco…</button>
+         <button class="btn btn-sm btn-outline" onclick="bancoDelete([...bancoChecked])">Elimina…</button>
          <button class="btn btn-sm btn-outline" onclick="bancoCheckAll(false, true)">Deseleziona</button>`
        : `<span>Seleziona tutte le ${n} ${n === 1 ? "domanda filtrata" : "domande filtrate"}` +
            (n > BANCO_MAX_ROWS ? ", anche quelle non mostrate" : "") + `</span>`) +
@@ -2497,6 +2599,86 @@ function bancoCheckAll(on, tutte) {
   renderBulkBar();
 }
 
+// ---- ELIMINAZIONE ----
+// Prima di chiedere conferma elenca cosa succede: tracce che perdono slot fissi, slot casuali
+// che restano con meno domande (o vuoti), esami aperti che le usano. Il server rifiuta se una
+// domanda è già stata assegnata a uno studente di un esame aperto; le righe vanno nel cestino.
+async function bancoDelete(ids) {
+  ids = ids.filter(id => allQuestions.some(q => q.id === id));
+  if (!ids.length) return;
+  const via = new Set(ids);
+  if (bancoEdit && via.has(bancoEdit.id) && bancoEditDirty() &&
+      !confirm("L'editor ha modifiche non salvate a " + bancoEdit.id + ", che stai per eliminare. Continuare?")) return;
+  const n = ids.length, righe = [];
+  const lista = (arr, max) => arr.slice(0, max).join("\n") + (arr.length > max ? "\n  … e altre " + (arr.length - max) : "");
+
+  const fisse = allTracks.map(t => ({ t, k: (t.items || []).filter(it => it.type === "fixed" && via.has(it.id)).length })).filter(x => x.k);
+  if (fisse.length) righe.push("Vengono tolte dalle tracce in cui sono fisse:\n" +
+    lista(fisse.map(x => "  • " + (x.t.nome || x.t.track_id) + " (" + x.k + (x.k === 1 ? " slot)" : " slot)")), 6));
+
+  const rimaste = allQuestions.filter(q => !via.has(q.id));
+  const slot = [];
+  allTracks.forEach(t => (t.items || []).forEach(it => {
+    if (it.type !== "random") return;
+    const prima = allQuestions.filter(q => slotAccepts(it, q)).length, dopo = rimaste.filter(q => slotAccepts(it, q)).length;
+    if (prima !== dopo) slot.push("  • " + (t.nome || t.track_id) + " — " +
+      ([it.categoria, it.sottocateg, it.tag && "tag " + it.tag].filter(Boolean).join(", ") || "qualsiasi") +
+      ": da " + prima + " a " + dopo + (dopo ? "" : "  ⚠ resterebbe vuoto"));
+  }));
+  if (slot.length) righe.push("Slot casuali che perdono domande:\n" + lista(slot, 6));
+
+  const aperti = new Map();
+  allQuestions.filter(q => via.has(q.id)).forEach(q => openExamsUsing(q).forEach(e => aperti.set(e.exam_id, e)));
+  if (aperti.size) righe.push("Usate da esami aperti (" + [...aperti.keys()].join(", ") + "): se sono già state assegnate a " +
+    "qualche studente l'eliminazione viene rifiutata.");
+
+  const cats = new Map();
+  allQuestions.filter(q => via.has(q.id)).forEach(q => { const c = q.categoria + (q.sottocateg ? " › " + q.sottocateg : ""); cats.set(c, (cats.get(c) || 0) + 1); });
+  const vuote = [...cats.keys()].filter(c => !rimaste.some(q => q.categoria + (q.sottocateg ? " › " + q.sottocateg : "") === c));
+  if (vuote.length) righe.push("Restano vuote, e quindi spariscono dai menu: " + vuote.join(", ") + ".");
+
+  if (!confirm((n === 1 ? "Eliminare la domanda " + ids[0] + "?" : "Eliminare " + n + " domande?") +
+      (righe.length ? "\n\n" + righe.join("\n\n") : "") +
+      "\n\nLe righe vengono spostate nel foglio «eliminate» delle Domande: il dettaglio dei risultati " +
+      "degli esami passati resta leggibile, e una domanda si recupera ricopiandone la riga.")) return;
+
+  const flash = t => { bancoBulkFlash = t; renderBulkBar(); };
+  flash("Eliminazione…");
+  let res;
+  try { res = await callScript({ action: "deleteQuestions", password: adminPassword, ids }); }
+  catch(e) { flash(""); alert("Eliminazione non riuscita: " + e.message); return; }
+  if (res.status === "blocked") {
+    flash("");
+    alert("Nessuna domanda eliminata: " + (res.blocked.length === 1 ? "una è già assegnata" : res.blocked.length + " sono già assegnate") +
+      " a studenti di esami aperti.\n\n" + lista(res.blocked.map(b => "  • " + b.id + " — " + b.exams.join(", ")), 10) +
+      "\n\nChiudi quegli esami, oppure togli queste domande dalla selezione.");
+    return;
+  }
+  if (res.status !== "ok") { flash(""); alert("Eliminazione non riuscita: " + (res.message || "errore") + versioneScriptHint()); return; }
+
+  const tolte = new Set(res.deleted);
+  deletedQuestions = deletedQuestions.concat(allQuestions.filter(q => tolte.has(q.id)));
+  allQuestions = allQuestions.filter(q => !tolte.has(q.id));
+  tolte.forEach(id => bancoChecked.delete(id));
+  if (bancoEdit && tolte.has(bancoEdit.id)) bancoEdit = null;
+  if (tolte.has(bancoSelected)) bancoSelected = null;
+  (res.tracce || []).forEach(x => {
+    const t = allTracks.find(t => t.track_id === x.track_id);
+    if (t) t.items = x.items;
+  });
+  // La traccia aperta nel tab Tracce: via solo gli slot eliminati, senza perdere modifiche in corso
+  if (res.tracce && res.tracce.length) {
+    trackItems = trackItems.filter(it => !(it.type === "fixed" && tolte.has(it.id)));
+    try { renderItemsList(); } catch(e) {}
+  }
+  _bancoIndex = null;
+  bancoBulkFlash = "✓ " + (tolte.size === 1 ? "Eliminata una domanda" : "Eliminate " + tolte.size + " domande") +
+    ((res.tracce || []).length ? ", tolte da " + res.tracce.length + (res.tracce.length === 1 ? " traccia" : " tracce") : "");
+  refreshCategoryMenus();
+  renderBanco();
+  renderQBrowser();
+}
+
 let bulkRemove = new Set();   // tag da togliere, scelti cliccando
 
 function bulkSelected() { return allQuestions.filter(q => bancoChecked.has(q.id)); }
@@ -2523,13 +2705,12 @@ function openBulkEdit() {
   const catVals = [...new Set(sel.map(q => q.categoria))], subVals = [...new Set(sel.map(q => q.sottocateg))];
   const statoVals = [...new Set(sel.map(q => q.stato || "verificato"))], puntiVals = [...new Set(sel.map(q => q.punti))];
   ["cat", "sub", "stato", "punti"].forEach(f => document.getElementById("bulk-on-" + f).checked = false);
-  document.getElementById("bulk-cat").value   = uno(catVals);
-  document.getElementById("bulk-sub").value   = uno(subVals);
+  const cp = catPicker("bulk", uno(catVals), uno(subVals), () => bulkRefresh());
+  document.getElementById("bulk-cp-cat").innerHTML = cp.cat;
+  document.getElementById("bulk-cp-sub").innerHTML = cp.sub;
   document.getElementById("bulk-stato").value = uno(statoVals) || "verificato";
   document.getElementById("bulk-punti").value = uno(puntiVals);
   document.getElementById("bulk-addtags").value = "";
-  document.getElementById("bulk-cats").innerHTML = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort()
-    .map(v => `<option value="${escAttr(v)}">`).join("");
   bulkRemove = new Set();
   const tags = conteggio(sel.flatMap(q => splitTagList(q.tags)));
   document.getElementById("bulk-tags").innerHTML = tags.length
@@ -2556,8 +2737,8 @@ function bulkToggleTag(el) {
 function bulkChanges() {
   const on = f => document.getElementById("bulk-on-" + f).checked, val = id => document.getElementById(id).value;
   const set = {};
-  if (on("cat"))   set.categoria  = val("bulk-cat").trim();
-  if (on("sub"))   set.sottocateg = val("bulk-sub").trim();
+  if (on("cat"))   set.categoria  = _cp.bulk.cat;
+  if (on("sub"))   set.sottocateg = _cp.bulk.sub;
   if (on("stato")) set.stato      = val("bulk-stato");
   if (on("punti")) set.punti      = Number(String(val("bulk-punti")).replace(",", "."));
   return { set, addTags: splitTagList(val("bulk-addtags")), removeTags: [...bulkRemove] };
@@ -2573,14 +2754,10 @@ function bulkApplyTo(q, ch) {
 }
 
 function bulkRefresh() {
-  ["cat", "sub", "stato", "punti"].forEach(f => {
-    const on = document.getElementById("bulk-on-" + f).checked;
-    document.getElementById("bulk-" + f).disabled = !on;
-  });
-  const cat = document.getElementById("bulk-on-cat").checked ? document.getElementById("bulk-cat").value.trim() : "";
-  const sel = bulkSelected(), selCats = new Set(sel.map(q => q.categoria));
-  document.getElementById("bulk-subs").innerHTML = [...new Set(allQuestions.filter(q => cat ? q.categoria === cat : selCats.has(q.categoria))
-    .map(q => q.sottocateg).filter(Boolean))].sort().map(v => `<option value="${escAttr(v)}">`).join("");
+  ["stato", "punti"].forEach(f => document.getElementById("bulk-" + f).disabled = !document.getElementById("bulk-on-" + f).checked);
+  ["-cat", "-cat-new"].forEach(x => document.getElementById("bulk" + x).disabled = !document.getElementById("bulk-on-cat").checked);
+  ["-sub", "-sub-new"].forEach(x => document.getElementById("bulk" + x).disabled = !document.getElementById("bulk-on-sub").checked);
+  const sel = bulkSelected();
 
   const ch = bulkChanges(), eff = document.getElementById("bulk-effect"), go = document.getElementById("bulk-go");
   const errori = [];
@@ -2640,7 +2817,7 @@ async function bulkApply() {
     closeBulkEdit();
     bancoBulkFlash = `✓ ${res.questions.length} ${res.questions.length === 1 ? "domanda modificata" : "domande modificate"}` +
       (res.missing && res.missing.length ? ` (${res.missing.length} non più nel foglio)` : "");
-    populateBancoFilters();
+    refreshCategoryMenus();
     renderBanco(true);
     renderQBrowser();
   } catch(e) {
@@ -2651,8 +2828,7 @@ async function bulkApply() {
 }
 
 function bancoResetFilters() {
-  ["banco-q", "banco-tipo", "banco-cat", "banco-subcat", "banco-stato", "banco-uso"].forEach(id => document.getElementById(id).value = "");
-  populateBancoSubcat();
+  ["banco-q", "banco-tipo", "banco-cattree", "banco-stato", "banco-uso"].forEach(id => document.getElementById(id).value = "");
   renderBanco();
 }
 
@@ -2778,6 +2954,7 @@ function renderBancoDetail() {
   main.innerHTML =
     `<div class="banco-detail-actions">
        <button class="btn btn-sm" onclick="bancoEditStart()">Modifica</button>
+       <button class="btn btn-sm btn-outline" onclick="bancoDelete(['${q.id}'])">Elimina…</button>
        ${flash}
      </div>` +
     `<div class="prev-meta" style="margin:0;">${escHtml(q.categoria)}${q.sottocateg ? " › " + escHtml(q.sottocateg) : ""}` +
@@ -3071,7 +3248,6 @@ function renderBancoEditor() {
     nota += `<div class="be-note">Resta nel formato vecchio (colonne I, J, M)${d.legacyMotivo ? ": " + escHtml(d.legacyMotivo) : ""}. ` +
             `Qui si modificano testo e metadati; per convertirla, riscrivila con la sintassi nuova.</div>`;
   }
-  const uniq = f => [...new Set(allQuestions.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
 
   document.getElementById("bd-main").innerHTML = `
     <div class="be-head"><strong>Modifica</strong> <code>${escHtml(q.id)}</code></div>
@@ -3088,10 +3264,9 @@ function renderBancoEditor() {
           <option value="verificato" ${d.stato === "verificato" ? "selected" : ""}>verificato</option>
           <option value="bozza" ${d.stato === "bozza" ? "selected" : ""}>bozza</option>
         </select></label>
-      <label class="be-field">Categoria
-        <input type="text" list="be-cats" value="${escAttr(d.categoria)}" oninput="bancoEditSet('categoria', this.value)"></label>
-      <label class="be-field">Sottocategoria
-        <input type="text" list="be-subcats" value="${escAttr(d.sottocateg)}" oninput="bancoEditSet('sottocateg', this.value)"></label>
+      ${(cp => `<label class="be-field">Categoria ${cp.cat}</label><label class="be-field">Sottocategoria ${cp.sub}</label>`)(
+          catPicker("be", d.categoria, d.sottocateg, (cat, sub) => {
+            Object.assign(bancoEdit.draft, { categoria: cat, sottocateg: sub }); bancoEditRefresh(); }))}
       <label class="be-field">Tag
         <input type="text" value="${escAttr(d.tags)}" placeholder="separati da virgola" oninput="bancoEditSet('tags', this.value)"></label>
     </div>
@@ -3113,8 +3288,7 @@ function renderBancoEditor() {
       <button class="btn btn-sm btn-outline" onclick="bancoEditCancel()">Annulla</button>
       <span id="be-msg"></span>
     </div>
-    <datalist id="be-cats">${uniq(x => x.categoria).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>
-    <datalist id="be-subcats">${uniq(x => x.sottocateg).map(c => `<option value="${escAttr(c)}">`).join("")}</datalist>`;
+`;
   document.getElementById("bd-sol").innerHTML = "";
   e.provaFp = null;
   renderBancoEditTipo();
@@ -3529,7 +3703,7 @@ async function importMoodleRun() {
   }
   moodleImport.inCorso = false;
   _bancoIndex = null;
-  populateBancoFilters();
+  refreshCategoryMenus();
   renderBanco();
   renderQBrowser();
   const hint = errori ? versioneScriptHint() : "";
@@ -3766,7 +3940,7 @@ async function bancoSave(asNew) {
       bancoEdit = null;
       bancoSelected = fresh.id;
       bancoFlash = { id: fresh.id, text: asNew ? "✓ Creata come nuova domanda " + fresh.id + " (l'originale è invariata)" : "✓ Salvata" };
-      populateBancoFilters();
+      refreshCategoryMenus();
       renderBanco(true);   // ridisegna anche il dettaglio, col messaggio di conferma
       const row = document.querySelector(`#banco-list .q-row[data-id="${fresh.id}"]`);
       if (row) row.scrollIntoView({ block: "nearest" });
@@ -4267,35 +4441,27 @@ async function doCreateTraccia() {
 
 // ---- FILTRI BROWSER ----
 function buildCategoryFilters() {
-  const cats = [...new Set(allQuestions.map(q => q.categoria).filter(Boolean))].sort();
-  const catSel = document.getElementById("f-cat");
-  catSel.innerHTML = '<option value="">— tutte —</option>';
-  cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; catSel.appendChild(o); });
+  if (!allQuestions) return;
+  catTreeFill(document.getElementById("f-cattree"), "— tutte —", false);
+  const keep = (sel, fill) => { const prev = sel.value; fill(); if ([...sel.options].some(o => o.value === prev)) sel.value = prev; };
 
   const tags = [...new Set(allQuestions.flatMap(q =>
     (q.tags || "").split(",").map(t => t.trim()).filter(Boolean)
   ))].sort();
   const tagSel = document.getElementById("f-tag");
-  tagSel.innerHTML = '<option value="">— tutti —</option>';
-  tags.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tagSel.appendChild(o); });
+  keep(tagSel, () => {
+    tagSel.innerHTML = '<option value="">— tutti —</option>';
+    tags.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tagSel.appendChild(o); });
+  });
 
   const pts = [...new Set(allQuestions.map(q => q.punti).filter(v => v != null))].sort((a,b) => a-b);
   const ptsSel = document.getElementById("f-pts");
-  ptsSel.innerHTML = '<option value="">— tutti —</option>';
-  pts.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p + " pt"; ptsSel.appendChild(o); });
+  keep(ptsSel, () => {
+    ptsSel.innerHTML = '<option value="">— tutti —</option>';
+    pts.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p + " pt"; ptsSel.appendChild(o); });
+  });
 }
 
-function updateSubcatFilter() {
-  const cat = document.getElementById("f-cat").value;
-  const subcats = [...new Set(
-    allQuestions.filter(q => !cat || q.categoria === cat).map(q => q.sottocateg).filter(Boolean)
-  )].sort();
-  const subSel = document.getElementById("f-subcat");
-  subSel.innerHTML = '<option value="">— tutte —</option>';
-  subcats.forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = s; subSel.appendChild(o); });
-}
-
-function onCatChange()     { updateSubcatFilter(); renderQBrowser(); }
 function filterQuestions() { renderQBrowser(); }
 
 async function toggleStato(id) {
@@ -4334,9 +4500,7 @@ function setFiltersFromItem(item) {
     subcat = item.sottocateg || "";
     tag    = item.tag        || "";
   }
-  document.getElementById("f-cat").value = cat;
-  updateSubcatFilter();
-  document.getElementById("f-subcat").value = subcat;
+  catTreeSet(document.getElementById("f-cattree"), cat || null, subcat);
   document.getElementById("f-tag").value = tag;
   document.getElementById("f-pts").value = "";
   renderQBrowser();
@@ -4354,14 +4518,12 @@ function statBadgeHtml(qid) {
 }
 
 function renderQBrowser() {
-  const cat    = document.getElementById("f-cat").value;
-  const subcat = document.getElementById("f-subcat").value;
+  const ramo   = catTreeValue(document.getElementById("f-cattree"));
   const tag    = document.getElementById("f-tag").value;
   const pts    = document.getElementById("f-pts").value;
   const stato  = document.getElementById("f-stato").value;
   const filtered = allQuestions.filter(q => {
-    if (cat    && q.categoria  !== cat)    return false;
-    if (subcat && q.sottocateg !== subcat) return false;
+    if (!catTreeMatch(ramo, q)) return false;
     if (tag) {
       const qTags = (q.tags || "").split(",").map(t => t.trim());
       if (!qTags.includes(tag)) return false;
@@ -4418,8 +4580,9 @@ function addFixedItem(id) {
 
 function addRandomItem() {
   if (!isEditingItems) return;
-  const categoria  = document.getElementById("f-cat").value;
-  const sottocateg = document.getElementById("f-subcat").value;
+  const ramo       = catTreeValue(document.getElementById("f-cattree"));
+  const categoria  = ramo.cat || "";
+  const sottocateg = ramo.sub || "";
   const tag        = document.getElementById("f-tag").value;
   const ptsVal     = document.getElementById("f-pts").value;
   const punti      = ptsVal !== "" ? Number(ptsVal) : undefined;

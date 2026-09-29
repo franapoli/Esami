@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.4.0"; // aggiornare ad ogni deploy
+const VERSION = "3.5.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -337,6 +337,31 @@ function getEsamiSheet() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+// Cestino: le domande eliminate dall'admin finiscono qui, con la data, invece di sparire.
+// Servono al dettaglio dei risultati degli esami passati e si recuperano a mano, ricopiando la riga.
+const TRASH_SHEET = "eliminate";
+
+function getTrashSheet(create) {
+  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  let sheet = ss.getSheetByName(TRASH_SHEET);
+  if (!sheet && create) {
+    sheet = ss.insertSheet(TRASH_SHEET);
+    const headers = ["ID", "Corso", "Categoria", "Sottocategoria", "Tag", "Stato", "Tipo", "Testo", "Opzioni",
+                     "Corretta", "Punti", "Placeholder", "Dati", "Eliminata il"];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function loadDeletedQuestions() {
+  const sheet = getTrashSheet(false);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, Q_DATA + 1).getValues()
+    .filter(r => String(r[Q_ID]).trim()).map(rowToQuestion);
 }
 
 // Legge tutte le domande come mappa id → oggetto
@@ -1498,7 +1523,9 @@ function doPost(e) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const allQ = loadAllQuestions();
-      return corsResponse({ status: "ok", questions: Object.values(allQ) });
+      let deleted = [];
+      try { deleted = loadDeletedQuestions(); } catch(e) {}
+      return corsResponse({ status: "ok", questions: Object.values(allQ), deleted: deleted });
     }
 
     // getImagesAdmin — immagini per preview ed export. Serve solo ID citati nel banco
@@ -1511,7 +1538,9 @@ function doPost(e) {
       }
       const allQ = loadAllQuestions();
       const known = {};
-      Object.values(allQ).forEach(q => imageIdsInText(q.testo).forEach(id => known[id] = true));
+      let deleted = [];
+      try { deleted = loadDeletedQuestions(); } catch(e) {}
+      Object.values(allQ).concat(deleted).forEach(q => imageIdsInText(q.testo).forEach(id => known[id] = true));
       const ids = (Array.isArray(data.ids) ? data.ids : []).map(String).filter(id => known[id] || fileInTree(id));
       return corsResponse({ status: "ok", images: loadImagesData(ids) });
     }
@@ -1653,6 +1682,81 @@ function doPost(e) {
           a = b + 1;
         }
         return corsResponse({ status: "ok", questions: changed.map(x => x.q),
+                              missing: Object.keys(ids).filter(id => !trovate[id]) });
+      } finally {
+        try { lock.releaseLock(); } catch(e) {}
+      }
+    }
+
+    // deleteQuestions — elimina domande dal banco. Rifiuta tutto se una è assegnata a uno studente
+    // di un esame aperto (la correzione alla consegna ne ha bisogno). Le righe vanno nel cestino;
+    // le tracce che le avevano come slot fissi le perdono (gli slot casuali si adeguano da soli).
+    if (data.action === "deleteQuestions") {
+      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      const ids = {};
+      (data.ids || []).forEach(id => { id = String(id).trim(); if (id) ids[id] = true; });
+      if (!Object.keys(ids).length) return corsResponse({ status: "ok", deleted: [], tracce: [], missing: [] });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        // 1. Domande assegnate negli esami aperti
+        const blocked = {};
+        const resultsSS = SpreadsheetApp.openById(getSheetResultsId());
+        getEsamiSheet().getDataRange().getValues().slice(1).forEach(row => {
+          if (String(row[E_STATO]).trim() !== "open") return;
+          const examId = String(row[E_ID]).trim();
+          const sh = examId && resultsSS.getSheetByName(examId);
+          if (!sh || sh.getLastRow() < 2) return;
+          sh.getRange(2, COL_QIDS, sh.getLastRow() - 1, 1).getValues().forEach(r => {
+            String(r[0] || "").split(",").forEach(x => {
+              const id = x.split(":")[0].trim();
+              if (ids[id]) (blocked[id] = blocked[id] || {})[examId] = true;
+            });
+          });
+        });
+        const bl = Object.keys(blocked).map(id => ({ id: id, exams: Object.keys(blocked[id]) }));
+        if (bl.length) return corsResponse({ status: "blocked", blocked: bl });
+
+        // 2. Righe da eliminare, copiate nel cestino
+        const sheet  = getQuestionsSheet();
+        const values = sheet.getDataRange().getValues();
+        const rows = [], trovate = {};
+        for (let i = 1; i < values.length; i++) {
+          const id = String(values[i][Q_ID]).trim();
+          if (ids[id]) { rows.push(i + 1); trovate[id] = true; }
+        }
+        if (rows.length) {
+          const trash = getTrashSheet(true);
+          const now = new Date();
+          const copie = rows.map(r => questionRowValues(String(values[r - 1][Q_ID]).trim(), rowToQuestion(values[r - 1])).concat([now]));
+          const first = trash.getLastRow() + 1;
+          trash.getRange(first, Q_CORSO + 1, copie.length, Q_CORRETTA - Q_CORSO + 1).setNumberFormat("@");
+          trash.getRange(first, Q_PLACEHOLDER + 1, copie.length, Q_DATA - Q_PLACEHOLDER + 1).setNumberFormat("@");
+          trash.getRange(first, 1, copie.length, Q_DATA + 2).setValues(copie);
+          // Dal basso, a blocchi di righe consecutive
+          for (let b = rows.length - 1; b >= 0; ) {
+            let a = b;
+            while (a > 0 && rows[a - 1] === rows[a] - 1) a--;
+            sheet.deleteRows(rows[a], b - a + 1);
+            b = a - 1;
+          }
+        }
+
+        // 3. Slot fissi nelle tracce
+        const tracce = [];
+        const tSheet = getTracceSheet();
+        const tValues = tSheet.getDataRange().getValues();
+        for (let i = 1; i < tValues.length; i++) {
+          let items;
+          try { items = JSON.parse(String(tValues[i][T_ITEMS] || "") || "[]"); } catch(e) { continue; }
+          if (!Array.isArray(items)) continue;
+          const rest = items.filter(it => !(it && it.type === "fixed" && ids[String(it.id)]));
+          if (rest.length !== items.length) {
+            tSheet.getRange(i + 1, T_ITEMS + 1).setValue(JSON.stringify(rest));
+            tracce.push({ track_id: String(tValues[i][T_ID]).trim(), removed: items.length - rest.length, items: rest });
+          }
+        }
+        return corsResponse({ status: "ok", deleted: Object.keys(trovate), tracce: tracce,
                               missing: Object.keys(ids).filter(id => !trovate[id]) });
       } finally {
         try { lock.releaseLock(); } catch(e) {}
