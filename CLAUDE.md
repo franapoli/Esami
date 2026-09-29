@@ -62,7 +62,7 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 **Drive folder** (`1FCl15simn4Ev363a59aEfOq1qZF4T78H`): admin can list spreadsheets in this folder and create new Questions/Results sheets from the UI. New sheets are moved into the folder via `DriveApp` (requires `oauthScopes` in `appsscript.json` including `https://www.googleapis.com/auth/drive`).
 
 **Apps Script (`quiz_apps_script_v2.js`)** — single `doPost` dispatcher. Actions:
-- `getTrack` — returns exam metadata + counts (`n_questions`, `total_pts`) for the cover; duration includes `extra_time:EXAM_ID:all` from `_config`. **Never returns question content** (anti pre-exam harvesting).
+- `getTrack` — returns exam metadata + counts (`n_questions`, `total_pts`) for the cover; duration includes `extra_time:EXAM_ID:all` from `_config`. **Never returns question content** (anti pre-exam harvesting). With `light:true` (3.6.0+, used by the student's `refreshDuration`) it returns only `{exam_id, duration, mode, status}` without resolving the traccia; older scripts ignore the flag.
 - `verifyTrackPassword` — checks per-exam access password
 - `getAllTracks` / `setTrack` / `createTrack` — admin: list/update/create **tracce** (templates)
 - `getAllEsami` / `setEsame` / `createEsame` — admin: list/update/create **esami** (sessions)
@@ -80,7 +80,7 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 - `listFolders` / `createFolder` / `uploadImage` — admin: browse/create folders and upload images, restricted to the QuizForge Drive tree (`folderPathInTree`, `folderInTree`)
 - `getMonitor` / `getResults` — admin: read student progress/scores
 - `init` — assigns questions **server-side** (ignores any client-sent IDs), stores them in `COL_QIDS`, returns the question objects (without correct answers) to render
-- `update` — saves only the raw answer (no points); rejected after finalization; response includes `extra_minutes_individual` for per-student extra time
+- `update` — saves only the raw answer (no points); rejected after finalization; response includes `extra_minutes_individual` for per-student extra time. Handled **before** `resolveEsame` (3.6.0+): it reads only the esami row and the matricola column, never the question bank — it is the hottest path during an exam.
 - `finalize` — recomputes the score **server-side** from `COL_QIDS`; ignores client score/pts; uses server timestamps; checks elapsed against `duration + extra_all + extra_individual`; freezes the score on first submit (re-finalize is idempotent → anti-oracle); returns correct answers only in practice
 - `resetPractice` — practice mode: deletes previous row and re-assigns questions server-side
 - `abandon` — delete student row (abandon in progress)
@@ -88,6 +88,16 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 - `createSheet` — create a new Questions or Results spreadsheet in the Drive folder
 - `getConfig` / `saveSheetConfig` — read/write ScriptProperties (sheet IDs, script URL)
 - `listDriveFolder` — list spreadsheets in the configured Drive folder
+
+## Performance notes (3.6.0)
+
+Each script call costs ~1.2 s of fixed Google overhead, and each spreadsheet opened and read adds roughly another second. Hence:
+- `openSS(id)` memoizes `SpreadsheetApp.openById` per execution (esami, tracce, questions and trash share one file). Never call `SpreadsheetApp.openById` directly.
+- Admin auth goes through `isAdmin(pwd)`: the correct password is cached in `CacheService` for `ADMIN_PWD_TTL` (60 s), keyed by the results sheet ID. A password that differs from the cached one always re-reads `_config`, so a newly changed password works at once; the old one stays valid at most 60 s (and stops as soon as the new one is used).
+- `findRow` reads only the matricola column.
+- Student client: `refreshDuration` uses `getTrack` light, every 60 s plus on question change, throttled to once per `DURATION_NAV_MIN_MS` (15 s).
+- Admin client: after login `getConfig` and the question bank load in the background; admin images are requested in parallel groups of `IMG_ADMIN_GRUPPO`.
+- Page rendering is not the bottleneck (a 3000-question bank renders in <70 ms).
 
 ## Security model (v2.12+) — anti-cheating
 

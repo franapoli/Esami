@@ -1033,7 +1033,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "ddb0a3b";
+const BUILD = "566f605";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1221,16 +1221,25 @@ function describeImageProblems(problems) {
 // Scarica le immagini non ancora caricate, e riprova quelle in errore (il file potrebbe
 // essere stato corretto nel frattempo). true solo se qualcosa è cambiato: chi ri-renderizza
 // in base al risultato non entra così in un ciclo.
+// Lo script legge i file dal Drive uno dopo l'altro: più immagini si chiedono in gruppi
+// paralleli, ciascuno letto da un'esecuzione diversa.
+const IMG_ADMIN_GRUPPO = 3;
 async function fetchAdminImages(ids) {
   const missing = ids.filter(id => typeof adminImages[id] !== "string");
   if (!missing.length) return false;
-  const res = await callScript({ action: "getImagesAdmin", password: adminPassword, ids: missing });
-  if (!res || res.status !== "ok") return false;
+  const gruppi = [];
+  for (let i = 0; i < missing.length; i += IMG_ADMIN_GRUPPO) gruppi.push(missing.slice(i, i + IMG_ADMIN_GRUPPO));
+  const risposte = await Promise.all(gruppi.map(g =>
+    callScript({ action: "getImagesAdmin", password: adminPassword, ids: g }).catch(() => null)));
   let changed = false;
-  missing.forEach(id => {
-    const v = (res.images || {})[id] ?? { error: "not_found" };
-    if (JSON.stringify(v) !== JSON.stringify(adminImages[id])) changed = true;
-    adminImages[id] = v;
+  gruppi.forEach((g, k) => {
+    const res = risposte[k];
+    if (!res || res.status !== "ok") return;   // gruppo non riuscito: le sue immagini restano da caricare
+    g.forEach(id => {
+      const v = (res.images || {})[id] ?? { error: "not_found" };
+      if (JSON.stringify(v) !== JSON.stringify(adminImages[id])) changed = true;
+      adminImages[id] = v;
+    });
   });
   return changed;
 }
@@ -1260,8 +1269,7 @@ async function doLogin() {
       document.getElementById("build-label").textContent =
         "build " + BUILD + " · v" + res.version;
     }
-    setLoadingMsg("Caricamento configurazione…");
-    await loadSheetConfig();
+    loadSheetConfig();       // background: nomi dei fogli e link dell'intestazione, non servono per entrare
 
     // Mostra il pannello
     document.getElementById("login-panel").style.display = "none";
@@ -1271,6 +1279,9 @@ async function doLogin() {
     ensureTracksLoaded();    // background: popola traccia-selects e crossref
     ensureDriveListLoaded(); // background: popola i select Drive
     loadAdminBackend().catch(() => {}); // background: conversione del formato nel testo per elenchi, export, risultati
+    ensureQuestionsLoaded().then(() => {  // background: tab Domande e Tracce pronti quando li apri
+      if (activeTab === "banco") initBancoTab();
+    }).catch(() => {});
   } catch(e) {
     document.getElementById("loading-overlay").classList.remove("active");
     document.getElementById("login-error").textContent = "Errore di rete: " + e.message;

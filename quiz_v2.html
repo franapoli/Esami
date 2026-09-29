@@ -929,7 +929,7 @@ function prevQ()    { if (current > 0)                    { saveCurrentAnswer();
 function saveCurrentAnswer() {
   const ans = answers[current];
   if (ans !== null && ans !== undefined) enqueueProgress(current, ans);
-  refreshDuration(); // aggiorna durata dalla traccia in background
+  refreshDuration(true); // tempo extra: oltre al controllo ogni minuto, anche cambiando domanda
 }
 
 // ---- CODA SERIALIZZATA CON DEDUPLICA ----
@@ -958,10 +958,17 @@ async function _flushSaveQueue() {
 }
 
 // ---- AGGIORNAMENTO DURATA DA SERVER ----
-async function refreshDuration() {
+// light: lo script restituisce solo la durata (con il tempo extra per tutti), senza risolvere la
+// traccia. Cambiando domanda il controllo parte al massimo ogni DURATION_NAV_MIN_MS: sfogliare le
+// domande non deve diventare una raffica di chiamate, ognuna delle quali occupa lo script.
+const DURATION_NAV_MIN_MS = 15000;
+let _lastDurationCheck = 0;
+async function refreshDuration(fromNavigation) {
   if (EXAM_MODE === "practice" || quizEnded) return;
+  if (fromNavigation && Date.now() - _lastDurationCheck < DURATION_NAV_MIN_MS) return;
+  _lastDurationCheck = Date.now();
   try {
-    const res = await callScript({ action: "getTrack", examId: EXAM_ID });
+    const res = await callScript({ action: "getTrack", examId: EXAM_ID, light: true });
     if (res.status !== "ok" || !res.track) return;
     const newDur = res.track.duration !== undefined && res.track.duration !== ""
       ? parseInt(res.track.duration) : EXAM_DURATION_MIN;

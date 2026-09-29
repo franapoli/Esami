@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.5.0"; // aggiornare ad ogni deploy
+const VERSION = "3.6.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -296,11 +296,19 @@ function imagesForStudent(images) {
   return out;
 }
 
+// Ogni file si apre una volta sola per esecuzione: aprire un foglio costa quasi un secondo, e
+// esami, tracce e domande stanno nello stesso file. L'oggetto vale solo per la chiamata in corso
+// (le variabili globali ripartono da zero a ogni esecuzione dello script).
+const _ssAperti = {};
+function openSS(id) {
+  return _ssAperti[id] || (_ssAperti[id] = SpreadsheetApp.openById(id));
+}
+
 // ------------------------------------------------------------
 // Repository domande
 // ------------------------------------------------------------
 function getQuestionsSheet() {
-  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  const ss = openSS(getSheetQuestionsId());
   let sheet = ss.getSheetByName("questions");
   if (!sheet) {
     sheet = ss.insertSheet("questions");
@@ -314,7 +322,7 @@ function getQuestionsSheet() {
 }
 
 function getTracceSheet() {
-  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  const ss = openSS(getSheetQuestionsId());
   let sheet = ss.getSheetByName("tracce");
   if (!sheet) {
     sheet = ss.insertSheet("tracce");
@@ -327,7 +335,7 @@ function getTracceSheet() {
 }
 
 function getEsamiSheet() {
-  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  const ss = openSS(getSheetQuestionsId());
   let sheet = ss.getSheetByName("esami");
   if (!sheet) {
     sheet = ss.insertSheet("esami");
@@ -344,7 +352,7 @@ function getEsamiSheet() {
 const TRASH_SHEET = "eliminate";
 
 function getTrashSheet(create) {
-  const ss = SpreadsheetApp.openById(getSheetQuestionsId());
+  const ss = openSS(getSheetQuestionsId());
   let sheet = ss.getSheetByName(TRASH_SHEET);
   if (!sheet && create) {
     sheet = ss.insertSheet(TRASH_SHEET);
@@ -1089,7 +1097,7 @@ function resolveTraccia(examId) { return resolveEsame(examId); }
 // Foglio risultati (identico a v1, ma usa SHEET_RESULTS_ID)
 // ------------------------------------------------------------
 function getConfigSheet() {
-  const ss = SpreadsheetApp.openById(getSheetResultsId());
+  const ss = openSS(getSheetResultsId());
   let cfg = ss.getSheetByName("_config");
   if (!cfg) {
     cfg = ss.insertSheet("_config");
@@ -1099,6 +1107,21 @@ function getConfigSheet() {
     cfg.setFrozenRows(1);
   }
   return cfg;
+}
+
+// Controllo della password admin. Rileggere _config a ogni chiamata vuol dire aprire il file
+// Risultati anche quando non serve: la password giusta resta in cache per ADMIN_PWD_TTL secondi.
+// Una password diversa da quella in cache fa sempre rileggere il foglio, quindi una password
+// appena cambiata funziona subito; quella vecchia resta valida al massimo ADMIN_PWD_TTL secondi.
+const ADMIN_PWD_TTL = 60;
+function isAdmin(pwd) {
+  if (pwd === undefined || pwd === null) return false;
+  if (String(pwd) === "") return getAdminPassword() === "";   // come prima: niente cache per il caso vuoto
+  const cache = CacheService.getScriptCache(), key = "admin_pwd:" + getSheetResultsId();
+  if (cache.get(key) === String(pwd)) return true;
+  const real = getAdminPassword();
+  if (real) try { cache.put(key, real, ADMIN_PWD_TTL); } catch(e) {}
+  return String(pwd) === real;
 }
 
 function getAdminPassword() {
@@ -1172,7 +1195,7 @@ function setResumeAll(examId, enabled) {
 }
 
 function getMetaSheet() {
-  const ss = SpreadsheetApp.openById(getSheetResultsId());
+  const ss = openSS(getSheetResultsId());
   let meta = ss.getSheetByName("Esami");
   if (!meta) {
     // retrocompatibilità: rinomina _meta se esiste ancora
@@ -1239,7 +1262,7 @@ function ensureMetaTrack(track) {
 }
 
 function getResultSheet(examId, nQuestions) {
-  const ss = SpreadsheetApp.openById(getSheetResultsId());
+  const ss = openSS(getSheetResultsId());
   let sheet = ss.getSheetByName(examId);
   if (!sheet) {
     sheet = ss.insertSheet(examId);
@@ -1258,9 +1281,11 @@ function getResultSheet(examId, nQuestions) {
 }
 
 function findRow(sheet, matricola) {
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][COL_MATRICOLA - 1]) === String(matricola)) return i + 1;
+  const n = sheet.getLastRow();
+  if (n < 2) return -1;
+  const values = sheet.getRange(2, COL_MATRICOLA, n - 1, 1).getValues();   // solo le matricole
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]) === String(matricola)) return i + 2;
   }
   return -1;
 }
@@ -1280,7 +1305,7 @@ function doPost(e) {
     // addExtraTime — aggiunge (o sottrae) minuti a tutti o a uno studente
     // ----------------------------------------------------------------
     if (data.action === "addExtraTime") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const minutes = Number(data.minutes) || 0;
       const scope   = String(data.scope || "all");   // "all" o matricola specifica
       const examId  = String(data.exam_id || "");
@@ -1294,7 +1319,7 @@ function doPost(e) {
     // setResumeAll — accende/spegne la ripresa d'emergenza per tutto l'esame
     // ----------------------------------------------------------------
     if (data.action === "setResumeAll") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const examId = String(data.exam_id || "");
       if (!examId) return corsResponse({ status: "error", message: "exam_id mancante" });
       const enabled = setResumeAll(examId, !!data.enabled);
@@ -1305,7 +1330,7 @@ function doPost(e) {
     // getConfig — legge gli ID dei fogli attivi (admin)
     // ----------------------------------------------------------------
     if (data.action === "getConfig") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const qId  = getSheetQuestionsId();
@@ -1333,7 +1358,7 @@ function doPost(e) {
     // setConfig — aggiorna gli ID dei fogli in ScriptProperties (admin)
     // ----------------------------------------------------------------
     if (data.action === "setConfig") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const props = PropertiesService.getScriptProperties();
@@ -1361,7 +1386,7 @@ function doPost(e) {
     // listDriveFolder — elenco spreadsheet nella cartella Drive configurata
     // ----------------------------------------------------------------
     if (data.action === "listDriveFolder") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const folderId = data.folder_id || getDriveFolderId();
@@ -1389,7 +1414,7 @@ function doPost(e) {
     // sheet_type: "questions" | "results"
     // ----------------------------------------------------------------
     if (data.action === "createSheet") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const folderId  = data.folder_id || getDriveFolderId();
@@ -1478,6 +1503,15 @@ function doPost(e) {
     if (data.action === "getTrack") {
       const examId = data.examId;
       if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
+      // light: solo la durata aggiornata col tempo extra per tutti (refreshDuration durante la
+      // prova, ogni minuto per ogni studente). Senza risolvere la traccia né leggere il banco.
+      if (data.light) {
+        const es = readEsame(examId);
+        if (!es) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
+        const base = parseInt(es.durata, 10) || 0, extra = getExtraMinutesAll(examId);
+        return corsResponse({ status: "ok", track: { exam_id: es.exam_id, duration: String(extra !== 0 ? base + extra : es.durata),
+                                                     mode: es.modalita, status: es.stato } });
+      }
       const resolved = resolveEsame(examId);
       if (!resolved) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
       ensureMetaTrack(resolved.track);
@@ -1519,7 +1553,7 @@ function doPost(e) {
     // getQuestions — restituisce tutte le domande per l'admin
     // ----------------------------------------------------------------
     if (data.action === "getQuestions") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const allQ = loadAllQuestions();
@@ -1533,7 +1567,7 @@ function doPost(e) {
     // in una domanda salvata): lo script ha accesso all'intero Drive del proprietario, e senza
     // questo filtro la sola password admin basterebbe a leggere qualunque file.
     if (data.action === "getImagesAdmin") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const allQ = loadAllQuestions();
@@ -1548,7 +1582,7 @@ function doPost(e) {
     // listFolders — sottocartelle di una cartella dell'albero QuizForge (la radice se non indicata),
     // con il percorso dalla radice, per lo sfogliatore dell'editor
     if (data.action === "listFolders") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       let folder, path;
       try {
         folder = DriveApp.getFolderById(data.folderId || getDriveFolderId());
@@ -1565,7 +1599,7 @@ function doPost(e) {
     // createFolder — nuova sottocartella dentro l'albero QuizForge. Se ne esiste già una con lo
     // stesso nome la restituisce, invece di crearne un doppione.
     if (data.action === "createFolder") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const name = String(data.name || "").replace(/[\\/]+/g, "-").trim().slice(0, 80);
       if (!name) return corsResponse({ status: "error", message: "Serve un nome per la cartella." });
       if (!folderInTree(data.parentId)) return corsResponse({ status: "error", message: "La cartella non è dentro la cartella QuizForge." });
@@ -1579,7 +1613,7 @@ function doPost(e) {
     // o "QuizForge immagini" se non indicata) e ne restituisce l'ID, da usare come [img:ID].
     // Il file resta privato: lo serve getImages.
     if (data.action === "uploadImage") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const mime = String(data.mime || "");
       if (mime.indexOf("image/") !== 0) return corsResponse({ status: "error", message: "Il file non è un'immagine." });
       let bytes;
@@ -1603,7 +1637,7 @@ function doPost(e) {
     // come l'admin l'ha aperta: se nel frattempo la riga è cambiata (per esempio a mano nel
     // foglio) risponde "conflict" con la versione attuale invece di sovrascriverla.
     if (data.action === "updateQuestion") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const q = normalizeIncomingQuestion(data.question);
       const errors = validateQuestion(q);
       if (errors.length) return corsResponse({ status: "invalid", errors: errors });
@@ -1633,7 +1667,7 @@ function doPost(e) {
     // oltre ai punti. I tag si aggiungono/tolgono rispetto al valore attuale nel foglio, così
     // non si perdono quelli messi nel frattempo. Scrive solo le righe che cambiano davvero.
     if (data.action === "updateQuestionsMeta") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const set = data.set || {};
       const splitTags = v => (Array.isArray(v) ? v : String(v || "").split(",")).map(t => String(t).trim()).filter(Boolean);
       const addTags = splitTags(data.addTags), removeTags = splitTags(data.removeTags);
@@ -1692,7 +1726,7 @@ function doPost(e) {
     // di un esame aperto (la correzione alla consegna ne ha bisogno). Le righe vanno nel cestino;
     // le tracce che le avevano come slot fissi le perdono (gli slot casuali si adeguano da soli).
     if (data.action === "deleteQuestions") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const ids = {};
       (data.ids || []).forEach(id => { id = String(id).trim(); if (id) ids[id] = true; });
       if (!Object.keys(ids).length) return corsResponse({ status: "ok", deleted: [], tracce: [], missing: [] });
@@ -1701,7 +1735,7 @@ function doPost(e) {
       try {
         // 1. Domande assegnate negli esami aperti
         const blocked = {};
-        const resultsSS = SpreadsheetApp.openById(getSheetResultsId());
+        const resultsSS = openSS(getSheetResultsId());
         getEsamiSheet().getDataRange().getValues().slice(1).forEach(row => {
           if (String(row[E_STATO]).trim() !== "open") return;
           const examId = String(row[E_ID]).trim();
@@ -1767,7 +1801,7 @@ function doPost(e) {
     // prima di scrivere; se anche una non è valida non ne scrive nessuna e le elenca, così non
     // restano import a metà. Le righe si scrivono in un unico blocco in fondo al foglio.
     if (data.action === "createQuestions") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const qs = (Array.isArray(data.questions) ? data.questions : []).map(normalizeIncomingQuestion);
       if (!qs.length) return corsResponse({ status: "ok", questions: [] });
       const invalid = [];
@@ -1794,7 +1828,7 @@ function doPost(e) {
     // createQuestion — "salva come nuova" dall'editor: nuova riga con ID nuovo, validata.
     // Diversa da addQuestion, che non valida e scrive i valori così come arrivano.
     if (data.action === "createQuestion") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const q = normalizeIncomingQuestion(data.question);
       const errors = validateQuestion(q);
       if (errors.length) return corsResponse({ status: "invalid", errors: errors });
@@ -1816,7 +1850,7 @@ function doPost(e) {
     // createTrack — crea nuova traccia (solo template domande)
     // ----------------------------------------------------------------
     if (data.action === "createTrack") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet = getTracceSheet();
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       let suffix = "";
@@ -1830,7 +1864,7 @@ function doPost(e) {
     // getAllTracks — elenco tracce (template domande) per admin
     // ----------------------------------------------------------------
     if (data.action === "getAllTracks") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getTracceSheet();
       const values = sheet.getDataRange().getValues();
       const tracks = [];
@@ -1849,7 +1883,7 @@ function doPost(e) {
     // setTrack — aggiorna nome e/o items di una traccia
     // ----------------------------------------------------------------
     if (data.action === "setTrack") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getTracceSheet();
       const values = sheet.getDataRange().getValues();
       for (let i = 1; i < values.length; i++) {
@@ -1866,7 +1900,7 @@ function doPost(e) {
     // createEsame — crea nuova sessione d'esame
     // ----------------------------------------------------------------
     if (data.action === "createEsame") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet = getEsamiSheet();
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       let suffix = "";
@@ -1892,7 +1926,7 @@ function doPost(e) {
     // getAllEsami — elenco sessioni d'esame per admin
     // ----------------------------------------------------------------
     if (data.action === "getAllEsami") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getEsamiSheet();
       const tz     = Session.getScriptTimeZone();
       const values = sheet.getDataRange().getValues();
@@ -1923,7 +1957,7 @@ function doPost(e) {
     // setEsame — aggiorna attributi di una sessione d'esame
     // ----------------------------------------------------------------
     if (data.action === "setEsame") {
-      if (data.password !== getAdminPassword()) return corsResponse({ status: "error", message: "Password errata" });
+      if (!isAdmin(data.password)) return corsResponse({ status: "error", message: "Password errata" });
       const sheet  = getEsamiSheet();
       const values = sheet.getDataRange().getValues();
       for (let i = 0; i < values.length; i++) {
@@ -1959,7 +1993,7 @@ function doPost(e) {
     // getMonitor — studenti di un esame (admin)
     // ----------------------------------------------------------------
     if (data.action === "getMonitor") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const examId  = data.examId;
@@ -1967,7 +2001,7 @@ function doPost(e) {
       const traccia = esame ? readTraccia(esame.traccia_id) : null;
       const nQ      = traccia ? traccia.items.length : 20;
       const resumeAll = getResumeAll(examId);
-      const ss      = SpreadsheetApp.openById(getSheetResultsId());
+      const ss      = openSS(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId), resume_all: resumeAll });
 
@@ -2000,14 +2034,14 @@ function doPost(e) {
     // getResults — punteggi per domanda (admin)
     // ----------------------------------------------------------------
     if (data.action === "getResults") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const examId  = data.examId;
       const esame2  = readEsame(examId);
       const traccia2 = esame2 ? readTraccia(esame2.traccia_id) : null;
       const nQ      = traccia2 ? traccia2.items.length : 20;
-      const ss      = SpreadsheetApp.openById(getSheetResultsId());
+      const ss      = openSS(getSheetResultsId());
       const sheet   = ss.getSheetByName(examId);
       if (!sheet) return corsResponse({ status: "ok", rows: [], track: readMetaTrack(examId) });
 
@@ -2046,10 +2080,10 @@ function doPost(e) {
     // Legge tutti i tab del foglio Risultati e aggrega correct/wrong/skipped per domanda.
     // ----------------------------------------------------------------
     if (data.action === "getQuestionStats") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
-      const ss     = SpreadsheetApp.openById(getSheetResultsId());
+      const ss     = openSS(getSheetResultsId());
       const sheets = ss.getSheets();
       const SKIP   = new Set(["_config", "Esami"]);
       const stats  = {}; // qId → { asked, correct, wrong, skipped }
@@ -2079,7 +2113,7 @@ function doPost(e) {
     // addQuestion — aggiunge domanda al repository con UUID generato
     // ----------------------------------------------------------------
     if (data.action === "addQuestion") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const sheet  = getQuestionsSheet();
@@ -2111,7 +2145,7 @@ function doPost(e) {
     // setQuestionStato — aggiorna solo lo stato bozza/verificato
     // ----------------------------------------------------------------
     if (data.action === "setQuestionStato") {
-      if (data.password !== getAdminPassword()) {
+      if (!isAdmin(data.password)) {
         return corsResponse({ status: "error", message: "Password errata" });
       }
       const qId    = data.id;
@@ -2133,7 +2167,7 @@ function doPost(e) {
     if (data.action === "abandon") {
       const examId = data.examId;
       if (!examId || !data.matricola) return corsResponse({ status: "error", message: "Parametri mancanti" });
-      const ss    = SpreadsheetApp.openById(getSheetResultsId());
+      const ss    = openSS(getSheetResultsId());
       const sheet = ss.getSheetByName(examId);
       if (sheet) {
         const rowIndex = findRow(sheet, data.matricola);
@@ -2154,6 +2188,37 @@ function doPost(e) {
                                                        ": probabilmente serve un deploy più recente." });
     }
     if (!examId) return corsResponse({ status: "error", message: "examId mancante" });
+
+    // ---- UPDATE (salvataggio di una risposta) ----
+    // Il più frequente: uno per risposta, per ogni studente. Serve solo la modalità dell'esame e la
+    // riga dello studente, quindi non risolve la traccia né legge il banco domande. Il punteggio
+    // non si calcola qui ma in finalize, dagli ID assegnati.
+    if (data.action === "update") {
+      const esame = readEsame(examId);
+      if (!esame) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
+      const sheet = openSS(getSheetResultsId()).getSheetByName(examId);
+      const rowIndex = sheet ? findRow(sheet, data.matricola) : -1;
+      if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
+      // Blocca modifiche dopo la consegna definitiva (anti-manomissione, exam mode)
+      if (esame.modalita !== "practice") {
+        const ended = sheet.getRange(rowIndex, COL_TS_END).getValue();
+        if (ended !== "" && ended !== null) {
+          return corsResponse({ status: "error", message: "Esame già consegnato" });
+        }
+      }
+      const qIdx = parseInt(data.qIndex, 10);
+      // Protezione: qIndex valido (>=1) per non scrivere mai nelle colonne di metadati
+      // (Score, Totale, Durata...) che precedono la prima colonna risposta.
+      if (!Number.isInteger(qIdx) || qIdx < 1) {
+        return corsResponse({ status: "error", message: "qIndex non valido" });
+      }
+      const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
+      // Salva solo la risposta grezza — il punteggio è calcolato server-side in finalize
+      sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
+      // Restituisce extra tempo individuale (NON include "all", già gestito via getTrack)
+      const extraInd = getExtraMinutesIndividual(esame.exam_id, data.matricola);
+      return corsResponse({ status: "ok", extra_minutes_individual: extraInd });
+    }
 
     const resolved = resolveEsame(examId);
     if (!resolved) return corsResponse({ status: "error", message: "Esame non trovato: " + examId });
@@ -2225,30 +2290,6 @@ function doPost(e) {
     }
 
     // ---- UPDATE ----
-    if (data.action === "update") {
-      const rowIndex = findRow(sheet, data.matricola);
-      if (rowIndex === -1) return corsResponse({ status: "error", message: "Matricola non trovata" });
-      // Blocca modifiche dopo la consegna definitiva (anti-manomissione, exam mode)
-      if (track.mode !== "practice") {
-        const ended = sheet.getRange(rowIndex, COL_TS_END).getValue();
-        if (ended !== "" && ended !== null) {
-          return corsResponse({ status: "error", message: "Esame già consegnato" });
-        }
-      }
-      const qIdx = parseInt(data.qIndex, 10);
-      // Protezione: qIndex valido (>=1) per non scrivere mai nelle colonne di metadati
-      // (Score, Totale, Durata...) che precedono la prima colonna risposta.
-      if (!Number.isInteger(qIdx) || qIdx < 1) {
-        return corsResponse({ status: "error", message: "qIndex non valido" });
-      }
-      const col  = COL_ANS_FIRST + (qIdx - 1) * 2;
-      // Salva solo la risposta grezza — il punteggio è calcolato server-side in finalize
-      sheet.getRange(rowIndex, col).setValue(data.ans !== undefined ? data.ans : "");
-      // Restituisce extra tempo individuale (NON include "all", già gestito via getTrack)
-      const extraInd = getExtraMinutesIndividual(track.exam_id, data.matricola);
-      return corsResponse({ status: "ok", extra_minutes_individual: extraInd });
-    }
-
     // ---- RESUME (ripresa d'emergenza, es. blackout) ----
     // Consente di recuperare una sessione NON consegnata da qualsiasi dispositivo,
     // SOLO se il docente ha acceso l'interruttore globale per questo esame.
