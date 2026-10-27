@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.7.1"; // aggiornare ad ogni deploy
+const VERSION = "3.7.2"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1184,6 +1184,14 @@ function verifyGoogleToken(idToken) {
   if (String(t.email_verified) !== "true") return { error: "L'email dell'account Google non è verificata." };
   if (Number(t.exp) * 1000 < Date.now()) return { error: "Accesso Google scaduto: riprova." };
   return t;
+}
+
+// Da eseguire UNA VOLTA dall'editor dopo il deploy (menu delle funzioni → autorizzaAccessoGoogle →
+// Esegui): fa comparire la richiesta del permesso «Connettersi a un servizio esterno», senza il
+// quale googleLogin non può far verificare gli accessi a Google.
+function autorizzaAccessoGoogle() {
+  const r = UrlFetchApp.fetch("https://oauth2.googleapis.com/tokeninfo?id_token=prova", { muteHttpExceptions: true });
+  console.log("Autorizzazione OK: Google raggiungibile (risposta " + r.getResponseCode() + " al token di prova, atteso 400).");
 }
 
 function ruoloPerEmail(email, hd) {
