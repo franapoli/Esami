@@ -114,6 +114,10 @@
   .badge-done { background: #c8e6c9; color: #1b5e20; }
   .badge-prog { background: #fff9c4; color: #f57f17; }
   .badge-wait { background: #f5f5f5; color: #666; }
+  .badge-ospite { font-size: 0.72em; padding: 1px 6px; border-radius: 3px; background: #fff3e0; color: #a35a00; margin-left: 6px; white-space: nowrap; }
+  #google-admin-btn { margin: 20px 0 8px; min-height: 44px; }
+  .pwd-emergenza { margin-top: 18px; font-size: 0.9em; }
+  .pwd-emergenza summary { cursor: pointer; color: #777; }
   .progress-mini { height: 6px; background: #eee; border-radius: 3px; width: 90px; display: inline-block; vertical-align: middle; }
   .progress-mini-fill { height: 100%; background: #81c784; border-radius: 3px; }
 
@@ -396,6 +400,7 @@
   .traccia-esami-inline { display: inline; }
   .traccia-esami-inline .esame-pill { font-size: 0.78em; }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -431,10 +436,14 @@
   <h1>Pannello Amministratore</h1>
   <p class="subtitle">QuizForge v2 — Applicazioni di Bioinformatica</p>
   <p id="build-label-login" style="font-size:0.75em;color:#bbb;font-family:monospace;margin-top:4px;"></p>
-  <label for="pwd">Password amministratore</label>
-  <input type="password" id="pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
+  <div id="google-admin-btn"></div>
   <div id="login-error" class="error-msg"></div>
-  <button class="btn" onclick="doLogin()">Accedi</button>
+  <details class="pwd-emergenza">
+    <summary>Accesso con password d'emergenza</summary>
+    <label for="pwd">Password amministratore</label>
+    <input type="password" id="pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="btn" onclick="doLogin()">Accedi</button>
+  </details>
 </div>
 
 <div id="main-panel">
@@ -538,6 +547,13 @@
               <option value="no">Disabilitato</option>
             </select>
           </div>
+          <div class="field" style="min-width:160px;">
+            <label for="new-ospiti">Accesso studenti</label>
+            <select id="new-ospiti">
+              <option value="si">Account di ateneo e ospiti</option>
+              <option value="no">Solo account di ateneo</option>
+            </select>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-sm btn-green" style="margin-top:0;" onclick="doCreateEsame()">Crea esame</button>
@@ -605,6 +621,14 @@
             </select>
             <p class="hint">Disabilita per esami formali</p>
           </div>
+          <div class="field" style="min-width:160px;">
+            <label for="cfg-ospiti">Accesso studenti</label>
+            <select id="cfg-ospiti">
+              <option value="si">Account di ateneo e ospiti</option>
+              <option value="no">Solo account di ateneo</option>
+            </select>
+            <p class="hint">Gli ospiti entrano scrivendo i propri dati, senza verifica</p>
+          </div>
         </div>
 
         <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -647,6 +671,8 @@
         <button class="btn btn-sm" onclick="doAddExtraTime('all')">+ Tutti</button>
         <button class="btn btn-sm" id="btn-extra-student" onclick="doAddExtraTime('student')" disabled style="opacity:0.5;">+ Studente selezionato</button>
         <span id="extra-student-label" style="font-size:0.85em;color:#1565c0;font-style:italic;"></span>
+        <button class="btn btn-sm btn-outline" id="btn-del-attempt" onclick="doDeleteAttempt()" disabled style="opacity:0.5;"
+                title="Cancella il tentativo dello studente selezionato: potrà iniziare di nuovo">Elimina tentativo</button>
         <span id="extra-time-msg" style="font-size:0.85em;margin-left:4px;"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid #eee;margin-top:4px;">
@@ -1033,11 +1059,54 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "67b6989";
+const BUILD = "75a4063";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
 let adminPassword  = "";
+// ---- ACCESSO CON GOOGLE ----
+// Il pannello si apre con un account admin (elenco admin_emails in _config). La password resta come
+// accesso d'emergenza. La sessione dura finché la scheda resta aperta (sessionStorage), al massimo 6 ore.
+const GOOGLE_CLIENT_ID  = "322876627281-v23v50rfun6vd0ea7jnkeejnjon3jks4.apps.googleusercontent.com";
+const ADMIN_SESSION_KEY = "qf_admin_session" + (_isTestMode ? "_test" : "");
+let adminSession = null;
+let adminEmail   = "";
+
+function whenGoogleReady(cb, tries) {
+  tries = tries || 0;
+  if (window.google && google.accounts && google.accounts.id) return cb(true);
+  if (tries > 60) return cb(false);
+  setTimeout(() => whenGoogleReady(cb, tries + 1), 100);
+}
+
+function renderAdminGoogle() {
+  whenGoogleReady(ok => {
+    if (!ok) { document.getElementById("login-error").textContent = "Accesso con Google non disponibile: usa la password d'emergenza."; return; }
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onAdminGoogle, ux_mode: "popup", auto_select: false });
+    google.accounts.id.renderButton(document.getElementById("google-admin-btn"),
+      { theme: "outline", size: "large", text: "signin_with", locale: "it", shape: "rectangular" });
+  });
+}
+
+async function onAdminGoogle(resp) {
+  const err = document.getElementById("login-error");
+  err.textContent = "";
+  document.getElementById("loading-overlay").classList.add("active");
+  setLoadingMsg("Verifica dell'accesso…");
+  try {
+    const res = await callScript({ action: "googleLogin", credential: resp.credential });
+    if (res.status !== "ok") throw new Error((res.message || "Accesso non riuscito.") + versioneScriptHint());
+    if (res.ruolo !== "admin") throw new Error("L'account " + res.email + " non è amministratore.");
+    adminSession = res.session; adminEmail = res.email;
+    try { sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: res.session, email: res.email,
+                                                                    exp: Date.now() + (res.ttl || 21600) * 1000 - 60000 })); } catch(e) {}
+    await enterPanel("");
+  } catch(e) {
+    adminSession = null;
+    document.getElementById("loading-overlay").classList.remove("active");
+    err.textContent = e.message;
+  }
+}
 let allEsami       = [];   // sessioni d'esame
 let allTracks      = [];   // tracce (template domande)
 let _tracksLoaded  = false;
@@ -1066,6 +1135,8 @@ let currentResultsData = null;  // ultima risposta getResults — usato per dett
 let selectedDetailRow  = -1;
 
 async function callScript(payload) {
+  // Dopo l'accesso con Google ogni chiamata porta la sessione (la password resta vuota)
+  if (adminSession && payload.session === undefined) payload = Object.assign({}, payload, { session: adminSession });
   const resp = await fetch(ACTIVE_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
@@ -1252,9 +1323,15 @@ function setLoadingMsg(msg) {
 async function doLogin() {
   const pwd = document.getElementById("pwd").value.trim();
   if (!pwd) { document.getElementById("login-error").textContent = "Inserisci la password."; return; }
+  adminSession = null;
+  await enterPanel(pwd);
+}
+
+// Entra nel pannello: con la password d'emergenza, oppure (pwd vuota) con la sessione Google già aperta
+async function enterPanel(pwd) {
   document.getElementById("login-error").textContent = "";
   document.getElementById("loading-overlay").classList.add("active");
-  setLoadingMsg("Verifica password…");
+  setLoadingMsg(adminSession ? "Caricamento…" : "Verifica password…");
   try {
     const res = await callScript({ action: "getAllEsami", password: pwd });
     if (res.status === "error") {
@@ -1267,7 +1344,7 @@ async function doLogin() {
     deployedScriptVersion = res.version || null;
     if (res.version) {
       document.getElementById("build-label").textContent =
-        "build " + BUILD + " · v" + res.version;
+        "build " + BUILD + " · v" + res.version + (adminEmail ? " · " + adminEmail : "");
     }
     loadSheetConfig();       // background: nomi dei fogli e link dell'intestazione, non servono per entrare
 
@@ -1471,6 +1548,10 @@ async function createNewSheet(type) {
 }
 
 function logout() {
+  if (adminSession) callScript({ action: "logout" }).catch(() => {});
+  adminSession = null; adminEmail = "";
+  try { sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch(e) {}
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   if (refreshTimer) clearInterval(refreshTimer);
   adminPassword = ""; currentEsame = null; currentTraccia = null; refreshTimer = null; trackItems = []; allEsami = []; allTracks = [];
   allQuestions = null; _allQuestionsPromise = null;
@@ -1619,6 +1700,7 @@ function populateEsameEditForm(e) {
   document.getElementById("cfg-mode").value  = e.modalita || "exam";
   document.getElementById("cfg-pwd").value   = e.password || "";
   document.getElementById("cfg-shuffle").value = e.shuffle === false ? "no" : "si";
+  document.getElementById("cfg-ospiti").value  = e.ospiti === false ? "no" : "si";
 }
 
 async function setStatus(newStatus) {
@@ -1649,7 +1731,8 @@ async function saveTrack() {
       duration:       document.getElementById("cfg-dur").value.trim(),
       mode:           document.getElementById("cfg-mode").value,
       track_password: document.getElementById("cfg-pwd").value.trim(),
-      shuffle:        document.getElementById("cfg-shuffle").value
+      shuffle:        document.getElementById("cfg-shuffle").value,
+      ospiti:         document.getElementById("cfg-ospiti").value
     });
     if (res.status === "ok") {
       currentEsame.traccia_id = document.getElementById("cfg-traccia-ref").value;
@@ -1659,6 +1742,7 @@ async function saveTrack() {
       currentEsame.modalita   = document.getElementById("cfg-mode").value;
       currentEsame.password   = document.getElementById("cfg-pwd").value.trim();
       currentEsame.shuffle    = document.getElementById("cfg-shuffle").value !== "no";
+      currentEsame.ospiti     = document.getElementById("cfg-ospiti").value !== "no";
       updateEsameInList(currentEsame);
       renderTrackStatus(currentEsame);
       msg.textContent = "✓ Modifiche salvate.";
@@ -1739,7 +1823,7 @@ function renderMonitorData(res) {
     const nom = escHtml(String(r.nominativo||""));
     return `<tr class="${r.finalized ? "finalized" : ""}" id="mrow-${mat}" onclick="selectMonitorStudent('${mat}','${nom}')" style="cursor:pointer;">
       <td>${mat}</td>
-      <td>${escHtml(String(r.nominativo||""))}</td>
+      <td>${escHtml(String(r.nominativo||""))}${r.google === false ? '<span class="badge-ospite" title="Entrato come ospite: dati non verificati">ospite</span>' : ""}</td>
       <td>${escHtml(String(r.email||""))}</td>
       <td>${fmtTs(r.tsStart)}</td>
       <td>${r.finalized ? fmtTs(r.tsEnd) : "—"}</td>
@@ -1769,8 +1853,30 @@ function selectMonitorStudent(matricola, nominativo) {
   });
   const lbl = document.getElementById("extra-student-label");
   if (lbl) lbl.textContent = nominativo || matricola;
-  const btn = document.getElementById("btn-extra-student");
-  if (btn) { btn.disabled = false; btn.style.opacity = "1"; }
+  ["btn-extra-student", "btn-del-attempt"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.disabled = false; btn.style.opacity = "1"; }
+  });
+}
+
+// Per esempio quando una matricola è stata usata da un'altra persona, o uno studente ha iniziato
+// l'esame sbagliato: la riga sparisce e lo studente può iniziare di nuovo
+async function doDeleteAttempt() {
+  if (!currentEsame || !_selectedMonitorMatricola) return;
+  const chi = (_selectedMonitorNominativo || "") + " (" + _selectedMonitorMatricola + ")";
+  if (!confirm("Eliminare il tentativo di " + chi + " in questo esame?\n\nRisposte e punteggio vengono cancellati " +
+               "e lo studente potrà iniziare di nuovo. L'operazione non si annulla.")) return;
+  const msg = document.getElementById("extra-time-msg");
+  try {
+    const res = await callScript({ action: "deleteAttempt", password: adminPassword, examId: currentEsame.exam_id,
+                                   matricola: _selectedMonitorMatricola });
+    if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
+    msg.style.color = "#2e7d32"; msg.textContent = "✓ Tentativo di " + chi + " eliminato";
+    _selectedMonitorMatricola = null;
+    ["btn-extra-student", "btn-del-attempt"].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = true; b.style.opacity = "0.5"; } });
+    document.getElementById("extra-student-label").textContent = "";
+    loadMonitorData();
+  } catch(e) { msg.style.color = "#b00"; msg.textContent = "Non eliminato: " + e.message; }
 }
 
 async function doAddExtraTime(scope) {
@@ -1924,7 +2030,7 @@ function renderRisultati(res) {
   document.getElementById("res-thead").innerHTML = thHtml;
 
   document.getElementById("res-tbody").innerHTML = rows.map((r, ri) => {
-    let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}</td>`;
+    let cells = `<td class="col-name">${escHtml(String(r.nominativo || r.matricola))}${r.google === false ? '<span class="badge-ospite" title="Entrato come ospite: dati non verificati">ospite</span>' : ""}</td>`;
     cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${fmtTs(r.tsStart)}</td>`;
     cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${fmtTs(r.tsEnd)}</td>`;
     cells += `<td style="font-size:0.82em;white-space:nowrap;color:#555;">${escHtml(r.elapsed||"—")}</td>`;
@@ -4090,6 +4196,7 @@ function duplicateEsame() {
   document.getElementById("new-dur").value          = src.durata     || "90";
   document.getElementById("new-mode").value         = src.modalita   || "exam";
   document.getElementById("new-shuffle").value      = src.shuffle === false ? "no" : "si";
+  document.getElementById("new-ospiti").value       = src.ospiti === false ? "no" : "si";
   // Data e password non si copiano: la password è il controllo d'accesso della singola
   // sessione, e riusarla lascerebbe entrare chi ha sostenuto l'esame originale.
   // Aprendo il form, updateAdminTab ne genera una nuova.
@@ -4767,16 +4874,17 @@ async function doCreateEsame() {
   msg.style.color="#555"; msg.textContent="Creazione in corso…";
   try {
     const shuffle = document.getElementById("new-shuffle").value;
+    const ospiti  = document.getElementById("new-ospiti").value;
     const res = await callScript({
       action:"createEsame", password:adminPassword,
       traccia_id:tracciaId, corso, exam_date:date,
-      duration:dur, mode, track_password:pwd, shuffle
+      duration:dur, mode, track_password:pwd, shuffle, ospiti
     });
     if (res.status !== "ok") throw new Error(res.message);
 
     const newE = { exam_id:res.exam_id, traccia_id:tracciaId, corso,
                    data:date, durata:dur, modalita:mode, stato:"closed",
-                   password:pwd, shuffle: shuffle !== "no" };
+                   password:pwd, shuffle: shuffle !== "no", ospiti: ospiti !== "no" };
     allEsami.push(newE);
     populateEsameSelect(allEsami);
     renderCrossref();
@@ -4795,7 +4903,21 @@ async function doCreateEsame() {
     if (cfg.drive_folder_id) document.getElementById("setup-folder-id").value = cfg.drive_folder_id;
     document.getElementById("setup-panel").style.display = "block";
     document.getElementById("login-panel").style.display = "none";
+    return;
   }
+  renderAdminGoogle();
+  // Sessione Google ancora valida in questa scheda (per esempio dopo un ricaricamento): si rientra
+  try {
+    const s = JSON.parse(sessionStorage.getItem(ADMIN_SESSION_KEY) || "null");
+    if (s && s.exp > Date.now()) {
+      adminSession = s.token; adminEmail = s.email;
+      await enterPanel("");
+      if (!document.getElementById("main-panel").classList.contains("active")) {
+        adminSession = null; adminEmail = ""; sessionStorage.removeItem(ADMIN_SESSION_KEY);
+        document.getElementById("login-error").textContent = "";
+      }
+    }
+  } catch(e) {}
 })();
 </script>
 </body>

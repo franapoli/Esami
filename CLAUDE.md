@@ -89,6 +89,15 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 - `getConfig` / `saveSheetConfig` — read/write ScriptProperties (sheet IDs, script URL)
 - `listDriveFolder` — list spreadsheets in the configured Drive folder
 
+## Accounts: Google sign-in and guests (3.7.0)
+
+- **Google Identity Services** on both pages (OAuth client ID `GOOGLE_CLIENT_ID`, origins `https://franapoli.github.io` and `http://localhost:3456`; Cloud project `quizforge-512911`, consent screen published, basic scopes only). The page gets an ID token and sends it to `googleLogin`, which verifies it with Google's `tokeninfo` endpoint (`UrlFetchApp`: the manifest needs the `script.external_request` scope) and opens a **script session** (random token in `CacheService`, `SESSION_TTL` 6 h). All later calls carry `session`, never the Google token.
+- **Roles** (`ruoloPerEmail`): `admin` = email listed in `_config` key `admin_emails` (default `ADMIN_EMAILS_DEFAULT`); `studente` = email whose domain is in `_config` `domini_studenti` (default `studenti.unisannio.it`) **and** matches the token's `hd` claim (Workspace accounts only). Everyone else is rejected.
+- **Admin auth** goes through `adminAuth(data)`: an admin session, or the old `admin_password` as emergency access. The admin page keeps the session in `sessionStorage` and injects it in `callScript`.
+- **Students: identity is the Google email; the matricola is only data.** Rows created with Google have `;auth=g` appended to `COL_QIDS` and the verified email/name in their columns. `studentWho(data, ospitiAmmessi)` + `rowOwnerError()` enforce that a Google row is touched only by its email and a guest row only by guests (init, update, finalize, abandon, resetPractice, resume, getImages). One account cannot hold two matricole in the same exam.
+- **Guests** work exactly as before (unverified name/matricola/email), so exams outside Unisannio keep working. Per-exam switch `E_OSPITI` (column K, `"no"` = Google only); `getTrack` returns `track.ospiti`. Monitor/results rows carry `google:true|false`; guests show an «ospite» badge. `deleteAttempt` (admin) removes a student's row from an exam.
+- Student page keeps the session in `localStorage` (`qf_student_session[_test]`); a "Sessione scaduta" reply mid-exam opens a re-login overlay (`chiediRiaccesso`).
+
 ## Performance notes (3.6.0)
 
 Each script call costs ~1.2 s of fixed Google overhead, and each spreadsheet opened and read adds roughly another second. Hence:
@@ -115,6 +124,7 @@ The exam is built so a student cannot extract answers or forge a score from the 
 - Do **not** create a `practice` esame on the **same traccia** used by a live `exam`: practice reveals correct answers, which a student could then recognise in the real exam (same question IDs).
 - The client time limit is enforced softly (flagged, not a hard server cutoff) — a student disabling the JS timer keeps working, but the overrun is recorded for the instructor.
 - `abandon` lets a student reroll random questions (fresh draw, no answer knowledge).
+- Guests are unverified by design: a guest can still type someone else's matricola if that matricola has no Google row in the exam. Close guests (`E_OSPITI = "no"`) for formal exams where everyone has an ateneo account.
 - `free` questions are not auto-scored (manual grading by design).
 - Images are private Drive files served as base64 by the script (`getImages`, cached in `CacheService` in chunks); a student only receives images of their assigned questions.
 

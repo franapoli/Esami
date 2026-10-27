@@ -13,6 +13,15 @@
   #site-header img { height: 52px; display: block; }
 
   /* COVER */
+  #login-box { margin-top: 22px; }
+  #google-who { font-size: 0.88em; color: #555; margin-top: 4px; }
+  #guest-link { font-size: 0.86em; margin-top: 14px; }
+  #guest-link a, #google-who a { color: #555; }
+  #exam-fields input[readonly] { background: #f6f6f2; color: #555; }
+  #riaccesso { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:3000;
+               align-items:center; justify-content:center; padding:20px; }
+  #riaccesso.open { display:flex; }
+  #riaccesso > div { background:#fff; max-width:420px; padding:26px 28px; border:1px solid #ccc; line-height:1.5; }
   #cover { max-width: 560px; margin: 60px auto; padding: 40px; background: #fff; border: 1px solid #ddd; }
   h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 6px; }
   .subtitle { color: #555; font-size: 0.95em; margin-bottom: 32px; }
@@ -141,6 +150,7 @@
   .spinner { width: 36px; height: 36px; border: 3px solid #ddd; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -164,6 +174,13 @@
   <div id="practice-badge" style="display:none;margin-top:12px;padding:8px 14px;background:#fff8e1;border:1px solid #ffe082;font-size:0.88em;color:#7b5e00;">
     ⚙ Modalità esercitazione — puoi ripetere il quiz tutte le volte che vuoi
   </div>
+  <div id="login-box" style="display:none;">
+    <div id="google-btn"></div>
+    <div id="google-who" style="display:none;">Accesso con l'account <strong id="google-email"></strong>
+      · <a href="#" onclick="googleLogout(); return false;">esci</a></div>
+    <div id="google-msg" style="font-size:0.86em;color:#b00;margin-top:8px;"></div>
+    <div id="guest-link" style="display:none;"><a href="#" onclick="entraOspite(); return false;">Non hai un account di ateneo? Entra come ospite</a></div>
+  </div>
   <div id="exam-fields" style="display:none;">
     <label for="cognome">Cognome e nome</label>
     <input type="text" id="cognome" placeholder="Es. Rossi Mario" autocomplete="new-password">
@@ -181,6 +198,15 @@
   <div id="cover-status" style="font-size:0.88em;color:#777;margin-top:10px;"></div>
   <button class="btn" id="btn-start" onclick="initQuiz()" disabled style="display:none;">Inizia il quiz</button>
 </div>
+
+<!-- Sessione Google scaduta durante la prova: si rientra senza perdere nulla -->
+<div id="riaccesso"><div>
+  <strong>Accesso scaduto</strong>
+  <p style="font-size:0.9em;color:#555;margin:8px 0 14px;">Per continuare a salvare le risposte accedi di nuovo con il tuo account di ateneo.
+     Le risposte date finora sono al sicuro.</p>
+  <div id="google-btn-riaccesso"></div>
+  <div id="riaccesso-msg" style="font-size:0.86em;color:#b00;margin-top:8px;"></div>
+</div></div>
 
 <!-- QUIZ -->
 <div id="quiz-wrapper">
@@ -511,8 +537,121 @@ function clearLocal() {
   localStorage.removeItem(getLSKey());
 }
 
+// ---- ACCESSO CON GOOGLE ----
+// Lo studente entra con l'account di ateneo (Google Identity Services): lo script verifica il token
+// e apre una sessione, che accompagna da lì in poi tutte le azioni d'esame. In alternativa, se
+// l'esame lo ammette, entra come ospite scrivendo i suoi dati, come prima.
+const GOOGLE_CLIENT_ID = "322876627281-v23v50rfun6vd0ea7jnkeejnjon3jks4.apps.googleusercontent.com";
+const SESSION_KEY      = "qf_student_session" + (_isTestMode ? "_test" : "");
+const AZIONI_STUDENTE  = new Set(["init", "update", "finalize", "resetPractice", "abandon", "resume", "getImages"]);
+let studentSession = null;      // {token, email, nome, exp} se entrato con Google
+let OSPITI_AMMESSI = true;
+try {
+  const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  if (s && s.exp > Date.now()) studentSession = s; else localStorage.removeItem(SESSION_KEY);
+} catch(e) {}
+
+function whenGoogleReady(cb, tries) {
+  tries = tries || 0;
+  if (window.google && google.accounts && google.accounts.id) return cb(true);
+  if (tries > 60) return cb(false);   // ~6 s: libreria bloccata o rete assente
+  setTimeout(() => whenGoogleReady(cb, tries + 1), 100);
+}
+
+function renderGoogleButton(elId, onCredential, msgId) {
+  whenGoogleReady(ok => {
+    if (!ok) { document.getElementById(msgId).textContent = "Accesso con Google non disponibile in questo browser." +
+                 (OSPITI_AMMESSI ? " Puoi entrare come ospite." : ""); return; }
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onCredential, ux_mode: "popup", auto_select: false });
+    google.accounts.id.renderButton(document.getElementById(elId),
+      { theme: "outline", size: "large", text: "signin_with", locale: "it", shape: "rectangular" });
+  });
+}
+
+async function googleLoginWith(credential) {
+  const res = await callScript({ action: "googleLogin", credential });
+  if (res.status !== "ok") throw new Error(res.message || "Accesso non riuscito.");
+  studentSession = { token: res.session, email: res.email, nome: res.nome, exp: Date.now() + (res.ttl || 21600) * 1000 - 60000 };
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(studentSession)); } catch(e) {}
+}
+
+async function onStudentGoogle(resp) {
+  const msg = document.getElementById("google-msg");
+  msg.textContent = "Verifica dell'accesso…"; msg.style.color = "#777";
+  try { await googleLoginWith(resp.credential); msg.textContent = ""; applicaSessione(); }
+  catch(e) { msg.style.color = "#b00"; msg.textContent = e.message; }
+}
+
+// Copertina: accesso con Google, oppure ospite se l'esame lo ammette
+function mostraAccesso(ospitiAmmessi) {
+  OSPITI_AMMESSI = ospitiAmmessi;
+  document.getElementById("login-box").style.display = "block";
+  if (studentSession) { applicaSessione(); return; }
+  document.getElementById("google-btn").style.display = "";
+  document.getElementById("google-who").style.display = "none";
+  document.getElementById("guest-link").style.display = ospitiAmmessi ? "" : "none";
+  document.getElementById("exam-fields").style.display = "none";
+  document.getElementById("btn-start").style.display = "none";
+  renderGoogleButton("google-btn", onStudentGoogle, "google-msg");
+}
+
+// Entrato con Google: nome ed email dall'account (non modificabili), la matricola la scrive lo studente
+function applicaSessione() {
+  const s = studentSession;
+  const nome = document.getElementById("cognome"), email = document.getElementById("email"), mat = document.getElementById("matricola");
+  nome.value = s.nome || ""; nome.readOnly = !!s.nome;
+  email.value = s.email; email.readOnly = true;
+  try { if (!mat.value) mat.value = localStorage.getItem("qf_matricola:" + s.email) || ""; } catch(e) {}
+  document.getElementById("google-email").textContent = s.email;
+  document.getElementById("google-btn").style.display = "none";
+  document.getElementById("google-who").style.display = "";
+  document.getElementById("guest-link").style.display = "none";
+  document.getElementById("exam-fields").style.display = "block";
+  showBtn();
+}
+
+function entraOspite() {
+  document.getElementById("guest-link").innerHTML = '<a href="#" onclick="mostraAccesso(OSPITI_AMMESSI); return false;">← Accedi invece con l\'account di ateneo</a>';
+  document.getElementById("google-btn").style.display = "none";
+  ["cognome", "email"].forEach(id => { const el = document.getElementById(id); el.readOnly = false; });
+  document.getElementById("exam-fields").style.display = "block";
+  showBtn();
+}
+
+function googleLogout() {
+  if (studentSession) callScript({ action: "logout", session: studentSession.token }).catch(() => {});
+  studentSession = null;
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  ["cognome", "email", "matricola"].forEach(id => { const el = document.getElementById(id); el.value = ""; el.readOnly = false; });
+  document.getElementById("guest-link").innerHTML = '<a href="#" onclick="entraOspite(); return false;">Non hai un account di ateneo? Entra come ospite</a>';
+  mostraAccesso(OSPITI_AMMESSI);
+}
+
+// Sessione scaduta durante la prova (dopo 6 ore, o se il server è stato riavviato): si rientra e si prosegue
+function chiediRiaccesso() {
+  const box = document.getElementById("riaccesso");
+  if (box.classList.contains("open")) return;
+  box.classList.add("open");
+  renderGoogleButton("google-btn-riaccesso", async resp => {
+    try {
+      await googleLoginWith(resp.credential);
+      if (studentSession.email !== studentEmail) {
+        document.getElementById("riaccesso-msg").textContent = "Accedi con lo stesso account con cui hai iniziato (" + studentEmail + ").";
+        return;
+      }
+      box.classList.remove("open");
+      setSaveStatus("✓ Accesso ripristinato");
+    } catch(e) { document.getElementById("riaccesso-msg").textContent = e.message; }
+  }, "riaccesso-msg");
+}
+
 // ---- HTTP ----
 function callScript(payload) {
+  // Le azioni d'esame viaggiano con la sessione Google, se lo studente è entrato così
+  if (studentSession && AZIONI_STUDENTE.has(payload.action) && payload.session === undefined) {
+    payload = Object.assign({}, payload, { session: studentSession.token });
+  }
   return fetch(ACTIVE_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
@@ -520,11 +659,14 @@ function callScript(payload) {
   }).then(r => {
     if (!r.ok) throw new Error("HTTP " + r.status + " " + r.statusText);
     return r.text().then(text => {
-      try { return JSON.parse(text); }
+      let res;
+      try { res = JSON.parse(text); }
       catch(e) {
         console.error("Risposta non-JSON da Apps Script:", text.slice(0, 500));
         throw new Error("Risposta non valida dal server (non JSON). Controlla il deployment.");
       }
+      if (res && res.status === "error" && /Sessione scaduta/.test(res.message || "") && studentMatricola) chiediRiaccesso();
+      return res;
     });
   });
 }
@@ -585,8 +727,7 @@ async function loadTrack() {
 
     if (EXAM_MODE === "practice") {
       document.getElementById("practice-badge").style.display = "block";
-      document.getElementById("exam-fields").style.display = "block";
-      showBtn();
+      mostraAccesso(t.ospiti !== false);
       return true;
     }
 
@@ -599,8 +740,7 @@ async function loadTrack() {
       document.getElementById("cover-status").textContent = "⚠ Il quiz non è ancora disponibile.";
       return true;
     }
-    document.getElementById("exam-fields").style.display = "block";
-    showBtn();
+    mostraAccesso(t.ospiti !== false);
     return true;
 
   } catch(e) {
@@ -799,6 +939,7 @@ async function initQuiz() {
     studentNominativo = nominativo;
     studentMatricola  = matricola;
     studentEmail      = email;
+    if (studentSession) try { localStorage.setItem("qf_matricola:" + studentSession.email, matricola); } catch(e) {}
     startTime = new Date();
     buildShuffleMap(authoritative.seed);  // null = shuffle off; number = seeded; undefined = legacy Math.random
     saveLocal();
