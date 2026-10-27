@@ -1033,7 +1033,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "566f605";
+const BUILD = "2ef2fba";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2119,11 +2119,13 @@ async function showStudentDetail(rowIdx) {
       </tr>`;
     }
     const qc = canon(q);   // opzioni e soluzioni nella forma interna, qualunque formato usi la domanda
-    const testo = qc.testo.length > 120 ? escHtml(qc.testo.slice(0, 120)) + "…" : escHtml(qc.testo);
+    // Testo leggibile: senza tag HTML, con ___ al posto di caselle e menu e [immagine] per le immagini
+    const piano = plainText(qc.testo);
+    const testo = piano.length > 120 ? escHtml(piano.slice(0, 120)) + "…" : escHtml(piano);
     return `<tr>
       <td class="col-n">${qi+1}</td>
       <td class="col-tipo"><span class="detail-tipo-badge">${escHtml(q.tipo)}</span></td>
-      <td class="detail-q-text" title="${escHtml(qc.testo)}">${testo}</td>
+      <td class="detail-q-text" title="${escAttr(piano)}">${testo}</td>
       <td class="detail-ans">${formatAnswerHtml(qc, ans)}</td>
       <td>${formatCorrectHtml(qc)}</td>
       <td class="col-pt ${ptCls}">${isFree ? pt+"*" : pt+"/"+maxPt}</td>
@@ -4557,7 +4559,7 @@ function renderQBrowser() {
   const usedIds = new Set(trackItems.filter(i => i.type === "fixed").map(i => i.id));
 
   browser.innerHTML = filtered.map(q => {
-    const testoQ = canon(q).testo;
+    const testoQ = plainText(canon(q).testo);
     const shortText = testoQ.length > 110 ? testoQ.substring(0, 110) + "…" : testoQ;
     const qs = q.stato || "verificato";
     const statoLabel = qs === "bozza" ? "✎ bozza" : "✓";

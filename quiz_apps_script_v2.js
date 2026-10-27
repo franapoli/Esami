@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.6.0"; // aggiornare ad ogni deploy
+const VERSION = "3.6.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1280,6 +1280,19 @@ function getResultSheet(examId, nQuestions) {
   return sheet;
 }
 
+// Una risposta conta come data se non è vuota. Alla consegna i tipi con più caselle salvano anche
+// quelle non toccate ("[]", ["",""], [null,null]): per il monitor sono ancora risposte non date.
+function isAnswered(v) {
+  if (v === "" || v === null || v === undefined) return false;
+  const s = String(v).trim();
+  if (s === "") return false;
+  if (s.charAt(0) !== "[") return true;
+  try {
+    const a = JSON.parse(s);
+    return !Array.isArray(a) || a.some(x => x !== null && x !== "" && x !== -1 && String(x).trim() !== "");
+  } catch(e) { return true; }
+}
+
 function findRow(sheet, matricola) {
   const n = sheet.getLastRow();
   if (n < 2) return -1;
@@ -2013,7 +2026,7 @@ function doPost(e) {
         const rowNQ = qids.length || nQ;
         let answered = 0;
         for (let q = 0; q < rowNQ; q++) {
-          if (row[COL_ANS_FIRST - 1 + q * 2] !== "") answered++;
+          if (isAnswered(row[COL_ANS_FIRST - 1 + q * 2])) answered++;
         }
         rows.push({
           matricola:  row[COL_MATRICOLA - 1],

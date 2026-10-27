@@ -406,10 +406,13 @@ async function initPreview() {
     previewShowLint = m.showLint !== false;
     previewReset();
   });
-  // L'admin dimensiona l'iframe sul contenuto
+  // L'admin dimensiona l'iframe sul contenuto. Si misura il contenuto e non il documento:
+  // scrollHeight del documento non scende mai sotto l'altezza attuale dell'iframe, che così
+  // restava alta dopo una domanda lunga.
+  const wrapper = document.getElementById("quiz-wrapper");
   new ResizeObserver(() => window.parent.postMessage(
-    { type: "qf-preview-height", height: document.documentElement.scrollHeight }, location.origin
-  )).observe(document.body);
+    { type: "qf-preview-height", height: Math.ceil(wrapper.getBoundingClientRect().height) + 4 }, location.origin
+  )).observe(wrapper);
   window.parent.postMessage({ type: "qf-preview-ready", version: previewBackend ? previewBackend.VERSION : null, error },
                             location.origin);
 }
