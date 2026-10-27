@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.7.0"; // aggiornare ad ogni deploy
+const VERSION = "3.7.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1172,7 +1172,11 @@ function verifyGoogleToken(idToken) {
   let res;
   try {
     res = UrlFetchApp.fetch("https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(idToken), { muteHttpExceptions: true });
-  } catch(e) { return { error: "Google non risponde: riprova tra poco." }; }
+  } catch(e) {
+    // Di solito è il permesso script.external_request non ancora autorizzato: il motivo va mostrato
+    console.error("tokeninfo: " + e);
+    return { error: "Verifica presso Google non riuscita: " + (e && e.message ? e.message : e) };
+  }
   if (res.getResponseCode() !== 200) return { error: "Accesso Google non valido o scaduto: riprova." };
   const t = JSON.parse(res.getContentText());
   if (t.aud !== googleClientId()) return { error: "Accesso Google non destinato a QuizForge." };
