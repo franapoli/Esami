@@ -132,6 +132,9 @@
   .tab-mini { font-size:0.84em; width:100%; border-collapse:collapse; }
   .tab-mini td, .tab-mini th { padding:5px 6px; border-bottom:1px solid #eee; text-align:left; }
   .tab-mini th { color:#888; font-weight:normal; font-size:0.9em; }
+  .esame-scelta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .esame-scelta label { margin:0; font-size:0.88em; color:#555; }
+  .esame-scelta select { flex:1; min-width:240px; max-width:560px; padding:8px 10px; border:1px solid #bbb; font:inherit; background:#fff; }
   .sez-diretta { margin-bottom:18px; }
   .sez-diretta > summary { cursor:pointer; font-size:0.78em; text-transform:uppercase; letter-spacing:.06em; color:#888; padding:6px 0 10px; }
   .sez-diretta > summary span { text-transform:none; letter-spacing:0; color:#555; font-size:1.15em; margin-left:6px; }
@@ -511,12 +514,6 @@
     <select id="corso-attivo" onchange="cambiaCorsoAttivo(this.value)" style="flex:0 1 280px;min-width:180px;"></select>
     <label class="chk" style="display:flex;align-items:center;gap:5px;cursor:pointer;" title="Mostra esami, tracce e domande di tutti i corsi">
       <input type="checkbox" id="mostra-tutto" onchange="cambiaMostraTutto(this.checked)"> Mostra tutto</label>
-    <label for="esame-select">Esame:</label>
-    <select id="esame-select" onchange="onEsameChange()">
-      <option value="">— caricamento… —</option>
-    </select>
-    <button class="btn btn-sm btn-outline" onclick="selectNewEsame()" style="margin-top:0;flex-shrink:0;">+ Nuovo esame</button>
-    <span id="no-tracks" style="display:none;font-size:0.85em;color:#888;font-style:italic;">Nessun esame trovato.</span>
   </div>
 
   <div class="tab-bar">
@@ -529,6 +526,12 @@
 
   <!-- TAB: ESAME -->
   <div class="tab-panel" id="panel-admin">
+    <div class="esame-scelta">
+      <label for="esame-select">Esame:</label>
+      <select id="esame-select" onchange="onEsameChange(this.value)"><option value="">— caricamento… —</option></select>
+      <button class="btn btn-sm btn-outline" onclick="selectNewEsame()" style="margin-top:0;flex-shrink:0;">+ Nuovo esame</button>
+      <span id="no-tracks" style="display:none;font-size:0.85em;color:#888;font-style:italic;">Nessun esame trovato.</span>
+    </div>
     <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
       Seleziona un esame dal menu o creane uno nuovo.
     </div>
@@ -852,6 +855,10 @@
   </div>
 
   <div class="tab-panel" id="panel-risultati">
+    <div class="esame-scelta">
+      <label for="esame-select-ris">Esame:</label>
+      <select id="esame-select-ris" onchange="onEsameChange(this.value)"></select>
+    </div>
     <!-- In diretta: studenti collegati, tempo extra, ripresa. Aperto durante l'esame, richiudibile dopo -->
     <details id="sez-diretta" class="sez-diretta" open ontoggle="if (!_direttaAuto) _direttaToccata = true;">
       <summary>In diretta <span id="diretta-riassunto"></span></summary>
@@ -1098,7 +1105,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "547d58c";
+const BUILD = "e8fd45f";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1618,6 +1625,7 @@ function populateEsameSelect(esami) {
   if (esami.length === 0) {
     sel.innerHTML = `<option value="">${c ? "— nessun esame in questo corso —" : "— nessun esame —"}</option>`;
     document.getElementById("no-tracks").style.display = "inline";
+    copiaMenuEsami();
     return;
   }
   document.getElementById("no-tracks").style.display = "none";
@@ -1626,17 +1634,29 @@ function populateEsameSelect(esami) {
   sorted.forEach(e => {
     const opt  = document.createElement("option");
     opt.value  = e.exam_id;
+    // "▶ Esame · 20 ottobre 2026 — traccia X": tipo e data prima di tutto, la traccia in coda
     const icon = e.stato === "open" ? "▶ " : "■ ";
-    const isPractice = e.modalita === "practice";
-    const mode = isPractice ? " [esercitazione]" : " [esame]";
+    const tipo = e.modalita === "practice" ? "Esercitazione" : "Esame";
     const t    = allTracks.find(t => t.track_id === e.traccia_id);
-    const trackName = t ? t.nome : e.traccia_id;
-    const name = e.nome && e.nome.trim() ? e.nome : trackName;
-    const suffix = isPractice ? "" : (e.data ? " · " + formatDateIt(e.data) : "");
-    opt.textContent = icon + (e.corso && !c ? e.corso + " — " : "") + (isPractice ? trackName : name) + suffix + mode;
+    opt.textContent = icon + tipo + (e.data ? " · " + formatDateIt(e.data) : "") +
+      (e.corso && !c ? " · " + e.corso : "") + (t ? " — traccia " + t.nome : "");
     sel.appendChild(opt);
   });
   if ([...sel.options].some(o => o.value === prevSel)) sel.value = prevSel;
+  copiaMenuEsami();
+}
+
+// Il tab Risultati ha un suo menu degli esami, copia di quello del tab Esami e sempre allineato
+function copiaMenuEsami() {
+  const a = document.getElementById("esame-select"), b = document.getElementById("esame-select-ris");
+  if (!a || !b) return;
+  b.innerHTML = a.innerHTML;
+  b.value = a.value;
+}
+
+function setEsameSelect(examId) {
+  document.getElementById("esame-select").value = examId || "";
+  copiaMenuEsami();
 }
 
 function populateTracciaSelects() {
@@ -1662,12 +1682,13 @@ function populateTracciaSelects() {
 
 function selectNewEsame() {
   currentEsame = null;
-  document.getElementById("esame-select").value = "";
+  setEsameSelect("");
   updateAdminTab();
   switchTab("admin");
 }
 
-function onEsameChange() {
+function onEsameChange(scelto) {
+  if (scelto !== undefined) setEsameSelect(scelto);
   const examId = document.getElementById("esame-select").value;
   currentEsame = examId ? (allEsami.find(e => e.exam_id === examId) || null) : null;
   updateAdminTab();
@@ -1680,7 +1701,7 @@ function updateEsameInList(e) {
   const prev = e.exam_id;
   populateEsameSelect(allEsami);
   renderCrossref();
-  document.getElementById("esame-select").value = prev;
+  setEsameSelect(prev);
 }
 
 // alias per compatibilità con vecchie chiamate residue
@@ -1721,6 +1742,7 @@ function updateAdminTab() {
     fillCorsoSelect("new", c ? c.corso_id : "");
   }
   document.getElementById("esame-status-card").style.display = has   ? "block" : "none";
+  document.getElementById("admin-placeholder").style.display = "none";   // col menu sopra, il modulo nuovo esame o la scheda bastano
   populateTracciaSelects();
   if (!has) return;
   renderTrackStatus(currentEsame);
@@ -4266,7 +4288,7 @@ function duplicateEsame() {
   if (!currentEsame) return;
   const src = currentEsame;
   currentEsame = null;
-  document.getElementById("esame-select").value     = "";
+  setEsameSelect("");
   document.getElementById("new-traccia-ref").value  = src.traccia_id || "";
   document.getElementById("new-corso").value        = src.corso      || "";
   fillCorsoSelect("new", src.corso_id || "");
@@ -4545,11 +4567,7 @@ function buildEsamePill(e) {
 
 function jumpToEsame(examId) {
   switchTab("admin");
-  const sel = document.getElementById("esame-select");
-  if (sel) {
-    sel.value = examId;
-    onEsameChange();
-  }
+  onEsameChange(examId);
 }
 
 function onTracciaChange() {
@@ -5005,7 +5023,7 @@ function aggiornaVista() {
   populateEsameSelect(allEsami);
   if (currentEsame && !esamiVisibili().some(e => e.exam_id === currentEsame.exam_id)) {
     currentEsame = null;
-    document.getElementById("esame-select").value = "";
+    setEsameSelect("");
     if (activeTab === "admin") updateAdminTab();
   }
   populateTracciaSelects();
@@ -5205,7 +5223,7 @@ async function iscrittoTogli(email) {
 }
 
 function apriEsameDaCorso(examId) {
-  document.getElementById("esame-select").value = examId;
+  setEsameSelect(examId);
   onEsameChange();
   switchTab("admin");
 }
@@ -5242,7 +5260,7 @@ async function doCreateEsame() {
     allEsami.push(newE);
     populateEsameSelect(allEsami);
     renderCrossref();
-    document.getElementById("esame-select").value = res.exam_id;
+    setEsameSelect(res.exam_id);
     currentEsame = newE;
     msg.style.color="#2e7d32"; msg.textContent="✓ Esame creato: " + res.exam_id;
     updateAdminTab();
