@@ -848,6 +848,15 @@
         <div class="card corsi-lista">
           <button class="btn btn-sm" style="margin-top:0;" onclick="corsoApri(null)">+ Nuovo corso</button>
           <div id="corsi-elenco" style="margin-top:12px;"></div>
+          <div class="corso-sez"><h3>Corsi di laurea</h3>
+            <div id="cdl-elenco"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <input type="text" id="cdl-nuovo" placeholder="Nuovo corso di laurea" autocomplete="off"
+                     style="flex:1;min-width:0;padding:6px 8px;border:1px solid #bbb;font:inherit;font-size:0.88em;" onkeydown="if (event.key === 'Enter') cdlAggiungi()">
+              <button class="btn btn-sm" style="margin-top:0;" onclick="cdlAggiungi()">Aggiungi</button>
+            </div>
+            <div id="cdl-msg" style="font-size:0.82em;margin-top:6px;"></div>
+          </div>
         </div>
         <div class="card corsi-dettaglio" id="corso-dettaglio"></div>
       </div>
@@ -1105,7 +1114,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "71f7a12";
+const BUILD = "4615c56";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -5070,6 +5079,7 @@ function aggiornaVista() {
 // Esami ed esercitazioni appartengono a un corso (corso_id); il nome del corso resta anche nel
 // campo "corso" dell'esame, che usano titoli ed elenchi.
 let allCorsi = null, _corsiPromise = null, corsoSel = null;
+let allCdl = [];   // corsi di laurea [{cdl_id, nome}]
 
 function ensureCorsiLoaded(forza) {
   if (allCorsi && !forza) return Promise.resolve();
@@ -5077,6 +5087,7 @@ function ensureCorsiLoaded(forza) {
   _corsiPromise = callScript({ action: "getCorsi", password: adminPassword }).then(res => {
     if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
     allCorsi = res.corsi || [];
+    allCdl = res.cdl || [];
     populateEsameSelect(allEsami);   // i gruppi dei menu portano i nomi dei corsi
     populateTracciaSelects();
   }).finally(() => { _corsiPromise = null; });
@@ -5114,7 +5125,50 @@ async function initCorsiTab() {
   if (pref && allCorsi.some(c => c.corso_id === pref)) corsoApri(pref); else corsoApri(allCorsi.length ? allCorsi[0].corso_id : null);
 }
 
+const nomeCdl = id => ((allCdl.find(x => x.cdl_id === id) || {}).nome || id);
+
+function renderCdlElenco() {
+  const el = document.getElementById("cdl-elenco");
+  el.innerHTML = allCdl.length ? allCdl.map(x => {
+    const n = allCorsi.filter(c => (c.cdl || []).includes(x.cdl_id)).length;
+    return `<div class="corso-voce" style="cursor:default;display:flex;gap:6px;align-items:baseline;">
+      <span style="flex:1;">${escHtml(x.nome)} <small style="display:inline;">· ${n} cors${n === 1 ? "o" : "i"}</small></span>
+      <button class="be-mini" onclick="cdlRinomina('${escAttr(x.cdl_id)}')" title="Rinomina">✎</button>
+      <button class="be-mini" onclick="cdlElimina('${escAttr(x.cdl_id)}')" title="Elimina">✕</button></div>`;
+  }).join("") : '<div style="color:#999;font-size:0.85em;">Nessuno.</div>';
+}
+
+async function cdlSalva(cdl) {
+  const msg = document.getElementById("cdl-msg");
+  const res = await callScript({ action: "saveCdl", password: adminPassword, cdl });
+  if (res.status !== "ok") { msg.style.color = "#b00"; msg.textContent = (res.message || "errore") + versioneScriptHint(); return false; }
+  msg.textContent = "";
+  await initCorsiTab();
+  return true;
+}
+
+async function cdlAggiungi() {
+  const el = document.getElementById("cdl-nuovo");
+  if (!el.value.trim()) return;
+  if (await cdlSalva({ nome: el.value.trim() })) el.value = "";
+}
+
+async function cdlRinomina(id) {
+  const nome = prompt("Nuovo nome del corso di laurea:", nomeCdl(id));
+  if (nome && nome.trim()) await cdlSalva({ cdl_id: id, nome: nome.trim() });
+}
+
+async function cdlElimina(id) {
+  if (!confirm("Eliminare il corso di laurea «" + nomeCdl(id) + "»?")) return;
+  const msg = document.getElementById("cdl-msg");
+  const res = await callScript({ action: "deleteCdl", password: adminPassword, cdl_id: id });
+  if (res.status !== "ok") { msg.style.color = "#b00"; msg.textContent = res.message; return; }
+  msg.textContent = "";
+  await initCorsiTab();
+}
+
 function renderCorsiElenco() {
+  renderCdlElenco();
   const el = document.getElementById("corsi-elenco");
   if (!allCorsi.length) { el.innerHTML = '<div style="color:#999;font-size:0.85em;">Nessun corso. Creane uno.</div>'; return; }
   const ordinati = allCorsi.slice().sort((a, b) => (a.stato === b.stato ? 0 : a.stato === "attivo" ? -1 : 1) || a.nome.localeCompare(b.nome, "it"));
@@ -5122,7 +5176,7 @@ function renderCorsiElenco() {
     const nEsami = allEsami.filter(e => e.corso_id === c.corso_id).length;
     return `<div class="corso-voce${c.corso_id === corsoSel ? " sel" : ""}" onclick="corsoApri('${c.corso_id}')">
       ${escHtml(c.nome)}${c.stato === "archiviato" ? ' <span style="color:#999;">(archiviato)</span>' : ""}
-      <small>${c.iscritti} iscritt${c.iscritti === 1 ? "o" : "i"} · ${nEsami} esam${nEsami === 1 ? "e" : "i"}</small></div>`;
+      <small>${(c.cdl || []).length ? escHtml(c.cdl.map(nomeCdl).join(", ")) + " · " : ""}${c.iscritti} iscritt${c.iscritti === 1 ? "o" : "i"} · ${nEsami} esam${nEsami === 1 ? "e" : "i"}</small></div>`;
   }).join("");
 }
 
@@ -5130,7 +5184,7 @@ function corsoApri(id) {
   corsoSel = id;
   if (id && id !== corsoAttivo) { corsoAttivo = id; try { localStorage.setItem(_vistaKey("corso_attivo"), id); } catch(e) {} aggiornaVista(); }
   renderCorsiElenco();
-  const c = id ? allCorsi.find(x => x.corso_id === id) : { corso_id: "", nome: "", descrizione: "", link: [], stato: "attivo" };
+  const c = id ? allCorsi.find(x => x.corso_id === id) : { corso_id: "", nome: "", descrizione: "", link: [], stato: "attivo", cdl: [] };
   const box = document.getElementById("corso-dettaglio");
   const esami = id ? allEsami.filter(e => e.corso_id === id).sort((a, b) => String(b.data).localeCompare(String(a.data))) : [];
   box.innerHTML = `
@@ -5140,6 +5194,12 @@ function corsoApri(id) {
       <div class="field" style="flex:1;min-width:140px;"><label for="corso-stato">Stato</label>
         <select id="corso-stato"><option value="attivo">Attivo</option><option value="archiviato">Archiviato</option></select></div>
     </div>
+    <div class="field"><label>Corsi di laurea</label>
+      <div id="corso-cdl" style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:0.9em;">
+        ${allCdl.length ? allCdl.map(x => `<label style="display:flex;gap:5px;align-items:center;cursor:pointer;font-weight:normal;margin:0;">
+          <input type="checkbox" value="${escAttr(x.cdl_id)}"${(c.cdl || []).includes(x.cdl_id) ? " checked" : ""}> ${escHtml(x.nome)}</label>`).join("")
+          : '<span style="color:#999;">Nessun corso di laurea: aggiungili nell\'elenco a sinistra.</span>'}
+      </div></div>
     <div class="field"><label for="corso-descr">Descrizione <span style="font-weight:normal;color:#aaa;">(mostrata nella home del corso)</span></label>
       <textarea id="corso-descr" rows="4" style="width:100%;box-sizing:border-box;font:inherit;padding:8px 10px;border:1px solid #bbb;">${escHtml(c.descrizione)}</textarea></div>
     <div class="field"><label>Link</label><div id="corso-link"></div>
@@ -5185,7 +5245,8 @@ async function corsoSalva() {
   try {
     const res = await callScript({ action: "saveCorso", password: adminPassword, corso: {
       corso_id: corsoSel || "", nome: document.getElementById("corso-nome").value.trim(),
-      descrizione: document.getElementById("corso-descr").value, link, stato: document.getElementById("corso-stato").value } });
+      descrizione: document.getElementById("corso-descr").value, link, stato: document.getElementById("corso-stato").value,
+      cdl: [...document.querySelectorAll("#corso-cdl input:checked")].map(x => x.value) } });
     if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
     corsoSel = res.corso_id;
     // Gli esami del corso mostrano il nome aggiornato

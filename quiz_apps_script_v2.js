@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.9.0"; // aggiornare ad ogni deploy
+const VERSION = "3.10.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -80,11 +80,12 @@ const E_OSPITI   = 10; // K  "no" = solo accesso con Google; vuoto/"si" = ammess
 const E_CORSO_ID = 11; // L  corso a cui appartiene (c-<6char>); vuoto = nessuno. E_CORSO resta il nome mostrato
 
 // Corsi e avvisi (file Domande), iscrizioni (file Risultati, con gli altri dati personali)
-const C_ID = 0, C_NOME = 1, C_DESCR = 2, C_LINK = 3, C_STATO = 4, C_CREATO = 5;
+const C_ID = 0, C_NOME = 1, C_DESCR = 2, C_LINK = 3, C_STATO = 4, C_CREATO = 5, C_CDL = 6;   // C_CDL: id dei CdL, separati da virgola
+const L_ID = 0, L_NOME = 1, L_CREATO = 2;   // corsi di laurea (file Domande)
 const AV_ID = 0, AV_CORSO = 1, AV_DATA = 2, AV_TESTO = 3;
 const I_EMAIL = 0, I_NOME = 1, I_MATRICOLA = 2, I_CORSO = 3, I_INIZIO = 4, I_SCADENZA = 5;
 const ISCRIZIONE_GIORNI = 365;
-const S_EMAIL = 0, S_NOME = 1, S_MATRICOLA = 2, S_AGGIORNATO = 3;   // studenti (file Risultati)
+const S_EMAIL = 0, S_NOME = 1, S_MATRICOLA = 2, S_AGGIORNATO = 3, S_CDL = 4;   // studenti (file Risultati)
 
 // Il corso di un esame è solo quello collegato (E_CORSO_ID); E_CORSO ne conserva il nome, tenuto
 // allineato da saveCorso. Un esame non collegato non ha corso.
@@ -1277,7 +1278,19 @@ function tabConIntestazione(ss, nome, headers) {
   }
   return sh;
 }
-function getCorsiSheet()  { return tabConIntestazione(openSS(getSheetQuestionsId()), "corsi",  ["CorsoID", "Nome", "Descrizione", "Link", "Stato", "Creato"]); }
+function getCorsiSheet()  { return tabConIntestazione(openSS(getSheetQuestionsId()), "corsi",  ["CorsoID", "Nome", "Descrizione", "Link", "Stato", "Creato", "CdL"]); }
+function getCdlSheet()    { return tabConIntestazione(openSS(getSheetQuestionsId()), "cdl",    ["CdlID", "Nome", "Creato"]); }
+
+// Corsi di laurea: elenco gestito dall'admin; un corso ne ha uno o più, lo studente ne sceglie uno
+function readCdl() {
+  const values = getCdlSheet().getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < values.length; i++) {
+    const id = String(values[i][L_ID]).trim();
+    if (id) out.push({ cdl_id: id, nome: String(values[i][L_NOME]), riga: i + 1 });
+  }
+  return out.sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+}
 function getAvvisiSheet() { return tabConIntestazione(openSS(getSheetQuestionsId()), "avvisi", ["AvvisoID", "CorsoID", "Data", "Testo"]); }
 function getIscrizioniSheet(archivio) {
   return tabConIntestazione(openSS(getSheetResultsId()), archivio ? "iscrizioni_archivio" : "iscrizioni",
@@ -1314,7 +1327,8 @@ function readCorsi() {
     let link = [];
     try { link = linkValidi(JSON.parse(String(r[C_LINK] || "[]"))); } catch(e) {}
     out.push({ corso_id: id, nome: String(r[C_NOME]), descrizione: String(r[C_DESCR] || ""), link: link,
-               stato: String(r[C_STATO] || "attivo").trim() || "attivo", creato: isoData(r[C_CREATO]), riga: i + 1 });
+               stato: String(r[C_STATO] || "attivo").trim() || "attivo", creato: isoData(r[C_CREATO]),
+               cdl: String(r[C_CDL] || "").split(",").map(x => x.trim()).filter(Boolean), riga: i + 1 });
   }
   return out;
 }
@@ -1366,22 +1380,26 @@ function readStudente(email) {
   const values = getStudentiSheet().getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][S_EMAIL]).trim().toLowerCase() === email) {
-      return { email: email, nome: String(values[i][S_NOME] || ""), matricola: String(values[i][S_MATRICOLA] || ""), riga: i + 1 };
+      return { email: email, nome: String(values[i][S_NOME] || ""), matricola: String(values[i][S_MATRICOLA] || ""),
+               cdl: String(values[i][S_CDL] || "").trim(), riga: i + 1 };
     }
   }
   return null;
 }
 
-// Crea o aggiorna la riga dello studente; il nome viene sempre dall'account Google
-function writeStudente(email, nome, matricola) {
+// Crea o aggiorna la riga dello studente; il nome viene sempre dall'account Google.
+// campi: {matricola?, cdl?}; quelli assenti restano come sono.
+function writeStudente(email, nome, campi) {
   const sheet = getStudentiSheet();
-  const st = readStudente(email);
-  const riga = [email, nome, String(matricola || ""), new Date()];
-  if (st) {
-    const r = sheet.getRange(st.riga, 1, 1, riga.length);
-    r.setNumberFormat("@"); r.setValues([riga.map((v, i) => i === S_AGGIORNATO ? v : sheetText(v))]);
+  const st = readStudente(email) || { matricola: "", cdl: "" };
+  const matricola = campi.matricola !== undefined ? String(campi.matricola) : st.matricola;
+  const cdl       = campi.cdl       !== undefined ? String(campi.cdl)       : st.cdl;
+  const riga = [sheetText(email), sheetText(nome), sheetText(matricola), new Date(), cdl];
+  if (st.riga) {
+    sheet.getRange(st.riga, 1, 1, 3).setNumberFormat("@");
+    sheet.getRange(st.riga, 1, 1, riga.length).setValues([riga]);
   } else {
-    sheet.appendRow([sheetText(email), sheetText(nome), sheetText(String(matricola || "")), new Date()]);
+    sheet.appendRow(riga);
     sheet.getRange(sheet.getLastRow(), S_MATRICOLA + 1).setNumberFormat("@");
   }
 }
@@ -1390,9 +1408,11 @@ function profiloDi(s) {
   const st = readStudente(s.email);
   const attive = readIscrizioniAttive().filter(x => x.email === s.email);
   const corsi = readCorsi().filter(c => c.stato === "attivo" || attive.some(x => x.corso_id === c.corso_id));
-  const pub = c => ({ corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione });
+  const pub = c => ({ corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione, cdl: c.cdl || [] });
+  const cdlElenco = readCdl().map(x => ({ cdl_id: x.cdl_id, nome: x.nome }));
   return {
     email: s.email, nome: s.nome, ruolo: s.ruolo, matricola: st ? st.matricola : "",
+    cdl: st && cdlElenco.some(x => x.cdl_id === st.cdl) ? st.cdl : "", cdl_elenco: cdlElenco,
     iscrizioni: attive.map(x => Object.assign(pub(corsi.find(c => c.corso_id === x.corso_id) || { corso_id: x.corso_id, nome: x.corso_id, descrizione: "" }),
                                               { inizio: x.inizio, scadenza: x.scadenza })),
     altri_corsi: corsi.filter(c => c.stato === "attivo" && !attive.some(x => x.corso_id === c.corso_id)).map(pub)
@@ -1608,7 +1628,7 @@ function doPost(e) {
     }
 
     // ---- PROFILO DELLO STUDENTE (sessione Google) ----
-    if (["getProfilo", "setMatricola", "iscriviCorso", "disiscriviCorso"].indexOf(data.action) !== -1) {
+    if (["getProfilo", "setMatricola", "setCdl", "iscriviCorso", "disiscriviCorso"].indexOf(data.action) !== -1) {
       const s = getSession(data.session);
       if (!s) return corsResponse({ status: "error", message: "Sessione scaduta: accedi di nuovo con Google." });
 
@@ -1618,13 +1638,22 @@ function doPost(e) {
         const lock = LockService.getScriptLock();
         try { lock.waitLock(15000); } catch(e) {}
         try {
-          writeStudente(s.email, s.nome, matricola);
+          writeStudente(s.email, s.nome, { matricola: matricola });
           // Anche nelle iscrizioni in corso, così l'elenco degli iscritti è aggiornato
           const isc = getIscrizioniSheet(false), v = isc.getDataRange().getValues();
           for (let i = 1; i < v.length; i++) {
             if (String(v[i][I_EMAIL]).trim().toLowerCase() === s.email) isc.getRange(i + 1, I_MATRICOLA + 1).setNumberFormat("@").setValue(matricola);
           }
         } finally { try { lock.releaseLock(); } catch(e) {} }
+        return corsResponse({ status: "ok", profilo: profiloDi(s) });
+      }
+
+      if (data.action === "setCdl") {
+        const cdl = String(data.cdl_id || "");
+        if (cdl && !readCdl().some(x => x.cdl_id === cdl)) return corsResponse({ status: "error", message: "Corso di laurea non trovato." });
+        const lock = LockService.getScriptLock();
+        try { lock.waitLock(15000); } catch(e) {}
+        try { writeStudente(s.email, s.nome, { cdl: cdl }); } finally { try { lock.releaseLock(); } catch(e) {} }
         return corsResponse({ status: "ok", profilo: profiloDi(s) });
       }
 
@@ -1671,7 +1700,46 @@ function doPost(e) {
       const iscritti = {};
       readIscrizioniAttive().forEach(x => { iscritti[x.corso_id] = (iscritti[x.corso_id] || 0) + 1; });
       const corsi = readCorsi().map(c => { delete c.riga; c.iscritti = iscritti[c.corso_id] || 0; return c; });
-      return corsResponse({ status: "ok", corsi: corsi });
+      return corsResponse({ status: "ok", corsi: corsi, cdl: readCdl().map(x => ({ cdl_id: x.cdl_id, nome: x.nome })) });
+    }
+
+    // saveCdl — crea (senza cdl_id) o rinomina un corso di laurea
+    if (data.action === "saveCdl") {
+      if (!adminAuth(data)) return corsResponse({ status: "error", message: "Password errata" });
+      const nome = String((data.cdl || {}).nome || "").trim(), id = String((data.cdl || {}).cdl_id || "");
+      if (!nome) return corsResponse({ status: "error", message: "Il corso di laurea deve avere un nome." });
+      const lock = LockService.getScriptLock();
+      try { lock.waitLock(15000); } catch(e) {}
+      try {
+        const elenco = readCdl();
+        if (elenco.some(x => x.nome.trim().toLowerCase() === nome.toLowerCase() && x.cdl_id !== id)) {
+          return corsResponse({ status: "error", message: "Esiste già un corso di laurea con questo nome." });
+        }
+        const sheet = getCdlSheet();
+        if (id) {
+          const x = elenco.find(y => y.cdl_id === id);
+          if (!x) return corsResponse({ status: "error", message: "Corso di laurea non trovato." });
+          sheet.getRange(x.riga, L_NOME + 1).setNumberFormat("@").setValue(sheetText(nome));
+          return corsResponse({ status: "ok", cdl_id: id });
+        }
+        let nuovo;
+        do { nuovo = idCasuale("l-"); } while (elenco.some(y => y.cdl_id === nuovo));
+        sheet.appendRow([nuovo, sheetText(nome), new Date()]);
+        return corsResponse({ status: "ok", cdl_id: nuovo });
+      } finally { try { lock.releaseLock(); } catch(e) {} }
+    }
+
+    // deleteCdl — solo se nessun corso lo usa (gli studenti che l'avevano scelto ne sceglieranno un altro)
+    if (data.action === "deleteCdl") {
+      if (!adminAuth(data)) return corsResponse({ status: "error", message: "Password errata" });
+      const id = String(data.cdl_id || "");
+      const usato = readCorsi().filter(c => c.cdl.indexOf(id) !== -1);
+      if (usato.length) return corsResponse({ status: "error", message: "È usato da " + usato.length +
+        (usato.length === 1 ? " corso" : " corsi") + " (" + usato.map(c => c.nome).join(", ") + "): toglilo prima dalle loro schede." });
+      const x = readCdl().find(y => y.cdl_id === id);
+      if (!x) return corsResponse({ status: "error", message: "Corso di laurea non trovato." });
+      getCdlSheet().deleteRow(x.riga);
+      return corsResponse({ status: "ok" });
     }
 
     // saveCorso — crea (senza corso_id) o aggiorna nome, descrizione, link e stato
@@ -1682,6 +1750,8 @@ function doPost(e) {
       if (!nome) return corsResponse({ status: "error", message: "Il corso deve avere un nome." });
       const stato = c.stato === "archiviato" ? "archiviato" : "attivo";
       const riga = [nome, String(c.descrizione || ""), JSON.stringify(linkValidi(c.link)), stato];
+      const cdlValidi = readCdl().map(x => x.cdl_id);
+      const cdl = (Array.isArray(c.cdl) ? c.cdl : []).map(String).filter(x => cdlValidi.indexOf(x) !== -1).join(",");
       const sheet = getCorsiSheet();
       const lock = LockService.getScriptLock();
       try { lock.waitLock(15000); } catch(e) {}
@@ -1695,6 +1765,7 @@ function doPost(e) {
           if (!esistente) return corsResponse({ status: "error", message: "Corso non trovato: " + c.corso_id });
           const r = sheet.getRange(esistente.riga, C_NOME + 1, 1, riga.length);
           r.setNumberFormat("@"); r.setValues([riga.map(sheetText)]);
+          sheet.getRange(esistente.riga, C_CDL + 1).setValue(cdl);
           // Il nome del corso è anche negli esami collegati (titoli della pagina studente)
           if (esistente.nome !== nome) {
             const es = getEsamiSheet(), ev = es.getDataRange().getValues();
@@ -1706,7 +1777,7 @@ function doPost(e) {
         }
         let id;
         do { id = idCasuale("c-"); } while (corsi.some(x => x.corso_id === id));
-        sheet.appendRow([id].concat(riga.map(sheetText), [new Date()]));
+        sheet.appendRow([id].concat(riga.map(sheetText), [new Date(), cdl]));
         return corsResponse({ status: "ok", corso_id: id });
       } finally {
         try { lock.releaseLock(); } catch(e) {}
