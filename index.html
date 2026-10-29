@@ -272,7 +272,7 @@ function voceCorso(c) {
   return `
     <div class="corso">
       <div class="info">
-        <div class="nome">${esc(c.nome)}</div>
+        <div class="nome"><a href="${esc(conTest("corso.html?c=" + encodeURIComponent(c.corso_id)))}">${esc(c.nome)}</a></div>
         ${c.descrizione ? `<div class="sotto">${esc(c.descrizione.length > 220 ? c.descrizione.slice(0, 220) + "…" : c.descrizione)}</div>` : ""}
       </div>
       <div class="azioni">

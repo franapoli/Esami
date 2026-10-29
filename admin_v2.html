@@ -1114,7 +1114,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "4615c56";
+const BUILD = "0105f0b";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -5188,7 +5188,8 @@ function corsoApri(id) {
   const box = document.getElementById("corso-dettaglio");
   const esami = id ? allEsami.filter(e => e.corso_id === id).sort((a, b) => String(b.data).localeCompare(String(a.data))) : [];
   box.innerHTML = `
-    <h2 style="margin-top:0;">${id ? escHtml(c.nome) : "Nuovo corso"}</h2>
+    <h2 style="margin-top:0;">${id ? escHtml(c.nome) : "Nuovo corso"}
+      ${id ? `<a href="corso.html?c=${encodeURIComponent(id)}${_isTestMode ? "&test" : ""}" target="_blank" style="font-size:0.6em;font-weight:normal;margin-left:10px;color:#555;">↗ Home del corso</a>` : ""}</h2>
     <div class="row2" style="margin-top:12px;">
       <div class="field" style="flex:3;"><label for="corso-nome">Nome</label><input type="text" id="corso-nome" value="${escAttr(c.nome)}" autocomplete="off"></div>
       <div class="field" style="flex:1;min-width:140px;"><label for="corso-stato">Stato</label>

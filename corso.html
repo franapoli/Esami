@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corso — QuizForge</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+  #test-banner { display:none; background:#b71c1c; color:#fff; text-align:center; padding:6px; font-size:0.85em; font-weight:600; letter-spacing:0.04em; }
+  #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  #site-header img { height: 52px; display: block; }
+  #site-header a { color: #555; font-size: 0.9em; }
+
+  main { max-width: 720px; margin: 36px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #ddd; padding: 28px 32px; margin-bottom: 20px; }
+  h1 { font-size: 1.5em; margin-bottom: 6px; }
+  h2 { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.07em; color: #777; font-weight: bold; margin-bottom: 14px; }
+  .cdl { color: #777; font-size: 0.9em; }
+  .archiviato { display: inline-block; font-size: 0.75em; padding: 2px 8px; background: #eee; color: #777; margin-left: 8px; vertical-align: middle; }
+  .stato-iscr { margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.92em; }
+  .stato-iscr .ok { color: #2e7d32; }
+  .stato-iscr a { color: #555; }
+  .descr { white-space: pre-wrap; line-height: 1.6; font-size: 0.97em; }
+  .link { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .link a { font-size: 0.9em; padding: 5px 12px; border: 1px solid #ccc; color: #1a1a1a; text-decoration: none; }
+  .link a:hover { background: #f8f8f4; }
+
+  .avviso { padding: 10px 0; border-top: 1px solid #eee; }
+  .avviso:first-of-type { border-top: none; padding-top: 0; }
+  .avviso .quando { font-size: 0.8em; color: #888; }
+  .avviso .testo { white-space: pre-wrap; line-height: 1.55; margin-top: 3px; }
+
+  .esame { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e4e4e0; margin-bottom: 6px; color: #1a1a1a; text-decoration: none; }
+  a.esame:hover { background: #f8f8f4; }
+  .esame .cosa { flex: 1; }
+  .esame small { color: #888; }
+  .esame .vai { font-size: 0.85em; color: #555; white-space: nowrap; }
+  .esame.futuro { color: #777; background: #fafaf7; }
+  .vuoto { color: #999; font-size: 0.9em; font-style: italic; }
+
+  .btn { display: inline-block; padding: 7px 18px; background: #1a1a1a; color: #fff; border: none; font-size: 0.9em; font-family: inherit; cursor: pointer; text-decoration: none; }
+  .btn:disabled { background: #ccc; cursor: not-allowed; }
+  .msg { font-size: 0.88em; color: #b00; }
+  .spinner { width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 540px) { #site-header { padding: 10px 16px; } main { margin: 18px auto; } .card { padding: 20px 18px; } }
+</style>
+</head>
+<body>
+
+<div id="test-banner">🧪 AMBIENTE DI TEST — i dati non sono reali</div>
+<header id="site-header">
+  <img src="logo_unisannio.png" alt="Università degli Studi del Sannio">
+  <a id="link-profilo" href="index.html">← I miei corsi</a>
+</header>
+
+<main>
+  <div id="caricamento" class="card"><div class="spinner"></div></div>
+  <div id="errore" class="card" style="display:none;"><p class="msg" id="errore-msg"></p></div>
+
+  <div id="pagina" style="display:none;">
+    <div class="card">
+      <h1 id="c-nome"></h1>
+      <div class="cdl" id="c-cdl"></div>
+      <div class="stato-iscr" id="c-iscrizione"></div>
+    </div>
+
+    <div class="card" id="sez-descr" style="display:none;">
+      <div class="descr" id="c-descr"></div>
+      <div class="link" id="c-link"></div>
+    </div>
+
+    <div class="card" id="sez-avvisi" style="display:none;">
+      <h2>Avvisi</h2>
+      <div id="c-avvisi"></div>
+    </div>
+
+    <div class="card">
+      <h2>Esercitazioni</h2>
+      <div id="c-esercitazioni"></div>
+    </div>
+
+    <div class="card">
+      <h2>Esami</h2>
+      <div id="c-esami"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnHlThdzpJYU4CWz2IB9GDrrLdXLVXwG4ezGToFZEVVXfb2_VJHkoyNnw/exec";
+const _isTestMode     = new URLSearchParams(window.location.search).has("test");
+let ACTIVE_URL        = _isTestMode ? TEST_SCRIPT_URL : "";
+if (_isTestMode) document.getElementById("test-banner").style.display = "block";
+const conTest = url => url + (_isTestMode ? (url.includes("?") ? "&" : "?") + "test" : "");
+document.getElementById("link-profilo").href = conTest("index.html");
+
+const CORSO_ID    = new URLSearchParams(window.location.search).get("c") || "";
+const SESSION_KEY = "qf_student_session" + (_isTestMode ? "_test" : "");   // stessa sessione del profilo
+let sessione = null;
+try { const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); if (s && s.exp > Date.now()) sessione = s; } catch(e) {}
+
+async function loadConfig() {
+  try {
+    const r = await fetch('./config.json?_=' + Date.now());
+    const cfg = await r.json();
+    if (!_isTestMode && cfg.script_url) ACTIVE_URL = cfg.script_url;
+  } catch(e) {}
+}
+
+function callScript(payload) {
+  return fetch(ACTIVE_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) })
+    .then(r => r.text()).then(t => JSON.parse(t));
+}
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+function dataIt(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? parseInt(m[3]) + " " + MESI[parseInt(m[2]) - 1] + " " + m[1] : "";
+}
+
+function errore(testo) {
+  document.getElementById("caricamento").style.display = "none";
+  document.getElementById("errore").style.display = "";
+  document.getElementById("errore-msg").textContent = testo;
+}
+
+async function carica() {
+  const res = await callScript({ action: "getCorsoPubblico", corso_id: CORSO_ID, session: sessione ? sessione.token : undefined });
+  if (res.status !== "ok") { errore(res.message || "Corso non disponibile."); return; }
+  render(res);
+}
+
+function render(res) {
+  const c = res.corso;
+  document.title = c.nome + " — QuizForge";
+  document.getElementById("caricamento").style.display = "none";
+  document.getElementById("pagina").style.display = "";
+  document.getElementById("c-nome").innerHTML = esc(c.nome) + (c.stato === "archiviato" ? '<span class="archiviato">archiviato</span>' : "");
+  document.getElementById("c-cdl").textContent = (c.cdl || []).length ? "Corso di laurea: " + c.cdl.join(", ") : "";
+
+  // Iscrizione
+  const box = document.getElementById("c-iscrizione");
+  if (res.iscrizione) {
+    box.innerHTML = `<span class="ok">✓ Sei iscritto fino al ${esc(dataIt(res.iscrizione.scadenza))}</span>`;
+  } else if (res.loggato) {
+    box.innerHTML = c.stato === "attivo"
+      ? `<button class="btn" onclick="iscriviti()">Iscriviti al corso</button><span class="msg" id="iscr-msg"></span>`
+      : `<span style="color:#777;">Il corso è archiviato: non accetta nuove iscrizioni.</span>`;
+  } else {
+    box.innerHTML = `<a href="${esc(conTest("index.html"))}">Accedi con l'account di ateneo</a>
+      <span style="color:#777;">per iscriverti. Esercitazioni ed esami sono comunque accessibili qui sotto.</span>`;
+  }
+
+  // Descrizione e link
+  const link = c.link || [];
+  document.getElementById("sez-descr").style.display = (c.descrizione || link.length) ? "" : "none";
+  document.getElementById("c-descr").textContent = c.descrizione || "";
+  document.getElementById("c-link").innerHTML = link.map(l =>
+    `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.titolo)} ↗</a>`).join("");
+
+  // Avvisi
+  const avvisi = res.avvisi || [];
+  document.getElementById("sez-avvisi").style.display = avvisi.length ? "" : "none";
+  document.getElementById("c-avvisi").innerHTML = avvisi.map(a =>
+    `<div class="avviso"><div class="quando">${esc(dataIt(a.data))}</div><div class="testo">${esc(a.testo)}</div></div>`).join("");
+
+  // Esercitazioni ed esami: aperti cliccabili, in programma con la data
+  const voce = e => {
+    const titolo = (e.modalita === "practice" ? (e.track_name || "Esercitazione") : "Esame") + (e.data ? " · " + esc(dataIt(e.data)) : "");
+    const durata = e.durata ? `<small> · ${e.durata} min</small>` : "";
+    return e.aperto
+      ? `<a class="esame" href="${esc(conTest("quiz_v2.html?id=" + encodeURIComponent(e.exam_id)))}"><span class="cosa">${titolo}${durata}</span><span class="vai">Entra →</span></a>`
+      : `<div class="esame futuro"><span class="cosa">${titolo}${durata}</span><span class="vai">in programma</span></div>`;
+  };
+  const esami = res.esami || [];
+  const pr = esami.filter(e => e.modalita === "practice"), ex = esami.filter(e => e.modalita !== "practice");
+  document.getElementById("c-esercitazioni").innerHTML = pr.length ? pr.map(voce).join("") : '<p class="vuoto">Nessuna esercitazione disponibile.</p>';
+  document.getElementById("c-esami").innerHTML = ex.length ? ex.map(voce).join("") : '<p class="vuoto">Nessun esame aperto o in programma.</p>';
+}
+
+async function iscriviti() {
+  const res = await callScript({ action: "iscriviCorso", session: sessione.token, corso_id: CORSO_ID });
+  if (res.status !== "ok") {
+    const m = document.getElementById("iscr-msg");
+    m.innerHTML = " " + esc(res.message || "Iscrizione non riuscita.") +
+      (/matricola/i.test(res.message || "") ? ` <a href="${esc(conTest("index.html"))}">Vai al profilo</a>` : "");
+    return;
+  }
+  carica();
+}
+
+(async () => {
+  await loadConfig();
+  if (!ACTIVE_URL) { errore("Configurazione mancante: aggiungi script_url in config.json."); return; }
+  if (!CORSO_ID) { errore("Corso non indicato."); return; }
+  try { await carica(); } catch(e) { errore("Impossibile caricare il corso. Controlla la connessione e riprova."); }
+})();
+</script>
+</body>
+</html>

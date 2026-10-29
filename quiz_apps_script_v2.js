@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.10.0"; // aggiornare ad ogni deploy
+const VERSION = "3.11.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -2026,6 +2026,48 @@ function doPost(e) {
     // ----------------------------------------------------------------
     // getPublicExams — elenco pubblico degli esami aperti (no password)
     // ----------------------------------------------------------------
+    // getCorsoPubblico — home del corso, consultabile da chiunque: dati del corso, avvisi, esami ed
+    // esercitazioni collegati (aperti, e in programma se chiusi con data futura). Con la sessione di
+    // chi è entrato con Google dice anche se è iscritto. Niente contenuto delle domande.
+    if (data.action === "getCorsoPubblico") {
+      const corsoId = String(data.corso_id || "");
+      const c = readCorsi().find(x => x.corso_id === corsoId);
+      if (!c) return corsResponse({ status: "error", message: "Corso non trovato." });
+      const cdl = readCdl();
+      const tz = Session.getScriptTimeZone();
+      const oggi = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+      const tracce = {};
+      const esami = [];
+      getEsamiSheet().getDataRange().getValues().slice(1).forEach(row => {
+        if (String(row[E_CORSO_ID] || "").trim() !== corsoId || !String(row[E_ID]).trim()) return;
+        const rawDate = row[E_DATA];
+        const dataStr = rawDate instanceof Date && !isNaN(rawDate) ? Utilities.formatDate(rawDate, tz, "yyyy-MM-dd") : String(rawDate || "");
+        const aperto = String(row[E_STATO]).trim() === "open";
+        if (!aperto && !(dataStr && dataStr >= oggi)) return;   // passati e chiusi: non servono qui
+        const modalita = String(row[E_MODALITA]).trim() || "exam";
+        const trId = String(row[E_TRACCIA]).trim();
+        if (modalita === "practice" && trId && tracce[trId] === undefined) {
+          const tr = readTraccia(trId);
+          tracce[trId] = tr ? tr.nome || "" : "";
+        }
+        esami.push({ exam_id: String(row[E_ID]).trim(), modalita: modalita, data: dataStr, durata: Number(row[E_DURATA]) || 0,
+                     aperto: aperto, track_name: modalita === "practice" ? (tracce[trId] || "") : "" });
+      });
+      esami.sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+      let iscrizione = null, loggato = false;
+      const s = data.session ? getSession(data.session) : null;
+      if (s) {
+        loggato = true;
+        const x = readIscrizioniAttive(corsoId).find(i => i.email === s.email);
+        if (x) iscrizione = { inizio: x.inizio, scadenza: x.scadenza };
+      }
+      return corsResponse({ status: "ok", corso: {
+        corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione, link: c.link, stato: c.stato,
+        cdl: c.cdl.map(id => (cdl.find(x => x.cdl_id === id) || {}).nome).filter(Boolean) },
+        avvisi: readAvvisi(corsoId).map(a => ({ data: a.data, testo: a.testo })),
+        esami: esami, loggato: loggato, iscrizione: iscrizione });
+    }
+
     if (data.action === "getPublicExams") {
       const sheet  = getEsamiSheet();
       const tz     = Session.getScriptTimeZone();
