@@ -1105,7 +1105,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "5545d89";
+const BUILD = "33f296b";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1166,6 +1166,7 @@ function ensureTracksLoaded() {
       allTracks = rt.tracks || [];
       _tracksLoaded = true;
       populateTracciaSelects();
+      populateEsameSelect(allEsami);   // le voci del menu esami citano la traccia
       renderCrossref();
     })
     .catch(() => {})
@@ -1629,19 +1630,30 @@ function populateEsameSelect(esami) {
     return;
   }
   document.getElementById("no-tracks").style.display = "none";
-  const sorted = [...esami].sort((a,b) => a.stato === b.stato ? 0 : a.stato === "open" ? -1 : 1);
-  sel.innerHTML = '<option value="">— seleziona un esame —</option>';
-  sorted.forEach(e => {
-    const opt  = document.createElement("option");
-    opt.value  = e.exam_id;
-    // "▶ Esame · 20 ottobre 2026 — traccia X": tipo e data prima di tutto, la traccia in coda
-    const icon = e.stato === "open" ? "▶ " : "■ ";
-    const tipo = e.modalita === "practice" ? "Esercitazione" : "Esame";
-    const t    = allTracks.find(t => t.track_id === e.traccia_id);
-    opt.textContent = icon + tipo + (e.data ? " · " + formatDateIt(e.data) : "") +
-      (e.corso && !c ? " · " + e.corso : "") + (t ? " — traccia " + t.nome : "");
-    sel.appendChild(opt);
-  });
+  const sorted = [...esami].sort((a,b) => a.stato === b.stato ? String(b.data).localeCompare(String(a.data)) : a.stato === "open" ? -1 : 1);
+  // "▶ Esame · 20 ottobre 2026 — traccia X": tipo e data prima di tutto, la traccia in coda.
+  // La voce è sempre la stessa; senza filtro gli esami si raggruppano per corso.
+  const voce = e => {
+    const t = allTracks.find(t => t.track_id === e.traccia_id);
+    return `<option value="${escAttr(e.exam_id)}">${e.stato === "open" ? "▶ " : "■ "}${e.modalita === "practice" ? "Esercitazione" : "Esame"}` +
+      `${e.data ? " · " + escHtml(formatDateIt(e.data)) : ""}${t ? " — traccia " + escHtml(t.nome) : ""}</option>`;
+  };
+  let html = '<option value="">— seleziona un esame —</option>';
+  if (c) {
+    html += sorted.map(voce).join("");
+  } else {
+    const gruppi = new Map();
+    sorted.forEach(e => {
+      const k = e.corso_id || "";
+      if (!gruppi.has(k)) gruppi.set(k, []);
+      gruppi.get(k).push(e);
+    });
+    const nome = k => k ? (((allCorsi || []).find(x => x.corso_id === k) || {}).nome || allEsami.find(e => e.corso_id === k).corso || k) : "Senza corso";
+    [...gruppi.keys()].sort((a, b) => !a ? 1 : !b ? -1 : nome(a).localeCompare(nome(b), "it")).forEach(k => {
+      html += `<optgroup label="${escAttr(nome(k))}">` + gruppi.get(k).map(voce).join("") + `</optgroup>`;
+    });
+  }
+  sel.innerHTML = html;
   if ([...sel.options].some(o => o.value === prevSel)) sel.value = prevSel;
   copiaMenuEsami();
 }
