@@ -510,10 +510,10 @@
   </div>
 
   <div class="track-selector-bar">
-    <label for="corso-attivo">Corso:</label>
+    <label for="corso-attivo">Corso corrente:</label>
     <select id="corso-attivo" onchange="cambiaCorsoAttivo(this.value)" style="flex:0 1 280px;min-width:180px;"></select>
     <label class="chk" style="display:flex;align-items:center;gap:5px;cursor:pointer;" title="Mostra esami, tracce e domande di tutti i corsi">
-      <input type="checkbox" id="mostra-tutto" onchange="cambiaMostraTutto(this.checked)"> Mostra tutto</label>
+      <input type="checkbox" id="mostra-tutto" onchange="cambiaMostraTutto(this.checked)"> Non filtrare</label>
   </div>
 
   <div class="tab-bar">
@@ -1105,7 +1105,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "f3e8078";
+const BUILD = "5545d89";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -2737,7 +2737,7 @@ function renderBanco(keepSelection) {
     list.innerHTML = '<div class="banco-empty">Il foglio domande non contiene domande.</div>';
   } else if (!base.length) {
     list.innerHTML = '<div class="banco-empty">Nessuna domanda in questo corso: le domande di un corso sono quelle delle tracce usate dai suoi esami. ' +
-      'Spunta «Mostra tutto» per vederle tutte.</div>';
+      'Spunta «Non filtrare» per vederle tutte.</div>';
   } else if (!n) {
     const attivi = [];
     if (terms.length) attivi.push("ricerca «" + document.getElementById("banco-q").value.trim() + "»");
@@ -4957,7 +4957,7 @@ function clearItems() {
 // ---- CORSO ATTIVO ----
 // Con un corso selezionato (barra in alto o tab Corsi) gli altri tab mostrano solo i suoi dati:
 // esami collegati, tracce usate da quegli esami, domande di quelle tracce (fisse ed estraibili
-// dagli slot casuali). "Mostra tutto" torna a tutti i dati. Scelte ricordate nel browser.
+// dagli slot casuali). "Non filtrare" torna a tutti i dati. Scelte ricordate nel browser.
 const _vistaKey = k => "qf_" + k + (_isTestMode ? "_test" : "");
 let corsoAttivo = (() => { try { return localStorage.getItem(_vistaKey("corso_attivo")) || ""; } catch(e) { return ""; } })();
 let mostraTutto = (() => { try { return localStorage.getItem(_vistaKey("mostra_tutto")) === "1"; } catch(e) { return false; } })();
