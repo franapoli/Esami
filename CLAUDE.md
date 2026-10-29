@@ -98,6 +98,15 @@ Sheet IDs and the Apps Script URL (`SCRIPT_URL`) can be changed from the admin h
 - **Guests** work exactly as before (unverified name/matricola/email), so exams outside Unisannio keep working. Per-exam switch `E_OSPITI` (column K, `"no"` = Google only); `getTrack` returns `track.ospiti`. Monitor/results rows carry `google:true|false`; guests show an «ospite» badge. `deleteAttempt` (admin) removes a student's row from an exam.
 - Student page keeps the session in `localStorage` (`qf_student_session[_test]`); a "Sessione scaduta" reply mid-exam opens a re-login overlay (`chiediRiaccesso`).
 
+## Courses, notices, enrollments (3.8.0 — phase 1 of the course system)
+
+- **Course** (`corsi` tab, Questions file): `corso_id` (`c-<6char>`), nome, descrizione, link (JSON `[{titolo,url}]`, http(s) only), stato `attivo|archiviato`. Courses are permanent. Renaming a course also rewrites `E_CORSO` (display name) of its exams.
+- **Exams** link to a course through `E_CORSO_ID` (column L); `E_CORSO` stays as display name. The admin exam form has a «Corso» select (`fillCorsoSelect`); old exams with only a text name show as "(non collegato)" and the Corsi tab offers to link them by name (`collegaEsami`).
+- **Notices** (`avvisi` tab, Questions file): `addAvviso` / `deleteAvviso` / `getAvvisi`, newest first.
+- **Enrollments** (`iscrizioni` tab, Results file, with personal data): email, nome, matricola, corso_id, inizio, scadenza = inizio + `ISCRIZIONE_GIORNI` (365). Expired rows move to `iscrizioni_archivio` (`archiviaIscrizioniScadute`, run on writes and when the admin opens the list), so the active sheet holds at most one year. Admin: `getCorsi` (with active counts), `saveCorso`, `getIscritti` (`archivio:true` for the archive), `removeIscrizione`.
+- Planned next phases: student profile page (enroll, matricola), course home page (description, links, notices, exams/practices, own results), results register written at finalize + per-exam "pubblica esiti".
+- Exams stay open to everyone (enrollment does not gate access); guests keep using direct exam links.
+
 ## Performance notes (3.6.0)
 
 Each script call costs ~1.2 s of fixed Google overhead, and each spreadsheet opened and read adds roughly another second. Hence:
