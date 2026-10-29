@@ -1105,7 +1105,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "33f296b";
+const BUILD = "8529d1b";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1680,11 +1680,29 @@ function populateTracciaSelects() {
     if (!el) return;
     const prev = el.value;
     if (id === "traccia-select") {
-      // Con un corso attivo: le tracce usate dai suoi esami (più quella aperta, anche se nuova)
+      // Con un corso attivo: le tracce usate dai suoi esami (più quella aperta, anche se nuova).
+      // Senza filtro: tutte, con le stesse voci, raggruppate per i corsi dei loro esami; una traccia
+      // usata in più corsi compare in ciascuno, quelle mai usate in fondo.
+      const voce = t => `<option value="${escAttr(t.track_id)}">${escHtml(t.nome)}</option>`;
+      const per = (a, b) => a.nome.localeCompare(b.nome, "it");
       const tc = tracceDelCorso();
-      const tracce = tc ? allTracks.filter(t => tc.has(t.track_id) || (currentTraccia && t.track_id === currentTraccia.track_id)) : allTracks;
-      el.innerHTML = '<option value="">— seleziona —</option><option value="__new__">+ Crea nuova traccia</option>' +
-        tracce.map(t => `<option value="${t.track_id}">${escHtml(t.nome)}</option>`).join("");
+      let html = '<option value="">— seleziona —</option><option value="__new__">+ Crea nuova traccia</option>';
+      if (tc) {
+        html += allTracks.filter(t => tc.has(t.track_id) || (currentTraccia && t.track_id === currentTraccia.track_id)).sort(per).map(voce).join("");
+      } else {
+        const corsiDi = {};   // track_id → Set di corso_id ("" = esami senza corso)
+        allEsami.forEach(e => { if (e.traccia_id) (corsiDi[e.traccia_id] = corsiDi[e.traccia_id] || new Set()).add(e.corso_id || ""); });
+        const nome = k => k ? (((allCorsi || []).find(x => x.corso_id === k) || {}).nome || k) : "Esami senza corso";
+        const chiavi = [...new Set(Object.values(corsiDi).flatMap(st => [...st]))]
+          .sort((a, b) => !a ? 1 : !b ? -1 : nome(a).localeCompare(nome(b), "it"));
+        chiavi.forEach(k => {
+          html += `<optgroup label="${escAttr(nome(k))}">` +
+            allTracks.filter(t => corsiDi[t.track_id] && corsiDi[t.track_id].has(k)).sort(per).map(voce).join("") + `</optgroup>`;
+        });
+        const maiUsate = allTracks.filter(t => !corsiDi[t.track_id]).sort(per);
+        if (maiUsate.length) html += `<optgroup label="Non usate">` + maiUsate.map(voce).join("") + `</optgroup>`;
+      }
+      el.innerHTML = html;
     } else {
       el.innerHTML = opts;
     }
@@ -5059,6 +5077,8 @@ function ensureCorsiLoaded(forza) {
   _corsiPromise = callScript({ action: "getCorsi", password: adminPassword }).then(res => {
     if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
     allCorsi = res.corsi || [];
+    populateEsameSelect(allEsami);   // i gruppi dei menu portano i nomi dei corsi
+    populateTracciaSelects();
   }).finally(() => { _corsiPromise = null; });
   return _corsiPromise;
 }
