@@ -1097,7 +1097,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "03fd4b6";
+const BUILD = "65a4d03";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -4927,12 +4927,12 @@ function ensureCorsiLoaded(forza) {
 }
 
 // Menu "Corso" della scheda esame: i corsi attivi (e quello dell'esame anche se archiviato).
-// Un esame vecchio con il solo nome del corso compare come "(non collegato)".
+// Un esame non collegato mostra "— non collegato —"; il vecchio nome scritto a mano resta come promemoria sotto.
 function fillCorsoSelect(pre, corsoId, corsoTesto) {
   const sel = document.getElementById(pre + "-corso-id");
   if (!sel) return;
   const corsi = (allCorsi || []).filter(c => c.stato !== "archiviato" || c.corso_id === corsoId);
-  let html = `<option value="">${corsoTesto && !corsoId ? escHtml(corsoTesto) : "— nessun corso —"}</option>`;
+  let html = `<option value="">— non collegato —</option>`;
   html += corsi.map(c => `<option value="${escAttr(c.corso_id)}">${escHtml(c.nome)}${c.stato === "archiviato" ? " (archiviato)" : ""}</option>`).join("");
   sel.innerHTML = html;
   sel.value = corsoId || "";
@@ -4952,7 +4952,7 @@ function corsoHint(pre, corsoTesto) {
   if (!h) return;
   const daCollegare = !document.getElementById(pre + "-corso-id").value && !!corsoTesto;
   h.style.display = daCollegare ? "" : "none";
-  h.textContent = daCollegare ? "Solo nome, non collegato a un corso: scegli il corso dal menu e salva (non comparirà nella home del corso finché non lo colleghi)." : "";
+  h.textContent = daCollegare ? "Prima dei corsi era indicato come «" + corsoTesto + "»: scegli il corso e salva." : "";
 }
 
 async function initCorsiTab() {
