@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.8.0"; // aggiornare ad ogni deploy
+const VERSION = "3.8.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -83,7 +83,12 @@ const E_CORSO_ID = 11; // L  corso a cui appartiene (c-<6char>); vuoto = nessuno
 const C_ID = 0, C_NOME = 1, C_DESCR = 2, C_LINK = 3, C_STATO = 4, C_CREATO = 5;
 const AV_ID = 0, AV_CORSO = 1, AV_DATA = 2, AV_TESTO = 3;
 const I_EMAIL = 0, I_NOME = 1, I_MATRICOLA = 2, I_CORSO = 3, I_INIZIO = 4, I_SCADENZA = 5;
-const ISCRIZIONE_GIORNI = 365;   // un'iscrizione dura un anno dalla data in cui lo studente si iscrive
+const ISCRIZIONE_GIORNI = 365;
+
+// Il corso di un esame è solo quello collegato (E_CORSO_ID); E_CORSO ne conserva il nome, tenuto
+// allineato da saveCorso. Un esame non collegato non ha corso: il nome scritto a mano nelle
+// versioni precedenti non si mostra (resta solo come "corso_vecchio" per collegarlo dal tab Corsi).
+const nomeCorsoEsame = row => String(row[E_CORSO_ID] || "").trim() ? String(row[E_CORSO] || "").trim() : "";   // un'iscrizione dura un anno dalla data in cui lo studente si iscrive
 
 // Colonne foglio "Esami" nel foglio risultati (specchio di esami) — 0-based
 const META_COLS = {
@@ -687,7 +692,7 @@ function readEsame(examId) {
       traccia_id: String(row[E_TRACCIA]).trim(),
       data:       dataStr,
       durata:     String(row[E_DURATA]),
-      corso:      String(row[E_CORSO]),
+      corso:      nomeCorsoEsame(row),
       modalita:   String(row[E_MODALITA]) || "exam",
       stato:      String(row[E_STATO])    || "closed",
       password:   String(row[E_PASSWORD] || "").trim(),
@@ -1294,6 +1299,12 @@ function linkValidi(link) {
     .filter(l => /^https?:\/\/\S+$/i.test(l.url)).map(l => ({ titolo: l.titolo || l.url, url: l.url }));
 }
 
+function nomeDelCorso(corsoId) {
+  if (!corsoId) return "";
+  const c = readCorsi().find(x => x.corso_id === String(corsoId));
+  return c ? sheetText(c.nome) : "";
+}
+
 function readCorsi() {
   const values = getCorsiSheet().getDataRange().getValues();
   const out = [];
@@ -1867,7 +1878,7 @@ function doPost(e) {
         }
         exams.push({
           exam_id:    id,
-          corso:      String(row[E_CORSO]).trim(),
+          corso:      nomeCorsoEsame(row),
           data:       dataStr,
           durata:     Number(row[E_DURATA]) || 0,
           modalita:   modalita,
@@ -2295,7 +2306,7 @@ function doPost(e) {
         "",               // col C riservata (era exam_name)
         examDate,
         data.duration       || 90,
-        data.corso          || "",
+        nomeDelCorso(data.corso_id),
         data.mode           || "exam",
         "closed",
         data.track_password || "",
@@ -2327,13 +2338,14 @@ function doPost(e) {
           traccia_id: String(row[E_TRACCIA]).trim(),
           data:       dataStr,
           durata:     String(row[E_DURATA]),
-          corso:      String(row[E_CORSO]),
+          corso:      nomeCorsoEsame(row),
           modalita:   String(row[E_MODALITA]) || "exam",
           stato:      String(row[E_STATO])    || "closed",
           password:   String(row[E_PASSWORD] || "").trim(),
           shuffle:    String(row[E_SHUFFLE] || "").trim().toLowerCase() !== "no",
           ospiti:     String(row[E_OSPITI] || "").trim().toLowerCase() !== "no",
-          corso_id:   String(row[E_CORSO_ID] || "").trim()
+          corso_id:   String(row[E_CORSO_ID] || "").trim(),
+          corso_vecchio: String(row[E_CORSO_ID] || "").trim() ? "" : String(row[E_CORSO] || "").trim()
         });
       }
       return corsResponse({ status: "ok", esami, version: VERSION });
@@ -2352,7 +2364,8 @@ function doPost(e) {
         if (data.traccia_id     !== undefined) sheet.getRange(row, E_TRACCIA  + 1).setValue(data.traccia_id);
         if (data.exam_date      !== undefined) sheet.getRange(row, E_DATA     + 1).setValue(data.exam_date);
         if (data.duration       !== undefined) sheet.getRange(row, E_DURATA   + 1).setValue(data.duration);
-        if (data.corso          !== undefined) sheet.getRange(row, E_CORSO    + 1).setValue(data.corso);
+        // Il nome segue il corso collegato; un esame scollegato non ha nome di corso
+        if (data.corso_id       !== undefined) sheet.getRange(row, E_CORSO    + 1).setValue(nomeDelCorso(data.corso_id));
         if (data.mode           !== undefined) sheet.getRange(row, E_MODALITA + 1).setValue(data.mode);
         if (data.status         !== undefined) sheet.getRange(row, E_STATO    + 1).setValue(data.status);
         if (data.track_password !== undefined) sheet.getRange(row, E_PASSWORD + 1).setValue(data.track_password);
@@ -2367,7 +2380,7 @@ function doPost(e) {
           const mrow = j + 1;
           if (data.exam_date !== undefined) meta.getRange(mrow, META_COLS.exam_date + 1).setValue(data.exam_date);
           if (data.duration  !== undefined) meta.getRange(mrow, META_COLS.duration  + 1).setValue(data.duration);
-          if (data.corso     !== undefined) meta.getRange(mrow, META_COLS.corso     + 1).setValue(data.corso);
+          if (data.corso_id  !== undefined) meta.getRange(mrow, META_COLS.corso     + 1).setValue(nomeDelCorso(data.corso_id));
           if (data.mode      !== undefined) meta.getRange(mrow, META_COLS.mode      + 1).setValue(data.mode);
           if (data.status    !== undefined) meta.getRange(mrow, META_COLS.status    + 1).setValue(data.status);
           break;
