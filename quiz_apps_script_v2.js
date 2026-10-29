@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.8.2"; // aggiornare ad ogni deploy
+const VERSION = "3.9.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -84,6 +84,7 @@ const C_ID = 0, C_NOME = 1, C_DESCR = 2, C_LINK = 3, C_STATO = 4, C_CREATO = 5;
 const AV_ID = 0, AV_CORSO = 1, AV_DATA = 2, AV_TESTO = 3;
 const I_EMAIL = 0, I_NOME = 1, I_MATRICOLA = 2, I_CORSO = 3, I_INIZIO = 4, I_SCADENZA = 5;
 const ISCRIZIONE_GIORNI = 365;
+const S_EMAIL = 0, S_NOME = 1, S_MATRICOLA = 2, S_AGGIORNATO = 3;   // studenti (file Risultati)
 
 // Il corso di un esame è solo quello collegato (E_CORSO_ID); E_CORSO ne conserva il nome, tenuto
 // allineato da saveCorso. Un esame non collegato non ha corso.
@@ -1356,6 +1357,48 @@ function archiviaIscrizioniScadute() {
   return scadute.length;
 }
 
+// ---- Profilo dello studente (chi entra con Google): nome, matricola, iscrizioni ----
+function getStudentiSheet() {
+  return tabConIntestazione(openSS(getSheetResultsId()), "studenti", ["Email", "Nome", "Matricola", "Aggiornato"]);
+}
+
+function readStudente(email) {
+  const values = getStudentiSheet().getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][S_EMAIL]).trim().toLowerCase() === email) {
+      return { email: email, nome: String(values[i][S_NOME] || ""), matricola: String(values[i][S_MATRICOLA] || ""), riga: i + 1 };
+    }
+  }
+  return null;
+}
+
+// Crea o aggiorna la riga dello studente; il nome viene sempre dall'account Google
+function writeStudente(email, nome, matricola) {
+  const sheet = getStudentiSheet();
+  const st = readStudente(email);
+  const riga = [email, nome, String(matricola || ""), new Date()];
+  if (st) {
+    const r = sheet.getRange(st.riga, 1, 1, riga.length);
+    r.setNumberFormat("@"); r.setValues([riga.map((v, i) => i === S_AGGIORNATO ? v : sheetText(v))]);
+  } else {
+    sheet.appendRow([sheetText(email), sheetText(nome), sheetText(String(matricola || "")), new Date()]);
+    sheet.getRange(sheet.getLastRow(), S_MATRICOLA + 1).setNumberFormat("@");
+  }
+}
+
+function profiloDi(s) {
+  const st = readStudente(s.email);
+  const attive = readIscrizioniAttive().filter(x => x.email === s.email);
+  const corsi = readCorsi().filter(c => c.stato === "attivo" || attive.some(x => x.corso_id === c.corso_id));
+  const pub = c => ({ corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione });
+  return {
+    email: s.email, nome: s.nome, ruolo: s.ruolo, matricola: st ? st.matricola : "",
+    iscrizioni: attive.map(x => Object.assign(pub(corsi.find(c => c.corso_id === x.corso_id) || { corso_id: x.corso_id, nome: x.corso_id, descrizione: "" }),
+                                              { inizio: x.inizio, scadenza: x.scadenza })),
+    altri_corsi: corsi.filter(c => c.stato === "attivo" && !attive.some(x => x.corso_id === c.corso_id)).map(pub)
+  };
+}
+
 function readIscrizioniAttive(corsoId) {
   const values = getIscrizioniSheet(false).getDataRange().getValues();
   const ora = Date.now();
@@ -1562,6 +1605,64 @@ function doPost(e) {
     if (data.action === "logout") {
       if (data.session) CacheService.getScriptCache().remove("sess:" + String(data.session));
       return corsResponse({ status: "ok" });
+    }
+
+    // ---- PROFILO DELLO STUDENTE (sessione Google) ----
+    if (["getProfilo", "setMatricola", "iscriviCorso", "disiscriviCorso"].indexOf(data.action) !== -1) {
+      const s = getSession(data.session);
+      if (!s) return corsResponse({ status: "error", message: "Sessione scaduta: accedi di nuovo con Google." });
+
+      if (data.action === "setMatricola") {
+        const matricola = String(data.matricola || "").trim();
+        if (!/^[A-Za-z0-9]{3,20}$/.test(matricola)) return corsResponse({ status: "error", message: "Matricola non valida: solo lettere e cifre." });
+        const lock = LockService.getScriptLock();
+        try { lock.waitLock(15000); } catch(e) {}
+        try {
+          writeStudente(s.email, s.nome, matricola);
+          // Anche nelle iscrizioni in corso, così l'elenco degli iscritti è aggiornato
+          const isc = getIscrizioniSheet(false), v = isc.getDataRange().getValues();
+          for (let i = 1; i < v.length; i++) {
+            if (String(v[i][I_EMAIL]).trim().toLowerCase() === s.email) isc.getRange(i + 1, I_MATRICOLA + 1).setNumberFormat("@").setValue(matricola);
+          }
+        } finally { try { lock.releaseLock(); } catch(e) {} }
+        return corsResponse({ status: "ok", profilo: profiloDi(s) });
+      }
+
+      if (data.action === "iscriviCorso" || data.action === "disiscriviCorso") {
+        const corsoId = String(data.corso_id || "");
+        const corso = readCorsi().find(c => c.corso_id === corsoId);
+        if (!corso) return corsResponse({ status: "error", message: "Corso non trovato." });
+        const lock = LockService.getScriptLock();
+        try { lock.waitLock(15000); } catch(e) {}
+        try {
+          archiviaIscrizioniScadute();
+          const isc = getIscrizioniSheet(false), v = isc.getDataRange().getValues();
+          let riga = -1;
+          for (let i = 1; i < v.length; i++) {
+            const x = iscrizioneDaRiga(v[i]);
+            if (x.email === s.email && x.corso_id === corsoId) { riga = i + 1; break; }
+          }
+          if (data.action === "iscriviCorso") {
+            if (corso.stato !== "attivo") return corsResponse({ status: "error", message: "Le iscrizioni a questo corso sono chiuse." });
+            const st = readStudente(s.email);
+            if (!st || !st.matricola) return corsResponse({ status: "error", message: "Indica prima la tua matricola." });
+            if (riga === -1) {
+              const ora = new Date(), fine = new Date(ora.getTime() + ISCRIZIONE_GIORNI * 86400000);
+              isc.appendRow([sheetText(s.email), sheetText(s.nome), sheetText(st.matricola), corsoId, ora, fine]);
+              isc.getRange(isc.getLastRow(), I_MATRICOLA + 1).setNumberFormat("@");
+            }
+          } else if (riga !== -1) {
+            // L'iscrizione annullata resta nello storico, chiusa oggi
+            const r = v[riga - 1].slice(0, I_SCADENZA + 1);
+            r[I_SCADENZA] = new Date();
+            getIscrizioniSheet(true).appendRow(r);
+            isc.deleteRow(riga);
+          }
+        } finally { try { lock.releaseLock(); } catch(e) {} }
+        return corsResponse({ status: "ok", profilo: profiloDi(s) });
+      }
+
+      return corsResponse({ status: "ok", profilo: profiloDi(s) });   // getProfilo
     }
 
     // ---- CORSI (admin) ----
@@ -1878,6 +1979,7 @@ function doPost(e) {
         exams.push({
           exam_id:    id,
           corso:      nomeCorsoEsame(row),
+          corso_id:   String(row[E_CORSO_ID] || "").trim(),
           data:       dataStr,
           durata:     Number(row[E_DURATA]) || 0,
           modalita:   modalita,

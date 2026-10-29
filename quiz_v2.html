@@ -545,6 +545,7 @@ const GOOGLE_CLIENT_ID = "322876627281-v23v50rfun6vd0ea7jnkeejnjon3jks4.apps.goo
 const SESSION_KEY      = "qf_student_session" + (_isTestMode ? "_test" : "");
 const AZIONI_STUDENTE  = new Set(["init", "update", "finalize", "resetPractice", "abandon", "resume", "getImages"]);
 let studentSession = null;      // {token, email, nome, exp} se entrato con Google
+let profiloMatricola = null;    // matricola del profilo; "" = ancora da indicare (null = non letta)
 let OSPITI_AMMESSI = true;
 try {
   const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
@@ -602,6 +603,13 @@ function applicaSessione() {
   nome.value = s.nome || ""; nome.readOnly = !!s.nome;
   email.value = s.email; email.readOnly = true;
   try { if (!mat.value) mat.value = localStorage.getItem("qf_matricola:" + s.email) || ""; } catch(e) {}
+  // La matricola del profilo (pagina iniziale) ha la precedenza su quella ricordata dal browser
+  callScript({ action: "getProfilo", session: s.token }).then(res => {
+    if (res && res.status === "ok") {
+      profiloMatricola = res.profilo.matricola || "";
+      if (profiloMatricola && document.getElementById("cover").style.display !== "none") mat.value = profiloMatricola;
+    }
+  }).catch(() => {});
   document.getElementById("google-email").textContent = s.email;
   document.getElementById("google-btn").style.display = "none";
   document.getElementById("google-who").style.display = "";
@@ -940,6 +948,11 @@ async function initQuiz() {
     studentMatricola  = matricola;
     studentEmail      = email;
     if (studentSession) try { localStorage.setItem("qf_matricola:" + studentSession.email, matricola); } catch(e) {}
+    // Profilo senza matricola: si salva quella usata qui, così la pagina iniziale la conosce
+    if (studentSession && profiloMatricola === "") {
+      callScript({ action: "setMatricola", session: studentSession.token, matricola }).catch(() => {});
+      profiloMatricola = matricola;
+    }
     startTime = new Date();
     buildShuffleMap(authoritative.seed);  // null = shuffle off; number = seeded; undefined = legacy Math.random
     saveLocal();

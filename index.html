@@ -3,127 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quiz — Università del Sannio</title>
+<title>QuizForge — Università del Sannio</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Georgia, serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
-
+  #test-banner { display:none; background:#b71c1c; color:#fff; text-align:center; padding:6px; font-size:0.85em; font-weight:600; letter-spacing:0.04em; }
   #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; }
   #site-header img { height: 52px; display: block; }
 
-  .card {
-    max-width: 480px;
-    margin: 60px auto;
-    padding: 40px;
-    background: #fff;
-    border: 1px solid #ddd;
-  }
-
+  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #ddd; padding: 30px 34px; margin-bottom: 20px; }
   .card-title { font-size: 1.35em; font-weight: bold; margin-bottom: 8px; }
-  .card-lead   { color: #555; font-size: 0.95em; line-height: 1.55; margin-bottom: 32px; }
+  .card-lead  { color: #555; font-size: 0.95em; line-height: 1.55; margin-bottom: 20px; }
+  h2 { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.07em; color: #777; font-weight: bold; margin-bottom: 14px; }
 
-  .field-label {
-    display: block;
-    font-size: 0.78em;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #777;
-    font-weight: bold;
-    margin-bottom: 6px;
-    margin-top: 22px;
-  }
-
-  select {
-    width: 100%;
-    padding: 9px 10px;
-    border: 1px solid #bbb;
-    font-size: 1em;
-    font-family: inherit;
-    background: #fff;
-    color: #1a1a1a;
-  }
-  select:disabled { background: #f5f5f0; color: #aaa; border-color: #ddd; }
-
-  .divider { height: 1px; background: #eee; margin: 28px 0 0; }
-
-  .btn {
-    display: inline-block;
-    margin-top: 28px;
-    padding: 11px 32px;
-    background: #1a1a1a;
-    color: #fff;
-    border: none;
-    font-size: 1em;
-    font-family: inherit;
-    cursor: pointer;
-  }
+  .btn { display: inline-block; padding: 9px 22px; background: #1a1a1a; color: #fff; border: none; font-size: 0.95em; font-family: inherit; cursor: pointer; text-decoration: none; }
   .btn:hover:not(:disabled) { background: #333; }
   .btn:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-outline { background: #fff; color: #1a1a1a; border: 1px solid #1a1a1a; }
+  .btn-outline:hover:not(:disabled) { background: #f5f5f0; }
+  .btn-sm { padding: 6px 14px; font-size: 0.85em; }
 
-  #msg-error  { color: #b00; font-size: 0.88em; margin-top: 14px; min-height: 1.2em; }
-  #msg-empty  { color: #888; font-size: 0.88em; margin-top: 18px; display: none; }
+  .msg { font-size: 0.88em; margin-top: 10px; min-height: 1.2em; }
+  .msg.err { color: #b00; }
+  .msg.ok  { color: #2e7d32; }
+  .chi { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .chi .email { color: #777; font-size: 0.88em; }
+  .chi a { color: #555; font-size: 0.88em; }
+  .matricola { display: flex; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+  .matricola label { font-size: 0.88em; color: #555; }
+  .matricola input { padding: 8px 10px; border: 1px solid #bbb; font: inherit; width: 160px; }
 
-  #loading-state { text-align: center; padding: 24px 0 8px; }
-  #loading-state .spinner {
-    width: 28px; height: 28px; margin: 0 auto 14px;
-    border: 3px solid #ddd; border-top-color: #1a1a1a;
-    border-radius: 50%; animation: spin 0.8s linear infinite;
-  }
-  #loading-state p { color: #888; font-size: 0.9em; }
+  .corso { padding: 14px 0; border-top: 1px solid #eee; display: flex; gap: 14px; align-items: flex-start; }
+  .corso:first-of-type { border-top: none; padding-top: 0; }
+  .corso .info { flex: 1; min-width: 0; }
+  .corso .nome { font-weight: bold; }
+  .corso .nome a { color: #1a1a1a; }
+  .corso .sotto { font-size: 0.85em; color: #777; margin-top: 3px; line-height: 1.5; }
+  .corso .azioni { display: flex; gap: 8px; flex-shrink: 0; }
+  .vuoto { color: #999; font-size: 0.9em; font-style: italic; }
+
+  .gruppo { margin-top: 16px; }
+  .gruppo:first-child { margin-top: 0; }
+  .gruppo-nome { font-size: 0.88em; color: #555; margin-bottom: 6px; }
+  .esame { display: block; padding: 9px 12px; border: 1px solid #e4e4e0; margin-bottom: 6px; color: #1a1a1a; text-decoration: none; font-size: 0.95em; }
+  .esame:hover { background: #f8f8f4; }
+  .esame small { color: #888; }
+
+  .spinner { width: 24px; height: 24px; margin: 4px 0; border: 3px solid #ddd; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #form-content { display: none; }
 
   @media (max-width: 540px) {
-    .card { margin: 24px 12px; padding: 28px 20px; }
+    #site-header { padding: 10px 16px; }
+    main { margin: 20px auto; }
+    .card { padding: 22px 18px; }
+    .corso { flex-direction: column; }
   }
 </style>
 </head>
 <body>
 
+<div id="test-banner">🧪 AMBIENTE DI TEST — i dati non sono reali</div>
 <header id="site-header">
   <img src="logo_unisannio.png" alt="Università degli Studi del Sannio">
 </header>
 
-<div class="card">
-  <p class="card-title">Accedi all'esame</p>
-  <p class="card-lead">Seleziona il corso, poi scegli un'esercitazione o un esame tra quelli disponibili.</p>
-
-  <div id="loading-state">
-    <div class="spinner"></div>
-    <p>Caricamento esami in corso&hellip;</p>
+<main>
+  <!-- Accesso -->
+  <div class="card" id="card-accesso">
+    <p class="card-title">QuizForge</p>
+    <p class="card-lead">Accedi con il tuo account di ateneo (@studenti.unisannio.it) per iscriverti ai corsi
+      e trovare esercitazioni ed esami.</p>
+    <div id="google-btn"></div>
+    <div class="msg" id="google-msg"></div>
   </div>
 
-  <div id="form-content">
-    <label class="field-label" for="sel-corso">Corso</label>
-    <select id="sel-corso" onchange="onCorsoChange()">
-      <option value="">— seleziona un corso —</option>
-    </select>
-
-    <div class="divider"></div>
-
-    <label class="field-label" for="sel-esercitazioni">Esercitazioni</label>
-    <select id="sel-esercitazioni" disabled onchange="onExamSelect('practice')">
-      <option value="">— seleziona esercitazione —</option>
-    </select>
-
-    <label class="field-label" for="sel-esami">Esami</label>
-    <select id="sel-esami" disabled onchange="onExamSelect('exam')">
-      <option value="">— seleziona esame —</option>
-    </select>
-
-    <div>
-      <button class="btn" id="btn-vai" disabled onclick="goToExam()">Accedi &#8594;</button>
+  <!-- Profilo -->
+  <div id="profilo" style="display:none;">
+    <div class="card">
+      <div class="chi">
+        <div><span class="card-title" id="p-nome"></span><br><span class="email" id="p-email"></span></div>
+        <a href="#" onclick="esci(); return false;">Esci</a>
+      </div>
+      <div class="matricola">
+        <label for="p-matricola">Matricola</label>
+        <input type="text" id="p-matricola" autocomplete="off" onkeydown="if (event.key === 'Enter') salvaMatricola()">
+        <button class="btn btn-sm" onclick="salvaMatricola()">Salva</button>
+      </div>
+      <div class="msg" id="p-msg"></div>
     </div>
 
-    <div id="msg-error"></div>
-    <div id="msg-empty">Nessun esame disponibile al momento.</div>
+    <div class="card">
+      <h2>I miei corsi</h2>
+      <div id="miei-corsi"></div>
+    </div>
+
+    <div class="card">
+      <h2>Altri corsi</h2>
+      <div id="altri-corsi"></div>
+    </div>
   </div>
-</div>
+
+  <!-- Esami aperti: per gli ospiti e per chi vuole entrare direttamente -->
+  <div class="card">
+    <h2>Esami aperti</h2>
+    <p class="card-lead" style="margin-bottom:16px;">Puoi entrare anche senza account, come ospite, se l'esame lo consente.</p>
+    <div id="esami"><div class="spinner"></div></div>
+  </div>
+</main>
 
 <script>
 const TEST_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyI5a2ejnWKpKnHlThdzpJYU4CWz2IB9GDrrLdXLVXwG4ezGToFZEVVXfb2_VJHkoyNnw/exec";
 const _isTestMode     = new URLSearchParams(window.location.search).has("test");
 let ACTIVE_URL        = _isTestMode ? TEST_SCRIPT_URL : "";
+if (_isTestMode) document.getElementById("test-banner").style.display = "block";
+const conTest = url => url + (_isTestMode ? (url.includes("?") ? "&" : "?") + "test" : "");
+
+// Stessa sessione della pagina d'esame (quiz_v2.html): chi entra qui è già dentro anche lì
+const GOOGLE_CLIENT_ID = "322876627281-v23v50rfun6vd0ea7jnkeejnjon3jks4.apps.googleusercontent.com";
+const SESSION_KEY      = "qf_student_session" + (_isTestMode ? "_test" : "");
+let sessione = null;   // {token, email, nome, exp}
+let profilo  = null;
 
 async function loadConfig() {
   try {
@@ -134,15 +135,9 @@ async function loadConfig() {
   } catch(e) { return {}; }
 }
 
-const MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
-              "luglio","agosto","settembre","ottobre","novembre","dicembre"];
-
-let allExams = [];
-let selectedExamId = null;
-
 function callScript(payload) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), 20000);
   return fetch(ACTIVE_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
@@ -151,125 +146,164 @@ function callScript(payload) {
   }).then(r => r.text()).then(t => { clearTimeout(timer); return JSON.parse(t); });
 }
 
-function formatDate(iso) {
-  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return iso || "";
-  return parseInt(m[3]) + " " + MESI[parseInt(m[2]) - 1] + " " + m[1];
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+function dataIt(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? parseInt(m[3]) + " " + MESI[parseInt(m[2]) - 1] + " " + m[1] : "";
+}
+function msg(id, testo, tipo) { const el = document.getElementById(id); el.textContent = testo || ""; el.className = "msg" + (tipo ? " " + tipo : ""); }
+
+// ---- ACCESSO ----
+function whenGoogleReady(cb, tries) {
+  tries = tries || 0;
+  if (window.google && google.accounts && google.accounts.id) return cb(true);
+  if (tries > 60) return cb(false);
+  setTimeout(() => whenGoogleReady(cb, tries + 1), 100);
 }
 
-function examLabel(e) {
-  const dur = e.durata ? " · " + e.durata + " min" : "";
-  if (e.modalita === "practice" && e.track_name) return e.track_name + dur;
-  const d = formatDate(e.data);
-  return d ? d + dur : e.exam_id;
+function mostraAccesso() {
+  document.getElementById("card-accesso").style.display = "";
+  document.getElementById("profilo").style.display = "none";
+  whenGoogleReady(ok => {
+    if (!ok) { msg("google-msg", "Accesso con Google non disponibile in questo browser. Puoi comunque entrare negli esami aperti qui sotto.", "err"); return; }
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle, ux_mode: "popup", auto_select: false });
+    google.accounts.id.renderButton(document.getElementById("google-btn"),
+      { theme: "outline", size: "large", text: "signin_with", locale: "it", shape: "rectangular" });
+  });
 }
 
-async function loadExams() {
+async function onGoogle(resp) {
+  msg("google-msg", "Verifica dell'accesso…");
+  try {
+    const res = await callScript({ action: "googleLogin", credential: resp.credential });
+    if (res.status !== "ok") throw new Error(res.message || "Accesso non riuscito.");
+    sessione = { token: res.session, email: res.email, nome: res.nome, exp: Date.now() + (res.ttl || 21600) * 1000 - 60000 };
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(sessione)); } catch(e) {}
+    msg("google-msg", "");
+    await caricaProfilo();
+  } catch(e) { msg("google-msg", e.message, "err"); }
+}
+
+function esci() {
+  if (sessione) callScript({ action: "logout", session: sessione.token }).catch(() => {});
+  sessione = null; profilo = null;
+  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  mostraAccesso();
+}
+
+// ---- PROFILO ----
+async function caricaProfilo() {
+  const res = await callScript({ action: "getProfilo", session: sessione.token });
+  if (res.status !== "ok") {
+    if (/scaduta/i.test(res.message || "")) { esci(); return; }
+    throw new Error(res.message || "Profilo non disponibile.");
+  }
+  profilo = res.profilo;
+  renderProfilo();
+}
+
+function renderProfilo() {
+  document.getElementById("card-accesso").style.display = "none";
+  document.getElementById("profilo").style.display = "";
+  document.getElementById("p-nome").textContent  = profilo.nome || profilo.email;
+  document.getElementById("p-email").textContent = profilo.email;
+  const mat = document.getElementById("p-matricola");
+  if (document.activeElement !== mat) mat.value = profilo.matricola || "";
+  if (!profilo.matricola) msg("p-msg", "Indica la tua matricola: serve per iscriverti ai corsi e compare nei tuoi esami.");
+
+  const miei = profilo.iscrizioni || [];
+  document.getElementById("miei-corsi").innerHTML = miei.length ? miei.map(c => `
+    <div class="corso">
+      <div class="info">
+        <div class="nome"><a href="${esc(conTest("corso.html?c=" + encodeURIComponent(c.corso_id)))}">${esc(c.nome)}</a></div>
+        <div class="sotto">Iscritto fino al ${esc(dataIt(c.scadenza))}</div>
+      </div>
+      <div class="azioni">
+        <a class="btn btn-sm" href="${esc(conTest("corso.html?c=" + encodeURIComponent(c.corso_id)))}">Apri</a>
+        <button class="btn btn-sm btn-outline" onclick="disiscrivi('${esc(c.corso_id)}')">Annulla iscrizione</button>
+      </div>
+    </div>`).join("") : '<p class="vuoto">Non sei iscritto a nessun corso.</p>';
+
+  const altri = profilo.altri_corsi || [];
+  document.getElementById("altri-corsi").innerHTML = altri.length ? altri.map(c => `
+    <div class="corso">
+      <div class="info">
+        <div class="nome">${esc(c.nome)}</div>
+        ${c.descrizione ? `<div class="sotto">${esc(c.descrizione.length > 220 ? c.descrizione.slice(0, 220) + "…" : c.descrizione)}</div>` : ""}
+      </div>
+      <div class="azioni">
+        <button class="btn btn-sm" onclick="iscrivi('${esc(c.corso_id)}')" ${profilo.matricola ? "" : 'disabled title="Indica prima la matricola"'}>Iscriviti</button>
+      </div>
+    </div>`).join("") : '<p class="vuoto">Nessun altro corso disponibile.</p>';
+}
+
+async function salvaMatricola() {
+  const val = document.getElementById("p-matricola").value.trim();
+  msg("p-msg", "Salvataggio…");
+  const res = await callScript({ action: "setMatricola", session: sessione.token, matricola: val });
+  if (res.status !== "ok") { msg("p-msg", res.message, "err"); return; }
+  profilo = res.profilo;
+  renderProfilo();
+  msg("p-msg", "✓ Matricola salvata", "ok");
+}
+
+async function iscrivi(corsoId) {
+  const res = await callScript({ action: "iscriviCorso", session: sessione.token, corso_id: corsoId });
+  if (res.status !== "ok") { msg("p-msg", res.message, "err"); return; }
+  profilo = res.profilo;
+  renderProfilo();
+}
+
+async function disiscrivi(corsoId) {
+  const c = (profilo.iscrizioni || []).find(x => x.corso_id === corsoId);
+  if (!confirm("Annullare l'iscrizione a «" + (c ? c.nome : corsoId) + "»? Potrai iscriverti di nuovo quando vuoi.")) return;
+  const res = await callScript({ action: "disiscriviCorso", session: sessione.token, corso_id: corsoId });
+  if (res.status !== "ok") { msg("p-msg", res.message, "err"); return; }
+  profilo = res.profilo;
+  renderProfilo();
+}
+
+// ---- ESAMI APERTI (anche per gli ospiti) ----
+async function caricaEsami() {
+  const box = document.getElementById("esami");
   try {
     const res = await callScript({ action: "getPublicExams" });
-    if (res.status !== "ok") throw new Error(res.message || "errore server");
-    allExams = res.exams || [];
-    document.getElementById("loading-state").style.display = "none";
-    document.getElementById("form-content").style.display = "block";
-    if (allExams.length === 0) {
-      document.getElementById("msg-empty").style.display = "block";
-      return;
-    }
-    populateCorso();
+    if (res.status !== "ok") throw new Error(res.message || "errore");
+    const esami = res.exams || [];
+    if (!esami.length) { box.innerHTML = '<p class="vuoto">Nessun esame aperto al momento.</p>'; return; }
+    const gruppi = new Map();
+    esami.forEach(e => { const k = e.corso || ""; if (!gruppi.has(k)) gruppi.set(k, []); gruppi.get(k).push(e); });
+    box.innerHTML = [...gruppi.keys()].sort((a, b) => !a ? 1 : !b ? -1 : a.localeCompare(b, "it")).map(k => `
+      <div class="gruppo">
+        <div class="gruppo-nome">${esc(k || "Altri esami")}</div>
+        ${gruppi.get(k).map(e => `<a class="esame" href="${esc(conTest("quiz_v2.html?id=" + encodeURIComponent(e.exam_id)))}">
+          ${e.modalita === "practice" ? "Esercitazione" : "Esame"}${e.data ? " · " + esc(dataIt(e.data)) : ""}
+          ${e.modalita === "practice" && e.track_name ? " — " + esc(e.track_name) : ""}
+          <small>${e.durata ? " · " + e.durata + " min" : ""}</small></a>`).join("")}
+      </div>`).join("");
   } catch(e) {
-    document.getElementById("loading-state").style.display = "none";
-    document.getElementById("form-content").style.display = "block";
-    document.getElementById("msg-error").textContent =
-      "Impossibile caricare gli esami. Controlla la connessione e riprova.";
-  }
-}
-
-function populateCorso() {
-  const corsi = [...new Set(allExams.map(e => e.corso).filter(Boolean))].sort();
-  const sel = document.getElementById("sel-corso");
-  corsi.forEach(c => {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    sel.appendChild(opt);
-  });
-  if (corsi.length === 1) {
-    sel.value = corsi[0];
-    onCorsoChange();
-  }
-}
-
-function onCorsoChange() {
-  const corso = document.getElementById("sel-corso").value;
-  selectedExamId = null;
-  document.getElementById("btn-vai").disabled = true;
-  document.getElementById("msg-error").textContent = "";
-
-  const selE = document.getElementById("sel-esercitazioni");
-  const selX = document.getElementById("sel-esami");
-
-  selE.innerHTML = '<option value="">— seleziona esercitazione —</option>';
-  selX.innerHTML = '<option value="">— seleziona esame —</option>';
-
-  if (!corso) {
-    selE.disabled = true;
-    selX.disabled = true;
-    return;
-  }
-
-  const filtered = allExams.filter(e => e.corso === corso);
-  const practice = filtered.filter(e => e.modalita === "practice");
-  const exam     = filtered.filter(e => e.modalita === "exam");
-
-  practice.forEach(e => {
-    const opt = document.createElement("option");
-    opt.value = e.exam_id;
-    opt.textContent = examLabel(e);
-    selE.appendChild(opt);
-  });
-
-  exam.forEach(e => {
-    const opt = document.createElement("option");
-    opt.value = e.exam_id;
-    opt.textContent = examLabel(e);
-    selX.appendChild(opt);
-  });
-
-  selE.disabled = practice.length === 0;
-  selX.disabled = exam.length === 0;
-
-  if (practice.length === 0 && exam.length === 0) {
-    document.getElementById("msg-error").textContent =
-      "Nessun esame disponibile per questo corso al momento.";
-  }
-}
-
-function onExamSelect(which) {
-  if (which === "practice") {
-    document.getElementById("sel-esami").value = "";
-    selectedExamId = document.getElementById("sel-esercitazioni").value || null;
-  } else {
-    document.getElementById("sel-esercitazioni").value = "";
-    selectedExamId = document.getElementById("sel-esami").value || null;
-  }
-  document.getElementById("btn-vai").disabled = !selectedExamId;
-}
-
-function goToExam() {
-  if (selectedExamId) {
-    window.location.href = "quiz_v2.html?id=" + encodeURIComponent(selectedExamId) + (_isTestMode ? "&test" : "");
+    box.innerHTML = '<p class="msg err">Impossibile caricare gli esami. Controlla la connessione e riprova.</p>';
   }
 }
 
 (async () => {
-  const cfg = await loadConfig();
+  await loadConfig();
   if (!ACTIVE_URL) {
-    document.getElementById("loading-state").style.display = "none";
-    document.getElementById("form-content").style.display = "block";
-    document.getElementById("msg-error").textContent = "Configurazione mancante: aggiungi script_url in config.json.";
+    document.getElementById("esami").innerHTML = '<p class="msg err">Configurazione mancante: aggiungi script_url in config.json.</p>';
     return;
   }
-  loadExams();
+  caricaEsami();
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (s && s.exp > Date.now()) sessione = s;
+  } catch(e) {}
+  if (sessione) {
+    try { await caricaProfilo(); } catch(e) { msg("google-msg", e.message, "err"); mostraAccesso(); }
+  } else {
+    mostraAccesso();
+  }
 })();
 </script>
 </body>
