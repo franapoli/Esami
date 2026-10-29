@@ -287,7 +287,7 @@ Track IDs use format `t-<6char>`, e.g. `t-aaa111`.
 
 ## Admin panel (`admin_v2.html`)
 
-Two separate selectors in the header bar: **Esame** (exam session) and, in the Tracce tab, **Traccia** (template).
+The header bar holds only the **active course** («Corso:» + «Mostra tutto»). The exam selector (`esame-select`, with «+ Nuovo esame») lives in the Esami tab; the Risultati tab has a synced copy (`esame-select-ris`, `copiaMenuEsami` / `setEsameSelect`). Entries read "▶ Esame · date — traccia X". The Tracce tab has its own **Traccia** selector.
 
 - **Login screen** shows `BUILD` (auto-updated by pre-push hook) and script `VERSION` (from `getAllEsami` response).
 - **Esame tab**: single card with status (dot, open/closed badge, exam_id, open/close buttons) and form fields: traccia reference, corso, data, durata, modalità, password. `saveTrack()` calls `setEsame`. `setStatus()` opens/closes. `duplicateEsame()` resets the form to create a new esame (traccia is unchanged). The clickable traccia name in the status bar switches to the Tracce tab with that traccia pre-selected.
