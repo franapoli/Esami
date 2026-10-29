@@ -132,7 +132,6 @@
   .tab-mini { font-size:0.84em; width:100%; border-collapse:collapse; }
   .tab-mini td, .tab-mini th { padding:5px 6px; border-bottom:1px solid #eee; text-align:left; }
   .tab-mini th { color:#888; font-weight:normal; font-size:0.9em; }
-  .collega-box { background:#fff8e1; border:1px solid #ffe082; padding:12px 16px; margin-bottom:18px; font-size:0.88em; line-height:1.6; }
   .badge-ospite { font-size: 0.72em; padding: 1px 6px; border-radius: 3px; background: #fff3e0; color: #a35a00; margin-left: 6px; white-space: nowrap; }
   #google-admin-btn { margin: 20px 0 8px; min-height: 44px; }
   .pwd-emergenza { margin-top: 18px; font-size: 0.9em; }
@@ -888,7 +887,6 @@
   <div class="tab-panel" id="panel-corsi">
     <div id="corsi-loading" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">Caricamento in corso…</div>
     <div id="corsi-content" style="display:none;">
-      <div id="corsi-collega"></div>
       <div class="corsi-layout">
         <div class="card corsi-lista">
           <button class="btn btn-sm" style="margin-top:0;" onclick="corsoApri(null)">+ Nuovo corso</button>
@@ -1095,7 +1093,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "fac092a";
+const BUILD = "a952e09";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -4949,7 +4947,6 @@ async function initCorsiTab() {
   catch(e) { loading.style.display = ""; loading.textContent = "Errore: " + e.message; return; }
   loading.style.display = "none"; content.style.display = "";
   renderCorsiElenco();
-  renderCorsiCollega();
   if (corsoSel && allCorsi.some(c => c.corso_id === corsoSel)) corsoApri(corsoSel); else corsoApri(allCorsi.length ? allCorsi[0].corso_id : null);
 }
 
@@ -4963,48 +4960,6 @@ function renderCorsiElenco() {
       ${escHtml(c.nome)}${c.stato === "archiviato" ? ' <span style="color:#999;">(archiviato)</span>' : ""}
       <small>${c.iscritti} iscritt${c.iscritti === 1 ? "o" : "i"} · ${nEsami} esam${nEsami === 1 ? "e" : "i"}</small></div>`;
   }).join("");
-}
-
-// Esami ancora senza corso: si propone di collegarli al corso con lo stesso nome (o di crearlo)
-function renderCorsiCollega() {
-  const box = document.getElementById("corsi-collega");
-  const gruppi = {};
-  allEsami.filter(e => !e.corso_id).forEach(e => { const k = (e.corso_vecchio || "").trim(); (gruppi[k] = gruppi[k] || []).push(e); });
-  const voci = Object.keys(gruppi).filter(k => k);
-  const senzaNome = (gruppi[""] || []).length;
-  if (!voci.length && !senzaNome) { box.innerHTML = ""; return; }
-  box.innerHTML = `<div class="collega-box"><strong>Esami non ancora collegati a un corso</strong><br>` +
-    voci.map(k => {
-      const c = allCorsi.find(x => x.nome.trim().toLowerCase() === k.toLowerCase());
-      const n = gruppi[k].length;
-      return `«${escHtml(k)}»: ${n} ${n === 1 ? "esame" : "esami"} — ` +
-        `<button class="btn btn-sm" style="margin:2px 0;" onclick="collegaEsami(${escAttr(JSON.stringify(k))})">` +
-        (c ? `Collega a «${escHtml(c.nome)}»` : `Crea il corso e collega`) + `</button>`;
-    }).join("<br>") +
-    (senzaNome ? `<br>${senzaNome} ${senzaNome === 1 ? "altro esame non collegato" : "altri esami non collegati"}: collegali dalla scheda dell'esame, se serve.` : "") +
-    `<div id="collega-msg" style="margin-top:6px;"></div></div>`;
-}
-
-async function collegaEsami(nomeCorso) {
-  const msg = document.getElementById("collega-msg");
-  const esami = allEsami.filter(e => !e.corso_id && (e.corso_vecchio || "").trim() === nomeCorso);
-  let c = allCorsi.find(x => x.nome.trim().toLowerCase() === nomeCorso.toLowerCase());
-  msg.style.color = "#555"; msg.textContent = "Collegamento…";
-  try {
-    if (!c) {
-      const r = await callScript({ action: "saveCorso", password: adminPassword, corso: { nome: nomeCorso } });
-      if (r.status !== "ok") throw new Error(r.message);
-      await ensureCorsiLoaded(true);
-      c = allCorsi.find(x => x.corso_id === r.corso_id);
-    }
-    for (const e of esami) {
-      const r = await callScript({ action: "setEsame", password: adminPassword, exam_id: e.exam_id, corso_id: c.corso_id });
-      if (r.status !== "ok") throw new Error(e.exam_id + ": " + r.message);
-      e.corso_id = c.corso_id; e.corso = c.nome; e.corso_vecchio = "";
-    }
-    corsoSel = c.corso_id;
-    initCorsiTab();
-  } catch(e) { msg.style.color = "#b00"; msg.textContent = "Non riuscito: " + e.message + versioneScriptHint(); }
 }
 
 function corsoApri(id) {

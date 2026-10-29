@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.8.1"; // aggiornare ad ogni deploy
+const VERSION = "3.8.2"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -86,8 +86,7 @@ const I_EMAIL = 0, I_NOME = 1, I_MATRICOLA = 2, I_CORSO = 3, I_INIZIO = 4, I_SCA
 const ISCRIZIONE_GIORNI = 365;
 
 // Il corso di un esame è solo quello collegato (E_CORSO_ID); E_CORSO ne conserva il nome, tenuto
-// allineato da saveCorso. Un esame non collegato non ha corso: il nome scritto a mano nelle
-// versioni precedenti non si mostra (resta solo come "corso_vecchio" per collegarlo dal tab Corsi).
+// allineato da saveCorso. Un esame non collegato non ha corso.
 const nomeCorsoEsame = row => String(row[E_CORSO_ID] || "").trim() ? String(row[E_CORSO] || "").trim() : "";   // un'iscrizione dura un anno dalla data in cui lo studente si iscrive
 
 // Colonne foglio "Esami" nel foglio risultati (specchio di esami) — 0-based
@@ -2344,8 +2343,7 @@ function doPost(e) {
           password:   String(row[E_PASSWORD] || "").trim(),
           shuffle:    String(row[E_SHUFFLE] || "").trim().toLowerCase() !== "no",
           ospiti:     String(row[E_OSPITI] || "").trim().toLowerCase() !== "no",
-          corso_id:   String(row[E_CORSO_ID] || "").trim(),
-          corso_vecchio: String(row[E_CORSO_ID] || "").trim() ? "" : String(row[E_CORSO] || "").trim()
+          corso_id:   String(row[E_CORSO_ID] || "").trim()
         });
       }
       return corsResponse({ status: "ok", esami, version: VERSION });
