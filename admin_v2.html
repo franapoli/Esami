@@ -1059,7 +1059,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "801d54d";
+const BUILD = "4910475";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1679,7 +1679,7 @@ function updateAdminTab() {
 
 function updateProvaLink(examId) {
   const a = document.getElementById("link-prova");
-  if (a) a.href = "quiz_v2.html?id=" + encodeURIComponent(examId);
+  if (a) a.href = "quiz_v2.html?id=" + encodeURIComponent(examId) + (_isTestMode ? "&test" : "");   // dal test resta sul test
 }
 
 function renderTrackStatus(e) {
