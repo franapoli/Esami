@@ -132,6 +132,9 @@
   .tab-mini { font-size:0.84em; width:100%; border-collapse:collapse; }
   .tab-mini td, .tab-mini th { padding:5px 6px; border-bottom:1px solid #eee; text-align:left; }
   .tab-mini th { color:#888; font-weight:normal; font-size:0.9em; }
+  .sez-diretta { margin-bottom:18px; }
+  .sez-diretta > summary { cursor:pointer; font-size:0.78em; text-transform:uppercase; letter-spacing:.06em; color:#888; padding:6px 0 10px; }
+  .sez-diretta > summary span { text-transform:none; letter-spacing:0; color:#555; font-size:1.15em; margin-left:6px; }
   .badge-ospite { font-size: 0.72em; padding: 1px 6px; border-radius: 3px; background: #fff3e0; color: #a35a00; margin-left: 6px; white-space: nowrap; }
   #google-admin-btn { margin: 20px 0 8px; min-height: 44px; }
   .pwd-emergenza { margin-top: 18px; font-size: 0.9em; }
@@ -518,11 +521,10 @@
 
   <div class="tab-bar">
     <button class="tab active" id="tab-corsi"     onclick="switchTab('corsi')">Corsi</button>
-    <button class="tab"        id="tab-admin"     onclick="switchTab('admin')">Esame</button>
-    <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
-    <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
+    <button class="tab"        id="tab-admin"     onclick="switchTab('admin')">Esami</button>
     <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Tracce</button>
     <button class="tab"        id="tab-banco"     onclick="switchTab('banco')">Domande</button>
+    <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
   </div>
 
   <!-- TAB: ESAME -->
@@ -667,58 +669,6 @@
   </div>
 
   <!-- TAB: MONITOR STUDENTI -->
-  <div class="tab-panel" id="panel-monitor">
-    <div id="monitor-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
-      Seleziona una traccia per monitorare gli studenti.
-    </div>
-    <div id="monitor-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
-      Caricamento in corso…
-    </div>
-    <div id="monitor-content" style="display:none;">
-      <div class="monitor-info-bar">
-        <div class="monitor-meta" id="monitor-meta"></div>
-        <div class="controls">
-          <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
-          <span id="monitor-updating" style="display:none;font-size:0.78em;color:#aaa;font-style:italic;">Aggiornamento…</span>
-          <span id="last-update"></span>
-          <span style="font-size:0.78em;color:#aaa;">auto ogni 30s</span>
-        </div>
-      </div>
-      <div class="stats-row">
-        <div class="stat-card blue">  <div class="num" id="stat-total">—</div><div class="lbl">Connessi</div></div>
-        <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
-        <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 4px;border-top:1px solid #eee;margin-top:8px;">
-        <span style="font-size:0.88em;color:#555;">Tempo extra:</span>
-        <input type="number" id="extra-minutes-input" value="10" step="5" style="width:64px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.9em;">
-        <span style="font-size:0.88em;color:#555;">min</span>
-        <button class="btn btn-sm" onclick="doAddExtraTime('all')">+ Tutti</button>
-        <button class="btn btn-sm" id="btn-extra-student" onclick="doAddExtraTime('student')" disabled style="opacity:0.5;">+ Studente selezionato</button>
-        <span id="extra-student-label" style="font-size:0.85em;color:#1565c0;font-style:italic;"></span>
-        <button class="btn btn-sm btn-outline" id="btn-del-attempt" onclick="doDeleteAttempt()" disabled style="opacity:0.5;"
-                title="Cancella il tentativo dello studente selezionato: potrà iniziare di nuovo">Elimina tentativo</button>
-        <span id="extra-time-msg" style="font-size:0.85em;margin-left:4px;"></span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid #eee;margin-top:4px;">
-        <span style="font-size:0.88em;color:#555;">Ripresa sessione:</span>
-        <span id="resume-status-badge" style="font-size:0.85em;font-weight:600;padding:2px 10px;border-radius:10px;background:#eee;color:#888;">OFF</span>
-        <button class="btn btn-sm" id="btn-resume-toggle" onclick="doToggleResume()">Abilita ripresa</button>
-        <span id="resume-warning" style="display:none;font-size:0.85em;color:#b00;font-weight:600;">⚠ RIPRESA ATTIVA — gli studenti possono recuperare la sessione da qualsiasi dispositivo</span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Matricola</th><th>Nominativo</th><th>Email</th>
-            <th>Inizio</th><th>Fine</th><th>Durata</th>
-            <th>Risposte</th><th>Voto</th><th>Stato</th>
-          </tr>
-        </thead>
-        <tbody id="monitor-body"></tbody>
-      </table>
-    </div>
-  </div>
-
   <!-- TAB: TRACCE -->
   <div class="tab-panel" id="panel-domande">
     <div id="domande-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
@@ -902,9 +852,60 @@
   </div>
 
   <div class="tab-panel" id="panel-risultati">
-    <div id="risultati-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
-      Seleziona una traccia per visualizzare i risultati.
+    <!-- In diretta: studenti collegati, tempo extra, ripresa. Aperto durante l'esame, richiudibile dopo -->
+    <details id="sez-diretta" class="sez-diretta" open ontoggle="if (!_direttaAuto) _direttaToccata = true;">
+      <summary>In diretta <span id="diretta-riassunto"></span></summary>
+    <div id="monitor-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Seleziona un esame per vederne gli studenti.
     </div>
+    <div id="monitor-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
+      Caricamento in corso…
+    </div>
+    <div id="monitor-content" style="display:none;">
+      <div class="monitor-info-bar">
+        <div class="monitor-meta" id="monitor-meta"></div>
+        <div class="controls">
+          <button class="btn btn-sm" onclick="loadMonitorData()">↻ Aggiorna ora</button>
+          <span id="monitor-updating" style="display:none;font-size:0.78em;color:#aaa;font-style:italic;">Aggiornamento…</span>
+          <span id="last-update"></span>
+          <span style="font-size:0.78em;color:#aaa;">auto ogni 30s</span>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card blue">  <div class="num" id="stat-total">—</div><div class="lbl">Connessi</div></div>
+        <div class="stat-card orange"><div class="num" id="stat-prog">—</div> <div class="lbl">In corso</div></div>
+        <div class="stat-card green"> <div class="num" id="stat-done">—</div> <div class="lbl">Consegnati</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 4px;border-top:1px solid #eee;margin-top:8px;">
+        <span style="font-size:0.88em;color:#555;">Tempo extra:</span>
+        <input type="number" id="extra-minutes-input" value="10" step="5" style="width:64px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.9em;">
+        <span style="font-size:0.88em;color:#555;">min</span>
+        <button class="btn btn-sm" onclick="doAddExtraTime('all')">+ Tutti</button>
+        <button class="btn btn-sm" id="btn-extra-student" onclick="doAddExtraTime('student')" disabled style="opacity:0.5;">+ Studente selezionato</button>
+        <span id="extra-student-label" style="font-size:0.85em;color:#1565c0;font-style:italic;"></span>
+        <button class="btn btn-sm btn-outline" id="btn-del-attempt" onclick="doDeleteAttempt()" disabled style="opacity:0.5;"
+                title="Cancella il tentativo dello studente selezionato: potrà iniziare di nuovo">Elimina tentativo</button>
+        <span id="extra-time-msg" style="font-size:0.85em;margin-left:4px;"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid #eee;margin-top:4px;">
+        <span style="font-size:0.88em;color:#555;">Ripresa sessione:</span>
+        <span id="resume-status-badge" style="font-size:0.85em;font-weight:600;padding:2px 10px;border-radius:10px;background:#eee;color:#888;">OFF</span>
+        <button class="btn btn-sm" id="btn-resume-toggle" onclick="doToggleResume()">Abilita ripresa</button>
+        <span id="resume-warning" style="display:none;font-size:0.85em;color:#b00;font-weight:600;">⚠ RIPRESA ATTIVA — gli studenti possono recuperare la sessione da qualsiasi dispositivo</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Matricola</th><th>Nominativo</th><th>Email</th>
+            <th>Inizio</th><th>Fine</th><th>Durata</th>
+            <th>Risposte</th><th>Voto</th><th>Stato</th>
+          </tr>
+        </thead>
+        <tbody id="monitor-body"></tbody>
+      </table>
+    </div>
+    </details>
+    <div id="risultati-placeholder" style="display:none;"></div>
     <div id="risultati-loading" style="display:none;color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
       Caricamento in corso…
     </div>
@@ -1097,7 +1098,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "0b2e9c7";
+const BUILD = "547d58c";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1670,8 +1671,7 @@ function onEsameChange() {
   const examId = document.getElementById("esame-select").value;
   currentEsame = examId ? (allEsami.find(e => e.exam_id === examId) || null) : null;
   updateAdminTab();
-  if (activeTab === "monitor")   updateMonitorTab();
-  if (activeTab === "risultati") updateRisultatiTab();
+  if (activeTab === "risultati") { _direttaToccata = false; updateMonitorTab(); updateRisultatiTab(); }
 }
 
 function updateEsameInList(e) {
@@ -1695,8 +1695,7 @@ function switchTab(name) {
   document.getElementById("tab-" + name).classList.add("active");
   document.getElementById("panel-" + name).classList.add("active");
 
-  if (name === "monitor")   { updateMonitorTab(); startAutoRefresh(); }
-  else if (name === "risultati") { updateRisultatiTab(); }
+  if (name === "risultati") { updateMonitorTab(); updateRisultatiTab(); startAutoRefresh(); }
   else if (name === "domande")   { initDomandeTab(); }
   else if (name === "banco")     { initBancoTab(); }
   else if (name === "corsi")     { initCorsiTab(); }
@@ -1812,6 +1811,10 @@ function onEsameTracciaChange() {
 }
 
 // ---- TAB MONITOR ----
+// La parte in diretta è aperta mentre l'esame è aperto o qualcuno non ha ancora consegnato;
+// altrimenti si richiude da sola, a meno che l'admin l'abbia aperta o chiusa a mano.
+let _direttaViva = false, _direttaToccata = false, _direttaAuto = false, _consegnatiVisti = -1;
+
 function updateMonitorTab() {
   const has = !!currentEsame;
   document.getElementById("monitor-placeholder").style.display = !has ? "block" : "none";
@@ -1858,6 +1861,16 @@ function renderMonitorData(res) {
     (dateIt ? " &nbsp;|&nbsp; " + dateIt : "") + modeLbl;
 
   const done = rows.filter(r => r.finalized).length;
+  _direttaViva = (currentEsame && currentEsame.stato === "open") || rows.some(r => !r.finalized);
+  document.getElementById("diretta-riassunto").textContent =
+    rows.length ? `${rows.length} collegat${rows.length === 1 ? "o" : "i"} · ${rows.length - done} in corso · ${done} consegnat${done === 1 ? "o" : "i"}` : "nessuno studente";
+  if (!_direttaToccata) {
+    const d = document.getElementById("sez-diretta");
+    _direttaAuto = true; d.open = _direttaViva; setTimeout(() => { _direttaAuto = false; }, 0);
+  }
+  // Nuove consegne: si aggiornano anche punteggi e statistiche
+  if (_consegnatiVisti !== -1 && done !== _consegnatiVisti) loadRisultatiData();
+  _consegnatiVisti = done;
   document.getElementById("stat-total").textContent = rows.length;
   document.getElementById("stat-prog").textContent  = rows.length - done;
   document.getElementById("stat-done").textContent  = done;
@@ -1895,7 +1908,8 @@ function renderMonitorData(res) {
 
 function startAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => { if (activeTab === "monitor") loadMonitorData(); }, 30000);
+  // Si aggiorna solo la parte in diretta, e solo mentre serve; i punteggi quando arriva una consegna
+  refreshTimer = setInterval(() => { if (activeTab === "risultati" && _direttaViva) loadMonitorData(); }, 30000);
 }
 
 let _selectedMonitorMatricola = null;
@@ -1998,7 +2012,7 @@ function updateResumeBar() {
 // ---- TAB RISULTATI ----
 function updateRisultatiTab() {
   const has = !!currentEsame;
-  document.getElementById("risultati-placeholder").style.display = !has ? "block" : "none";
+  _consegnatiVisti = -1;
   document.getElementById("risultati-loading").style.display     = has  ? "block" : "none";
   document.getElementById("risultati-content").style.display     = "none";
   if (has) loadRisultatiData();
@@ -5000,8 +5014,7 @@ function aggiornaVista() {
     if (document.getElementById("banco-content").style.display !== "none") renderBanco();
     try { renderQBrowser(); } catch(e) {}
   }
-  if (activeTab === "monitor") updateMonitorTab();
-  if (activeTab === "risultati") updateRisultatiTab();
+  if (activeTab === "risultati") { updateMonitorTab(); updateRisultatiTab(); }
 }
 
 // ---- CORSI ----
