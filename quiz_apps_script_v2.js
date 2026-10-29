@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.11.0"; // aggiornare ad ogni deploy
+const VERSION = "3.12.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -86,6 +86,9 @@ const AV_ID = 0, AV_CORSO = 1, AV_DATA = 2, AV_TESTO = 3;
 const I_EMAIL = 0, I_NOME = 1, I_MATRICOLA = 2, I_CORSO = 3, I_INIZIO = 4, I_SCADENZA = 5;
 const ISCRIZIONE_GIORNI = 365;
 const S_EMAIL = 0, S_NOME = 1, S_MATRICOLA = 2, S_AGGIORNATO = 3, S_CDL = 4;   // studenti (file Risultati)
+// esiti (file Risultati): indice di chi ha consegnato cosa; il punteggio si legge dal foglio dell'esame
+const R_EMAIL = 0, R_MATRICOLA = 1, R_CORSO = 2, R_ESAME = 3, R_MODALITA = 4, R_DATA = 5;
+const E_ESITI = 12;   // M  "si" = esiti dell'esame pubblicati agli studenti
 
 // Il corso di un esame è solo quello collegato (E_CORSO_ID); E_CORSO ne conserva il nome, tenuto
 // allineato da saveCorso. Un esame non collegato non ha corso.
@@ -353,7 +356,7 @@ function getEsamiSheet() {
   let sheet = ss.getSheetByName("esami");
   if (!sheet) {
     sheet = ss.insertSheet("esami");
-    const headers = ["EsameID", "TracciaID", "Nome", "Data", "Durata (min)", "Corso", "Modalità", "Stato", "Password", "Shuffle", "Ospiti", "CorsoID"];
+    const headers = ["EsameID", "TracciaID", "Nome", "Data", "Durata (min)", "Corso", "Modalità", "Stato", "Password", "Shuffle", "Ospiti", "CorsoID", "Esiti"];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -1419,6 +1422,85 @@ function profiloDi(s) {
   };
 }
 
+// ---- Registro degli esiti ----
+function getEsitiSheet(archivio) {
+  return tabConIntestazione(openSS(getSheetResultsId()), archivio ? "esiti_archivio" : "esiti",
+                            ["Email", "Matricola", "CorsoID", "EsameID", "Modalità", "Consegnato"]);
+}
+
+// Chiamata da finalize (già sotto lock). Esercitazioni: vale l'ultimo tentativo, la riga si aggiorna.
+function registraEsito(email, matricola, track, examId) {
+  const esame = readEsame(examId);
+  const corsoId = esame ? esame.corso_id : "";
+  const sheet = getEsitiSheet(false);
+  const riga = [sheetText(email), sheetText(matricola), corsoId, examId, track.mode || "exam", new Date()];
+  if (track.mode === "practice") {
+    const v = sheet.getDataRange().getValues();
+    for (let i = v.length - 1; i >= 1; i--) {
+      if (String(v[i][R_EMAIL]).trim().toLowerCase() === email && String(v[i][R_ESAME]).trim() === examId) {
+        sheet.getRange(i + 1, 1, 1, riga.length).setValues([riga]);
+        return;
+      }
+    }
+  }
+  sheet.appendRow(riga);
+  sheet.getRange(sheet.getLastRow(), R_MATRICOLA + 1).setNumberFormat("@");
+}
+
+// Voci più vecchie di un anno nell'archivio (chiamata dall'admin, non durante gli esami)
+function archiviaEsitiVecchi() {
+  const sheet = getEsitiSheet(false), v = sheet.getDataRange().getValues();
+  const limite = Date.now() - ISCRIZIONE_GIORNI * 86400000, vecchie = [];
+  for (let i = 1; i < v.length; i++) {
+    const t = v[i][R_DATA] instanceof Date ? v[i][R_DATA].getTime() : new Date(v[i][R_DATA]).getTime();
+    if (String(v[i][R_EMAIL]).trim() && isFinite(t) && t < limite) vecchie.push(i + 1);
+  }
+  if (!vecchie.length) return;
+  const arch = getEsitiSheet(true);
+  arch.getRange(arch.getLastRow() + 1, 1, vecchie.length, R_DATA + 1).setValues(vecchie.map(r => v[r - 1].slice(0, R_DATA + 1)));
+  for (let b = vecchie.length - 1; b >= 0; ) {
+    let a = b;
+    while (a > 0 && vecchie[a - 1] === vecchie[a] - 1) a--;
+    sheet.deleteRows(vecchie[a], b - a + 1);
+    b = a - 1;
+  }
+}
+
+// «I miei risultati» in un corso: esercitazioni sempre, esami solo se gli esiti sono pubblicati.
+// Il punteggio viene dal foglio dell'esame (eventuali correzioni a mano comprese).
+function risultatiStudente(email, corsoId) {
+  const tz = Session.getScriptTimeZone();
+  const esami = {};
+  getEsamiSheet().getDataRange().getValues().slice(1).forEach(row => {
+    const id = String(row[E_ID]).trim();
+    if (!id) return;
+    const d = row[E_DATA];
+    esami[id] = { data: d instanceof Date && !isNaN(d) ? Utilities.formatDate(d, tz, "yyyy-MM-dd") : String(d || ""),
+                  pubblicati: String(row[E_ESITI] || "").trim().toLowerCase() === "si",
+                  modalita: String(row[E_MODALITA]).trim() || "exam", corso_id: String(row[E_CORSO_ID] || "").trim(),
+                  traccia_id: String(row[E_TRACCIA]).trim() };
+  });
+  const ss = openSS(getSheetResultsId());
+  const out = [];
+  getEsitiSheet(false).getDataRange().getValues().slice(1).forEach(r => {
+    if (String(r[R_EMAIL]).trim().toLowerCase() !== email) return;
+    const examId = String(r[R_ESAME]).trim(), e = esami[examId];
+    if (!e || e.corso_id !== corsoId) return;
+    const voce = { exam_id: examId, modalita: e.modalita, data: e.data, consegnato: isoData(r[R_DATA]) };
+    if (e.modalita === "exam" && !e.pubblicati) { voce.in_attesa = true; out.push(voce); return; }
+    const sheet = ss.getSheetByName(examId);
+    const riga = sheet ? findRow(sheet, String(r[R_MATRICOLA])) : -1;
+    if (riga === -1) return;
+    const v = sheet.getRange(riga, COL_EMAIL, 1, COL_QIDS - COL_EMAIL + 1).getValues()[0];
+    if (String(v[0]).trim().toLowerCase() !== email) return;   // la riga è di qualcun altro (tentativo rifatto)
+    voce.punteggio = v[COL_SCORE - COL_EMAIL];
+    voce.totale = v[COL_TOTALE - COL_EMAIL];
+    if (e.modalita === "practice" && e.traccia_id) { const tr = readTraccia(e.traccia_id); voce.track_name = tr ? tr.nome : ""; }
+    out.push(voce);
+  });
+  return out.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+}
+
 function readIscrizioniAttive(corsoId) {
   const values = getIscrizioniSheet(false).getDataRange().getValues();
   const ora = Date.now();
@@ -1697,6 +1779,8 @@ function doPost(e) {
     // ---- CORSI (admin) ----
     if (data.action === "getCorsi") {
       if (!adminAuth(data)) return corsResponse({ status: "error", message: "Password errata" });
+      const lockA = LockService.getScriptLock();
+      try { lockA.waitLock(15000); archiviaIscrizioniScadute(); archiviaEsitiVecchi(); } catch(e) {} finally { try { lockA.releaseLock(); } catch(e) {} }
       const iscritti = {};
       readIscrizioniAttive().forEach(x => { iscritti[x.corso_id] = (iscritti[x.corso_id] || 0) + 1; });
       const corsi = readCorsi().map(c => { delete c.riga; c.iscritti = iscritti[c.corso_id] || 0; return c; });
@@ -2061,11 +2145,12 @@ function doPost(e) {
         const x = readIscrizioniAttive(corsoId).find(i => i.email === s.email);
         if (x) iscrizione = { inizio: x.inizio, scadenza: x.scadenza };
       }
+      const risultati = s ? risultatiStudente(s.email, corsoId) : [];
       return corsResponse({ status: "ok", corso: {
         corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione, link: c.link, stato: c.stato,
         cdl: c.cdl.map(id => (cdl.find(x => x.cdl_id === id) || {}).nome).filter(Boolean) },
         avvisi: readAvvisi(corsoId).map(a => ({ data: a.data, testo: a.testo })),
-        esami: esami, loggato: loggato, iscrizione: iscrizione });
+        esami: esami, loggato: loggato, iscrizione: iscrizione, risultati: risultati });
     }
 
     if (data.action === "getPublicExams") {
@@ -2558,7 +2643,8 @@ function doPost(e) {
           password:   String(row[E_PASSWORD] || "").trim(),
           shuffle:    String(row[E_SHUFFLE] || "").trim().toLowerCase() !== "no",
           ospiti:     String(row[E_OSPITI] || "").trim().toLowerCase() !== "no",
-          corso_id:   String(row[E_CORSO_ID] || "").trim()
+          corso_id:   String(row[E_CORSO_ID] || "").trim(),
+          esiti:      String(row[E_ESITI] || "").trim().toLowerCase() === "si"
         });
       }
       return corsResponse({ status: "ok", esami, version: VERSION });
@@ -2585,6 +2671,7 @@ function doPost(e) {
         if (data.shuffle        !== undefined) sheet.getRange(row, E_SHUFFLE  + 1).setValue(data.shuffle === false || data.shuffle === "no" ? "no" : "");
         if (data.ospiti         !== undefined) sheet.getRange(row, E_OSPITI   + 1).setValue(data.ospiti === false || data.ospiti === "no" ? "no" : "");
         if (data.corso_id       !== undefined) sheet.getRange(row, E_CORSO_ID + 1).setValue(String(data.corso_id || ""));
+        if (data.esiti          !== undefined) sheet.getRange(row, E_ESITI    + 1).setValue(data.esiti === true || data.esiti === "si" ? "si" : "");
         // Sincronizza foglio Esami nel foglio risultati
         const meta  = getMetaSheet();
         const mvals = meta.getDataRange().getValues();
@@ -3099,8 +3186,12 @@ function doPost(e) {
           }
         }
 
-        sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || existingRow[COL_NOMINATIVO - 1] || "");
-        sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || existingRow[COL_EMAIL - 1] || "");
+        // Riga Google: nome ed email restano quelli verificati (l'email lega la riga all'account);
+        // un ospite può ancora correggerli alla consegna, come prima
+        if (!isGoogleRow(existingRow[COL_QIDS - 1])) {
+          sheet.getRange(rowIndex, COL_NOMINATIVO).setValue(data.nominativo || existingRow[COL_NOMINATIVO - 1] || "");
+          sheet.getRange(rowIndex, COL_EMAIL).setValue(data.email || existingRow[COL_EMAIL - 1] || "");
+        }
         sheet.getRange(rowIndex, COL_SCORE).setValue(serverScore);            // score server-side
         sheet.getRange(rowIndex, COL_TS_END).setValue(serverEnd); // fine server-side
         sheet.getRange(rowIndex, COL_ELAPSED).setValue(elapsedStr);
@@ -3109,6 +3200,11 @@ function doPost(e) {
           sheet.getRange(rowIndex, col).setValue(item.ans !== undefined ? item.ans : "");
           sheet.getRange(rowIndex, col + 1).setValue(item.pts);
         });
+
+        // Registro degli esiti, per «I miei risultati»: solo chi è entrato con Google
+        if (who.google) {
+          try { registraEsito(who.email, String(data.matricola), track, examId); } catch(e) { console.error("registro esiti: " + e); }
+        }
 
         const response = { status: "ok", score: serverScore, total_pts: totalPtsResp, overtime: overtime, n_correct: nCorrect, n_scored: nScored };
         // Le risposte corrette si rivelano SOLO in practice e SOLO dopo la consegna

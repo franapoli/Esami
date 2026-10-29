@@ -604,6 +604,8 @@
             <button class="btn btn-sm btn-red"   onclick="setStatus('closed')">■ Chiudi</button>
             <a id="link-prova" href="#" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;">↗ Prova esame</a>
             <button class="btn btn-sm btn-outline" onclick="duplicateEsame()">Duplica</button>
+            <button class="btn btn-sm btn-outline" id="btn-esiti" onclick="toggleEsiti()" style="display:none;"
+                    title="Gli studenti entrati con l'account di ateneo vedono il proprio punteggio nella home del corso">Pubblica esiti</button>
           </div>
           <div id="status-msg" class="ok-msg" style="width:100%;margin:2px 0 0;min-height:1em;"></div>
         </div>
@@ -1114,7 +1116,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "0105f0b";
+const BUILD = "ae9b489";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1802,8 +1804,27 @@ function renderTrackStatus(e) {
   document.getElementById("status-stato").textContent = isOpen ? "APERTO" : "CHIUSO";
   document.getElementById("status-badge").innerHTML  = e.modalita === "practice"
     ? '<span class="badge badge-practice">Esercitazione</span>'
-    : '<span class="badge badge-exam">Esame</span>';
+    : '<span class="badge badge-exam">Esame</span>' + (e.esiti ? ' <span class="badge badge-done">esiti pubblicati</span>' : "");
   document.getElementById("status-examid").textContent = e.exam_id || "";
+  // Le esercitazioni mostrano sempre il punteggio; per gli esami lo decidi tu
+  const be = document.getElementById("btn-esiti");
+  be.style.display = e.modalita === "practice" ? "none" : "";
+  be.textContent = e.esiti ? "Ritira esiti" : "Pubblica esiti";
+}
+
+async function toggleEsiti() {
+  if (!currentEsame) return;
+  const pubblica = !currentEsame.esiti;
+  if (pubblica && !confirm("Pubblicare gli esiti di questo esame?\n\nGli studenti entrati con l'account di ateneo vedranno il proprio punteggio " +
+                           "nella home del corso (quello attuale del foglio, comprese le tue correzioni). Puoi ritirarli quando vuoi.")) return;
+  const msg = document.getElementById("status-msg");
+  msg.className = "ok-msg"; msg.textContent = "Aggiornamento…";
+  const res = await callScript({ action: "setEsame", password: adminPassword, exam_id: currentEsame.exam_id, esiti: pubblica });
+  if (res.status !== "ok") { msg.className = "error-msg"; msg.textContent = res.message || "Errore."; return; }
+  currentEsame.esiti = pubblica;
+  updateEsameInList(currentEsame);
+  renderTrackStatus(currentEsame);
+  msg.textContent = pubblica ? "✓ Esiti pubblicati: gli studenti li vedono nella home del corso." : "✓ Esiti ritirati.";
 }
 
 function populateEsameEditForm(e) {
