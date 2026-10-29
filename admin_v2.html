@@ -541,6 +541,7 @@
             <label for="new-corso-id">Corso</label>
             <select id="new-corso-id" onchange="corsoScelto('new')"></select>
             <input type="hidden" id="new-corso">
+            <p class="hint" id="new-corso-hint" style="display:none;color:#a35a00;"></p>
           </div>
           <div class="field" style="min-width:140px;">
             <label for="new-date">Data</label>
@@ -614,6 +615,7 @@
             <label for="cfg-corso-id">Corso</label>
             <select id="cfg-corso-id" onchange="corsoScelto('cfg')"></select>
             <input type="hidden" id="cfg-corso">
+            <p class="hint" id="cfg-corso-hint" style="display:none;color:#a35a00;"></p>
           </div>
           <div class="field" style="min-width:140px;">
             <label for="cfg-date">Data</label>
@@ -1095,7 +1097,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "77df613";
+const BUILD = "03fd4b6";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -4930,16 +4932,27 @@ function fillCorsoSelect(pre, corsoId, corsoTesto) {
   const sel = document.getElementById(pre + "-corso-id");
   if (!sel) return;
   const corsi = (allCorsi || []).filter(c => c.stato !== "archiviato" || c.corso_id === corsoId);
-  let html = `<option value="">${corsoTesto && !corsoId ? escHtml(corsoTesto) + " (non collegato)" : "— nessun corso —"}</option>`;
+  let html = `<option value="">${corsoTesto && !corsoId ? escHtml(corsoTesto) : "— nessun corso —"}</option>`;
   html += corsi.map(c => `<option value="${escAttr(c.corso_id)}">${escHtml(c.nome)}${c.stato === "archiviato" ? " (archiviato)" : ""}</option>`).join("");
   sel.innerHTML = html;
   sel.value = corsoId || "";
+  corsoHint(pre, corsoTesto);
   if (!allCorsi) ensureCorsiLoaded().then(() => fillCorsoSelect(pre, corsoId, corsoTesto)).catch(() => {});
 }
 
 function corsoScelto(pre) {
   const c = (allCorsi || []).find(x => x.corso_id === document.getElementById(pre + "-corso-id").value);
   if (c) document.getElementById(pre + "-corso").value = c.nome;
+  corsoHint(pre, document.getElementById(pre + "-corso").value);
+}
+
+// Esame con il solo nome del corso scritto a mano (com'era prima dei corsi): va collegato a un corso
+function corsoHint(pre, corsoTesto) {
+  const h = document.getElementById(pre + "-corso-hint");
+  if (!h) return;
+  const daCollegare = !document.getElementById(pre + "-corso-id").value && !!corsoTesto;
+  h.style.display = daCollegare ? "" : "none";
+  h.textContent = daCollegare ? "Solo nome, non collegato a un corso: scegli il corso dal menu e salva (non comparirà nella home del corso finché non lo colleghi)." : "";
 }
 
 async function initCorsiTab() {
