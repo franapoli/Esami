@@ -504,6 +504,10 @@
   </div>
 
   <div class="track-selector-bar">
+    <label for="corso-attivo">Corso:</label>
+    <select id="corso-attivo" onchange="cambiaCorsoAttivo(this.value)" style="flex:0 1 280px;min-width:180px;"></select>
+    <label class="chk" style="display:flex;align-items:center;gap:5px;cursor:pointer;" title="Mostra esami, tracce e domande di tutti i corsi">
+      <input type="checkbox" id="mostra-tutto" onchange="cambiaMostraTutto(this.checked)"> Mostra tutto</label>
     <label for="esame-select">Esame:</label>
     <select id="esame-select" onchange="onEsameChange()">
       <option value="">— caricamento… —</option>
@@ -513,16 +517,16 @@
   </div>
 
   <div class="tab-bar">
-    <button class="tab active" id="tab-admin"     onclick="switchTab('admin')">Esame</button>
+    <button class="tab active" id="tab-corsi"     onclick="switchTab('corsi')">Corsi</button>
+    <button class="tab"        id="tab-admin"     onclick="switchTab('admin')">Esame</button>
     <button class="tab"        id="tab-monitor"   onclick="switchTab('monitor')">Monitor studenti</button>
     <button class="tab"        id="tab-risultati" onclick="switchTab('risultati')">Risultati</button>
     <button class="tab"        id="tab-domande"   onclick="switchTab('domande')">Tracce</button>
     <button class="tab"        id="tab-banco"     onclick="switchTab('banco')">Domande</button>
-    <button class="tab"        id="tab-corsi"     onclick="switchTab('corsi')">Corsi</button>
   </div>
 
   <!-- TAB: ESAME -->
-  <div class="tab-panel active" id="panel-admin">
+  <div class="tab-panel" id="panel-admin">
     <div id="admin-placeholder" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">
       Seleziona un esame dal menu o creane uno nuovo.
     </div>
@@ -884,7 +888,7 @@
   </div>
 
   <!-- TAB: RISULTATI -->
-  <div class="tab-panel" id="panel-corsi">
+  <div class="tab-panel active" id="panel-corsi">
     <div id="corsi-loading" style="color:#888;font-size:0.9em;font-style:italic;padding:20px 0;">Caricamento in corso…</div>
     <div id="corsi-content" style="display:none;">
       <div class="corsi-layout">
@@ -1093,7 +1097,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "a952e09";
+const BUILD = "0b2e9c7";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -1388,7 +1392,7 @@ async function enterPanel(pwd) {
     populateEsameSelect(allEsami);
     document.getElementById("loading-overlay").classList.remove("active");
     ensureTracksLoaded();    // background: popola traccia-selects e crossref
-    ensureCorsiLoaded().catch(() => {});   // background: menu "Corso" della scheda esame
+    switchTab("corsi");      // i corsi sono il punto di partenza; caricano anche la barra del corso attivo
     ensureDriveListLoaded(); // background: popola i select Drive
     loadAdminBackend().catch(() => {}); // background: conversione del formato nel testo per elenchi, export, risultati
     ensureQuestionsLoaded().then(() => {  // background: tab Domande e Tracce pronti quando li apri
@@ -1607,8 +1611,11 @@ function logout() {
 // ---- ESAME SELECT ----
 function populateEsameSelect(esami) {
   const sel = document.getElementById("esame-select");
+  const c = filtroCorso();
+  if (c) esami = esami.filter(e => e.corso_id === c);
+  const prevSel = sel.value;
   if (esami.length === 0) {
-    sel.innerHTML = '<option value="">— nessun esame —</option>';
+    sel.innerHTML = `<option value="">${c ? "— nessun esame in questo corso —" : "— nessun esame —"}</option>`;
     document.getElementById("no-tracks").style.display = "inline";
     return;
   }
@@ -1625,9 +1632,10 @@ function populateEsameSelect(esami) {
     const trackName = t ? t.nome : e.traccia_id;
     const name = e.nome && e.nome.trim() ? e.nome : trackName;
     const suffix = isPractice ? "" : (e.data ? " · " + formatDateIt(e.data) : "");
-    opt.textContent = icon + (e.corso ? e.corso + " — " : "") + (isPractice ? trackName : name) + suffix + mode;
+    opt.textContent = icon + (e.corso && !c ? e.corso + " — " : "") + (isPractice ? trackName : name) + suffix + mode;
     sel.appendChild(opt);
   });
+  if ([...sel.options].some(o => o.value === prevSel)) sel.value = prevSel;
 }
 
 function populateTracciaSelects() {
@@ -1639,8 +1647,11 @@ function populateTracciaSelects() {
     if (!el) return;
     const prev = el.value;
     if (id === "traccia-select") {
+      // Con un corso attivo: le tracce usate dai suoi esami (più quella aperta, anche se nuova)
+      const tc = tracceDelCorso();
+      const tracce = tc ? allTracks.filter(t => tc.has(t.track_id) || (currentTraccia && t.track_id === currentTraccia.track_id)) : allTracks;
       el.innerHTML = '<option value="">— seleziona —</option><option value="__new__">+ Crea nuova traccia</option>' +
-        allTracks.map(t => `<option value="${t.track_id}">${escHtml(t.nome)}</option>`).join("");
+        tracce.map(t => `<option value="${t.track_id}">${escHtml(t.nome)}</option>`).join("");
     } else {
       el.innerHTML = opts;
     }
@@ -1706,7 +1717,7 @@ function updateAdminTab() {
   if (appenaAperto) document.getElementById("new-pwd").value = randomTrackPassword();
   if (appenaAperto && !document.getElementById("new-corso-id").value) {
     // ultimo corso usato, così gli esami di una sessione nascono già nel corso giusto
-    const ultimo = (() => { try { return localStorage.getItem("qf_ultimo_corso") || ""; } catch(e) { return ""; } })();
+    const ultimo = filtroCorso() || (() => { try { return localStorage.getItem("qf_ultimo_corso") || ""; } catch(e) { return ""; } })();
     const c = (allCorsi || []).find(x => x.corso_id === ultimo);
     fillCorsoSelect("new", c ? c.corso_id : "");
   }
@@ -2592,13 +2603,14 @@ const cmpIt = (a, b) => a.localeCompare(b, "it");
 
 function catTreeFill(sel, tutte, senzaSub) {
   const prev = sel.value, tree = new Map();
-  (allQuestions || []).forEach(q => {
+  const base = domandeVisibili();
+  base.forEach(q => {
     const c = q.categoria || "", sc = q.sottocateg || "";
     if (!tree.has(c)) tree.set(c, new Map());
     tree.get(c).set(sc, (tree.get(c).get(sc) || 0) + 1);
   });
   const opt = (v, label) => `<option value="${escAttr(v === "" ? "" : JSON.stringify(v))}">${label}</option>`;
-  let html = opt("", `${escHtml(tutte)} (${(allQuestions || []).length})`);
+  let html = opt("", `${escHtml(tutte)} (${base.length})`);
   [...tree.keys()].sort(cmpIt).forEach(c => {
     const subs = tree.get(c), tot = [...subs.values()].reduce((a, b) => a + b, 0);
     html += opt([c, null], `${escHtml(c || "(senza categoria)")} (${tot})`);
@@ -2659,7 +2671,8 @@ function renderBanco(keepSelection) {
   const index = bancoIndex();
   const fixed = bancoFixedUsage();
 
-  _bancoFiltered = allQuestions.filter(q => {
+  const base = domandeVisibili();
+  _bancoFiltered = base.filter(q => {
     if (tipo  && q.tipo !== tipo) return false;
     if (!catTreeMatch(ramo, q)) return false;
     if (stato && (q.stato || "verificato") !== stato) return false;
@@ -2671,7 +2684,7 @@ function renderBanco(keepSelection) {
 
   const n = _bancoFiltered.length;
   document.getElementById("banco-count").textContent =
-    (n === allQuestions.length ? n + " domande" : n + " di " + allQuestions.length) +
+    (n === base.length ? n + " domande" : n + " di " + base.length) + (filtroCorso() ? " del corso" : "") +
     (n > BANCO_MAX_ROWS ? " — mostrate le prime " + BANCO_MAX_ROWS + ", affina la ricerca" : "");
 
   // Con l'editor aperto la selezione non si sposta mai: cercare non deve far perdere la bozza
@@ -2686,6 +2699,9 @@ function renderBanco(keepSelection) {
   const list = document.getElementById("banco-list");
   if (!allQuestions.length) {
     list.innerHTML = '<div class="banco-empty">Il foglio domande non contiene domande.</div>';
+  } else if (!base.length) {
+    list.innerHTML = '<div class="banco-empty">Nessuna domanda in questo corso: le domande di un corso sono quelle delle tracce usate dai suoi esami. ' +
+      'Spunta «Mostra tutto» per vederle tutte.</div>';
   } else if (!n) {
     const attivi = [];
     if (terms.length) attivi.push("ricerca «" + document.getElementById("banco-q").value.trim() + "»");
@@ -2693,7 +2709,7 @@ function renderBanco(keepSelection) {
       const el = document.getElementById(id);
       if (el.value) attivi.push(nome + ": " + el.options[el.selectedIndex].text.replace(/^[\s└]+|\s*\(\d+\)$/g, ""));
     });
-    list.innerHTML = `<div class="banco-empty">Nessuna delle ${allQuestions.length} domande corrisponde a ` +
+    list.innerHTML = `<div class="banco-empty">Nessuna delle ${base.length} domande corrisponde a ` +
       `${escHtml(attivi.join(", "))}.<br><button class="btn btn-sm btn-outline" style="margin-top:10px;" ` +
       `onclick="bancoResetFilters()">Azzera ricerca e filtri</button></div>`;
   } else {
@@ -4685,11 +4701,12 @@ function statBadgeHtml(qid) {
 }
 
 function renderQBrowser() {
+  if (!allQuestions) return;
   const ramo   = catTreeValue(document.getElementById("f-cattree"));
   const tag    = document.getElementById("f-tag").value;
   const pts    = document.getElementById("f-pts").value;
   const stato  = document.getElementById("f-stato").value;
-  const filtered = allQuestions.filter(q => {
+  const filtered = domandeVisibili().filter(q => {
     if (!catTreeMatch(ramo, q)) return false;
     if (tag) {
       const qTags = (q.tags || "").split(",").map(t => t.trim());
@@ -4905,6 +4922,88 @@ function clearItems() {
   renderQBrowser();
 }
 
+// ---- CORSO ATTIVO ----
+// Con un corso selezionato (barra in alto o tab Corsi) gli altri tab mostrano solo i suoi dati:
+// esami collegati, tracce usate da quegli esami, domande di quelle tracce (fisse ed estraibili
+// dagli slot casuali). "Mostra tutto" torna a tutti i dati. Scelte ricordate nel browser.
+const _vistaKey = k => "qf_" + k + (_isTestMode ? "_test" : "");
+let corsoAttivo = (() => { try { return localStorage.getItem(_vistaKey("corso_attivo")) || ""; } catch(e) { return ""; } })();
+let mostraTutto = (() => { try { return localStorage.getItem(_vistaKey("mostra_tutto")) === "1"; } catch(e) { return false; } })();
+
+function filtroCorso() { return !mostraTutto && corsoAttivo ? corsoAttivo : null; }
+
+function esamiVisibili() {
+  const c = filtroCorso();
+  return c ? allEsami.filter(e => e.corso_id === c) : allEsami;
+}
+
+// null = nessun filtro
+function tracceDelCorso() {
+  if (!filtroCorso()) return null;
+  return new Set(esamiVisibili().map(e => e.traccia_id).filter(Boolean));
+}
+
+function domandeDelCorso() {
+  const tracce = tracceDelCorso();
+  if (!tracce) return null;
+  const ids = new Set();
+  allTracks.filter(t => tracce.has(t.track_id)).forEach(t => (t.items || []).forEach(it => {
+    if (it.type === "fixed") ids.add(it.id);
+    else if (it.type === "random") randomSlotPool(it).forEach(q => ids.add(q.id));
+  }));
+  return ids;
+}
+
+function domandeVisibili() {
+  const ids = domandeDelCorso();
+  return ids ? (allQuestions || []).filter(q => ids.has(q.id)) : (allQuestions || []);
+}
+
+function renderBarraCorso() {
+  const sel = document.getElementById("corso-attivo");
+  const corsi = (allCorsi || []).slice().sort((a, b) => (a.stato === b.stato ? 0 : a.stato === "attivo" ? -1 : 1) || a.nome.localeCompare(b.nome, "it"));
+  sel.innerHTML = '<option value="">— tutti i corsi —</option>' +
+    corsi.map(c => `<option value="${escAttr(c.corso_id)}">${escHtml(c.nome)}${c.stato === "archiviato" ? " (archiviato)" : ""}</option>`).join("");
+  if (allCorsi && corsoAttivo && !corsi.some(c => c.corso_id === corsoAttivo)) corsoAttivo = "";   // corso eliminato o d'un altro foglio
+  sel.value = corsoAttivo;
+  const chk = document.getElementById("mostra-tutto");
+  chk.checked = mostraTutto;
+  chk.disabled = !corsoAttivo;
+  chk.parentElement.style.opacity = corsoAttivo ? "1" : "0.5";
+}
+
+function cambiaCorsoAttivo(id) {
+  corsoAttivo = id || "";
+  try { localStorage.setItem(_vistaKey("corso_attivo"), corsoAttivo); } catch(e) {}
+  aggiornaVista();
+  if (activeTab === "corsi" && corsoAttivo && corsoSel !== corsoAttivo) corsoApri(corsoAttivo);
+}
+
+function cambiaMostraTutto(on) {
+  mostraTutto = !!on;
+  try { localStorage.setItem(_vistaKey("mostra_tutto"), mostraTutto ? "1" : "0"); } catch(e) {}
+  aggiornaVista();
+}
+
+// Ridisegna ciò che dipende dal corso attivo
+function aggiornaVista() {
+  renderBarraCorso();
+  populateEsameSelect(allEsami);
+  if (currentEsame && !esamiVisibili().some(e => e.exam_id === currentEsame.exam_id)) {
+    currentEsame = null;
+    document.getElementById("esame-select").value = "";
+    if (activeTab === "admin") updateAdminTab();
+  }
+  populateTracciaSelects();
+  if (allQuestions) {
+    refreshCategoryMenus();
+    if (document.getElementById("banco-content").style.display !== "none") renderBanco();
+    try { renderQBrowser(); } catch(e) {}
+  }
+  if (activeTab === "monitor") updateMonitorTab();
+  if (activeTab === "risultati") updateRisultatiTab();
+}
+
 // ---- CORSI ----
 // Un corso è permanente; gli studenti si iscrivono dal profilo e l'iscrizione dura un anno.
 // Esami ed esercitazioni appartengono a un corso (corso_id); il nome del corso resta anche nel
@@ -4947,7 +5046,9 @@ async function initCorsiTab() {
   catch(e) { loading.style.display = ""; loading.textContent = "Errore: " + e.message; return; }
   loading.style.display = "none"; content.style.display = "";
   renderCorsiElenco();
-  if (corsoSel && allCorsi.some(c => c.corso_id === corsoSel)) corsoApri(corsoSel); else corsoApri(allCorsi.length ? allCorsi[0].corso_id : null);
+  renderBarraCorso();
+  const pref = corsoSel || corsoAttivo;
+  if (pref && allCorsi.some(c => c.corso_id === pref)) corsoApri(pref); else corsoApri(allCorsi.length ? allCorsi[0].corso_id : null);
 }
 
 function renderCorsiElenco() {
@@ -4964,6 +5065,7 @@ function renderCorsiElenco() {
 
 function corsoApri(id) {
   corsoSel = id;
+  if (id && id !== corsoAttivo) { corsoAttivo = id; try { localStorage.setItem(_vistaKey("corso_attivo"), id); } catch(e) {} aggiornaVista(); }
   renderCorsiElenco();
   const c = id ? allCorsi.find(x => x.corso_id === id) : { corso_id: "", nome: "", descrizione: "", link: [], stato: "attivo" };
   const box = document.getElementById("corso-dettaglio");
