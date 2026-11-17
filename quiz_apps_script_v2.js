@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.12.0"; // aggiornare ad ogni deploy
+const VERSION = "3.12.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1097,6 +1097,7 @@ function resolveEsame(examId) {
       mode:            esame.modalita,
       status:          esame.stato,
       corso:           esame.corso,
+      corso_id:        esame.corso_id,    // per il percorso «I miei corsi › corso» della pagina d'esame
       track_name:      traccia.nome,      // nome traccia (per esercitazioni)
       traccia_id:      esame.traccia_id,  // usato internamente da ensureMetaTrack
       _password:       esame.password,    // rimosso dal doPost prima di inviare al client

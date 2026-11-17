@@ -11,6 +11,11 @@
   /* HEADER */
   #site-header { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 32px; }
   #site-header img { height: 52px; display: block; }
+  #site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  #briciole { font-size: 0.88em; color: #888; }
+  #briciole a { color: #555; }
+  #briciole .sep { margin: 0 6px; color: #bbb; }
+  body.preview #briciole { display: none; }
 
   /* COVER */
   #login-box { margin-top: 22px; }
@@ -161,6 +166,7 @@
 
 <header id="site-header">
   <img src="logo_unisannio.png" alt="Università degli Studi del Sannio — DST">
+  <nav id="briciole" aria-label="Percorso"></nav>
 </header>
 
 <!-- COVER -->
@@ -695,6 +701,23 @@ async function callScriptWithRetry(payload, maxRetries) {
   return false;
 }
 
+// ---- PERCORSO: I miei corsi › corso › questo esame ----
+// Durante la prova i link chiedono conferma: il quiz resta in corso e si riprende riaprendolo.
+function renderBriciole(t) {
+  const conTest = url => url + (_isTestMode ? (url.includes("?") ? "&" : "?") + "test" : "");
+  const parti = [`<a href="${conTest("index.html")}" onclick="return lasciaQuiz()">I miei corsi</a>`];
+  if (t && t.corso_id && t.corso) {
+    parti.push(`<a href="${conTest("corso.html?c=" + encodeURIComponent(t.corso_id))}" onclick="return lasciaQuiz()">${escHtml(t.corso)}</a>`);
+  }
+  parti.push(`<span>${t && t.mode === "practice" ? "Esercitazione" : "Esame"}</span>`);
+  document.getElementById("briciole").innerHTML = parti.join('<span class="sep">›</span>');
+}
+
+function lasciaQuiz() {
+  const inCorso = document.getElementById("quiz-wrapper").classList.contains("active") && !quizEnded;
+  return !inCorso || confirm("Il quiz è ancora in corso: le risposte date sono salvate e potrai riprenderlo riaprendolo. Vuoi uscire?");
+}
+
 // ---- CARICA TRACCIA + DOMANDE ----
 async function loadTrack() {
   try {
@@ -713,6 +736,7 @@ async function loadTrack() {
 
     // Metadati traccia
     const t = res.track;
+    renderBriciole(t);
     EXAM_DATE         = t.exam_date || "";
     EXAM_DURATION_MIN = t.duration !== undefined && t.duration !== "" ? parseInt(t.duration) : 60;
     EXAM_MODE         = t.mode || "exam";

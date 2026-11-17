@@ -57,7 +57,7 @@
 <div id="test-banner">🧪 AMBIENTE DI TEST — i dati non sono reali</div>
 <header id="site-header">
   <img src="logo_unisannio.png" alt="Università degli Studi del Sannio">
-  <a id="link-profilo" href="index.html">← I miei corsi</a>
+  <nav id="briciole" style="font-size:0.88em;color:#888;"><a id="link-profilo" href="index.html">I miei corsi</a></nav>
 </header>
 
 <main>
@@ -146,6 +146,8 @@ async function carica() {
 function render(res) {
   const c = res.corso;
   document.title = c.nome + " — QuizForge";
+  document.getElementById("briciole").innerHTML = `<a href="${esc(conTest("index.html"))}">I miei corsi</a>` +
+    `<span style="margin:0 6px;color:#bbb;">›</span><span>${esc(c.nome)}</span>`;
   document.getElementById("caricamento").style.display = "none";
   document.getElementById("pagina").style.display = "";
   document.getElementById("c-nome").innerHTML = esc(c.nome) + (c.stato === "archiviato" ? '<span class="archiviato">archiviato</span>' : "");
