@@ -119,6 +119,9 @@
   .rt-barra button:hover { background:#eee; }
   .rt-editor { border:1px solid #bbb; padding:10px 12px; min-height:110px; background:#fff; line-height:1.55; font-size:0.95em; }
   .rt-editor:focus { outline:2px solid #c8e6c9; }
+  .rt-codice { width:100%; box-sizing:border-box; min-height:160px; border:1px solid #bbb; padding:10px 12px;
+               font-family:monospace; font-size:0.85em; line-height:1.5; resize:vertical; }
+  .rt-barra button.attivo { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
   .rt-editor h3 { font-size:1.1em; margin:8px 0 4px; } .rt-editor p { margin:0 0 8px; }
   .rt-editor ul, .rt-editor ol { margin:0 0 8px 22px; } .rt-editor a { color:#1565c0; }
   .corsi-layout { display:flex; gap:18px; align-items:flex-start; }
@@ -1123,7 +1126,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "b3b93d3";
+const BUILD = "deff54a";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -5132,7 +5135,39 @@ function rtPulisci(html) {
   return radice.innerHTML.replace(/(<p>(\s|<br>)*<\/p>)+$/i, "").trim();
 }
 
-function rtCmd(cmd, val) { document.getElementById("corso-descr").focus(); document.execCommand(cmd, false, val); }
+function rtCmd(cmd, val) {
+  if (rtInCodice()) return;   // i pulsanti di formato valgono nella vista formattata
+  document.getElementById("corso-descr").focus(); document.execCommand(cmd, false, val);
+}
+
+const rtInCodice = () => document.getElementById("corso-descr-html").style.display !== "none";
+
+// Vista codice ↔ vista formattata; passando dal codice il testo viene ripulito
+function rtHtml() {
+  const ed = document.getElementById("corso-descr"), ta = document.getElementById("corso-descr-html");
+  const codice = !rtInCodice();
+  if (codice) ta.value = rtPulisci(ed.innerHTML).replace(/(<\/(p|h3|h4|ul|ol|li|blockquote|div)>)/gi, "$1\n");
+  else ed.innerHTML = rtPulisci(ta.value);
+  ed.style.display = codice ? "none" : "";
+  ta.style.display = codice ? "" : "none";
+  document.getElementById("rt-html-btn").classList.toggle("attivo", codice);
+  document.querySelectorAll(".rt-barra button:not(#rt-html-btn)").forEach(b => b.disabled = codice);
+  (codice ? ta : ed).focus();
+}
+
+// Incollare: dal web o da Word si tiene la formattazione ammessa; un testo che è codice HTML
+// diventa formattazione. Sempre attraverso rtPulisci.
+function rtIncolla(ev) {
+  const cd = ev.clipboardData;
+  if (!cd) return;
+  const html = cd.getData("text/html"), testo = cd.getData("text/plain");
+  const sembraHtml = /<\/?(p|br|b|strong|i|em|u|ul|ol|li|a|h[1-6]|blockquote|div|span|table)\b[^>]*>/i.test(testo);
+  if (!html && !sembraHtml) return;   // testo semplice: incolla normale
+  ev.preventDefault();
+  // h1/h2/h5/h6 diventano titoletti ammessi
+  const sorgente = (html || testo).replace(/<(\/?)h[1256](\s[^>]*)?>/gi, "<$1h3>");
+  document.execCommand("insertHTML", false, rtPulisci(sorgente));
+}
 function rtLink() {
   const url = prompt("Indirizzo del link (https://…):", "https://");
   if (url && /^https?:\/\/\S+$/i.test(url.trim())) rtCmd("createLink", url.trim());
@@ -5277,8 +5312,11 @@ function corsoApri(id) {
         <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('insertOrderedList')" title="Elenco numerato">1. Elenco</button>
         <button type="button" onmousedown="event.preventDefault()" onclick="rtLink()" title="Link sul testo selezionato">Link</button>
         <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('removeFormat');rtCmd('unlink')" title="Togli formattazione">✕ Formato</button>
+        <button type="button" id="rt-html-btn" onclick="rtHtml()" title="Mostra o modifica il codice HTML" style="margin-left:auto;">&lt;/&gt; HTML</button>
       </div>
-      <div id="corso-descr" class="rt-editor" contenteditable="true">${rtPulisci(c.descrizione)}</div></div>
+      <div id="corso-descr" class="rt-editor" contenteditable="true" onpaste="rtIncolla(event)">${rtPulisci(c.descrizione)}</div>
+      <textarea id="corso-descr-html" class="rt-codice" style="display:none;" spellcheck="false"
+                placeholder="Incolla o scrivi qui il codice HTML"></textarea></div>
     <div class="field"><label>Link</label><div id="corso-link"></div>
       <button class="btn btn-sm btn-outline" style="margin-top:4px;" onclick="corsoLinkAggiungi()">+ Aggiungi link</button></div>
     <button class="btn btn-sm btn-green" onclick="corsoSalva()">${id ? "Salva" : "Crea corso"}</button> <span id="corso-msg" style="font-size:0.85em;"></span>
@@ -5322,7 +5360,7 @@ async function corsoSalva() {
   try {
     const res = await callScript({ action: "saveCorso", password: adminPassword, corso: {
       corso_id: corsoSel || "", nome: document.getElementById("corso-nome").value.trim(),
-      descrizione: rtPulisci(document.getElementById("corso-descr").innerHTML), link, stato: document.getElementById("corso-stato").value,
+      descrizione: rtPulisci(rtInCodice() ? document.getElementById("corso-descr-html").value : document.getElementById("corso-descr").innerHTML), link, stato: document.getElementById("corso-stato").value,
       cdl: [...document.querySelectorAll("#corso-cdl input:checked")].map(x => x.value) } });
     if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
     corsoSel = res.corso_id;
