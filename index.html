@@ -273,13 +273,20 @@ function voceCorso(c) {
     <div class="corso">
       <div class="info">
         <div class="nome"><a href="${esc(conTest("corso.html?c=" + encodeURIComponent(c.corso_id)))}">${esc(c.nome)}</a></div>
-        ${c.descrizione ? `<div class="sotto">${esc(c.descrizione.length > 220 ? c.descrizione.slice(0, 220) + "…" : c.descrizione)}</div>` : ""}
+        ${testoSemplice(c.descrizione) ? `<div class="sotto">${esc(accorcia(testoSemplice(c.descrizione), 220))}</div>` : ""}
       </div>
       <div class="azioni">
         <button class="btn btn-sm" onclick="iscrivi('${esc(c.corso_id)}')" ${profilo.matricola ? "" : 'disabled title="Indica prima la matricola"'}>Iscriviti</button>
       </div>
     </div>`;
 }
+
+// Descrizione del corso (testo formattato) in anteprima: solo il testo, accorciato
+function testoSemplice(html) {
+  const d = new DOMParser().parseFromString("<div>" + String(html || "").replace(/<\/(p|li|h3|h4|div)>/gi, " </$1>") + "</div>", "text/html");
+  return (d.body.textContent || "").replace(/\s+/g, " ").trim();
+}
+const accorcia = (t, n) => t.length > n ? t.slice(0, n) + "…" : t;
 
 function cambiaMostraTutti(on) {
   mostraTutti = !!on;

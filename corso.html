@@ -21,7 +21,10 @@
   .stato-iscr { margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.92em; }
   .stato-iscr .ok { color: #2e7d32; }
   .stato-iscr a { color: #555; }
-  .descr { white-space: pre-wrap; line-height: 1.6; font-size: 0.97em; }
+  .descr { line-height: 1.6; font-size: 0.97em; }
+  .descr p { margin: 0 0 10px; } .descr h3, .descr h4 { font-size: 1.08em; margin: 14px 0 6px; }
+  .descr ul, .descr ol { margin: 0 0 10px 24px; } .descr li { margin-bottom: 3px; }
+  .descr a { color: #1565c0; } .descr blockquote { border-left: 3px solid #ddd; padding-left: 12px; color: #555; }
   .link { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
   .link a { font-size: 0.9em; padding: 5px 12px; border: 1px solid #ccc; color: #1a1a1a; text-decoration: none; }
   .link a:hover { background: #f8f8f4; }
@@ -131,6 +134,36 @@ function dataIt(iso) {
   return m ? parseInt(m[3]) + " " + MESI[parseInt(m[2]) - 1] + " " + m[1] : "";
 }
 
+// ---- TESTO FORMATTATO (descrizione del corso) ----
+// Solo questi tag; dei link resta l'href http(s), aperto in una nuova scheda. Tutto il resto
+// (script, stili, attributi, eventi) sparisce: il risultato si può inserire nella pagina.
+// La stessa funzione è in admin_v2.html e corso.html.
+const RT_TAG = { B:1, STRONG:1, I:1, EM:1, U:1, P:1, BR:1, UL:1, OL:1, LI:1, A:1, H3:1, H4:1, BLOCKQUOTE:1, DIV:1 };
+function rtPulisci(html) {
+  const s = String(html || "");
+  // Testo semplice (descrizioni di prima): gli a capo diventano paragrafi
+  const src = /<\/?(p|br|b|strong|i|em|u|ul|ol|li|a|h3|h4|blockquote|div)\b/i.test(s) ? s
+    : s.split(/\n{2,}/).map(p => "<p>" + p.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).replace(/\n/g, "<br>") + "</p>").join("");
+  const doc = new DOMParser().parseFromString("<div>" + src + "</div>", "text/html");
+  const pulisci = nodo => {
+    [...nodo.childNodes].forEach(n => {
+      if (n.nodeType === 3) return;
+      if (n.nodeType !== 1 || /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|TEMPLATE|SVG|MATH)$/.test(n.tagName)) { n.remove(); return; }
+      pulisci(n);
+      if (!RT_TAG[n.tagName]) { n.replaceWith(...n.childNodes); return; }
+      const href = n.tagName === "A" ? (n.getAttribute("href") || "").trim() : "";
+      [...n.attributes].forEach(a => n.removeAttribute(a.name));
+      if (n.tagName === "A") {
+        if (/^https?:\/\/\S+$/i.test(href)) { n.setAttribute("href", href); n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener"); }
+        else n.replaceWith(...n.childNodes);
+      }
+    });
+  };
+  const radice = doc.body.firstChild;
+  pulisci(radice);
+  return radice.innerHTML.replace(/(<p>(\s|<br>)*<\/p>)+$/i, "").trim();
+}
+
 function errore(testo) {
   document.getElementById("caricamento").style.display = "none";
   document.getElementById("errore").style.display = "";
@@ -169,7 +202,7 @@ function render(res) {
   // Descrizione e link
   const link = c.link || [];
   document.getElementById("sez-descr").style.display = (c.descrizione || link.length) ? "" : "none";
-  document.getElementById("c-descr").textContent = c.descrizione || "";
+  document.getElementById("c-descr").innerHTML = rtPulisci(c.descrizione);
   document.getElementById("c-link").innerHTML = link.map(l =>
     `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.titolo)} ↗</a>`).join("");
 

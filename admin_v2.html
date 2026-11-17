@@ -114,6 +114,13 @@
   .badge-done { background: #c8e6c9; color: #1b5e20; }
   .badge-prog { background: #fff9c4; color: #f57f17; }
   .badge-wait { background: #f5f5f5; color: #666; }
+  .rt-barra { display:flex; flex-wrap:wrap; gap:4px; border:1px solid #bbb; border-bottom:none; background:#f6f6f2; padding:4px; }
+  .rt-barra button { font:inherit; font-size:0.82em; padding:3px 8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+  .rt-barra button:hover { background:#eee; }
+  .rt-editor { border:1px solid #bbb; padding:10px 12px; min-height:110px; background:#fff; line-height:1.55; font-size:0.95em; }
+  .rt-editor:focus { outline:2px solid #c8e6c9; }
+  .rt-editor h3 { font-size:1.1em; margin:8px 0 4px; } .rt-editor p { margin:0 0 8px; }
+  .rt-editor ul, .rt-editor ol { margin:0 0 8px 22px; } .rt-editor a { color:#1565c0; }
   .corsi-layout { display:flex; gap:18px; align-items:flex-start; }
   .corsi-lista { flex:0 0 280px; }
   .corsi-dettaglio { flex:1; min-width:0; }
@@ -1116,7 +1123,7 @@ async function applySetup() {
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("login-panel").style.display = "block";
 }
-const BUILD = "6066998";
+const BUILD = "b3b93d3";
 document.getElementById("build-label-login").textContent = "build " + BUILD;
 document.getElementById("build-label").textContent = "build " + BUILD;
 
@@ -5095,6 +5102,43 @@ function aggiornaVista() {
   if (activeTab === "risultati") { updateMonitorTab(); updateRisultatiTab(); }
 }
 
+// ---- TESTO FORMATTATO (descrizione del corso) ----
+// Solo questi tag; dei link resta l'href http(s), aperto in una nuova scheda. Tutto il resto
+// (script, stili, attributi, eventi) sparisce: il risultato si può inserire nella pagina.
+// La stessa funzione è in admin_v2.html e corso.html.
+const RT_TAG = { B:1, STRONG:1, I:1, EM:1, U:1, P:1, BR:1, UL:1, OL:1, LI:1, A:1, H3:1, H4:1, BLOCKQUOTE:1, DIV:1 };
+function rtPulisci(html) {
+  const s = String(html || "");
+  // Testo semplice (descrizioni di prima): gli a capo diventano paragrafi
+  const src = /<\/?(p|br|b|strong|i|em|u|ul|ol|li|a|h3|h4|blockquote|div)\b/i.test(s) ? s
+    : s.split(/\n{2,}/).map(p => "<p>" + p.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])).replace(/\n/g, "<br>") + "</p>").join("");
+  const doc = new DOMParser().parseFromString("<div>" + src + "</div>", "text/html");
+  const pulisci = nodo => {
+    [...nodo.childNodes].forEach(n => {
+      if (n.nodeType === 3) return;
+      if (n.nodeType !== 1 || /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|TEMPLATE|SVG|MATH)$/.test(n.tagName)) { n.remove(); return; }
+      pulisci(n);
+      if (!RT_TAG[n.tagName]) { n.replaceWith(...n.childNodes); return; }
+      const href = n.tagName === "A" ? (n.getAttribute("href") || "").trim() : "";
+      [...n.attributes].forEach(a => n.removeAttribute(a.name));
+      if (n.tagName === "A") {
+        if (/^https?:\/\/\S+$/i.test(href)) { n.setAttribute("href", href); n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener"); }
+        else n.replaceWith(...n.childNodes);
+      }
+    });
+  };
+  const radice = doc.body.firstChild;
+  pulisci(radice);
+  return radice.innerHTML.replace(/(<p>(\s|<br>)*<\/p>)+$/i, "").trim();
+}
+
+function rtCmd(cmd, val) { document.getElementById("corso-descr").focus(); document.execCommand(cmd, false, val); }
+function rtLink() {
+  const url = prompt("Indirizzo del link (https://…):", "https://");
+  if (url && /^https?:\/\/\S+$/i.test(url.trim())) rtCmd("createLink", url.trim());
+  else if (url) alert("Il link deve iniziare con https:// o http://");
+}
+
 // ---- CORSI ----
 // Un corso è permanente; gli studenti si iscrivono dal profilo e l'iscrizione dura un anno.
 // Esami ed esercitazioni appartengono a un corso (corso_id); il nome del corso resta anche nel
@@ -5222,8 +5266,19 @@ function corsoApri(id) {
           <input type="checkbox" value="${escAttr(x.cdl_id)}"${(c.cdl || []).includes(x.cdl_id) ? " checked" : ""}> ${escHtml(x.nome)}</label>`).join("")
           : '<span style="color:#999;">Nessun corso di laurea: aggiungili nell\'elenco a sinistra.</span>'}
       </div></div>
-    <div class="field"><label for="corso-descr">Descrizione <span style="font-weight:normal;color:#aaa;">(mostrata nella home del corso)</span></label>
-      <textarea id="corso-descr" rows="4" style="width:100%;box-sizing:border-box;font:inherit;padding:8px 10px;border:1px solid #bbb;">${escHtml(c.descrizione)}</textarea></div>
+    <div class="field"><label>Descrizione <span style="font-weight:normal;color:#aaa;">(mostrata nella home del corso)</span></label>
+      <div class="rt-barra">
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('bold')" title="Grassetto"><b>G</b></button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('italic')" title="Corsivo"><i>C</i></button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('underline')" title="Sottolineato"><u>S</u></button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('formatBlock','H3')" title="Titoletto">Titolo</button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('formatBlock','P')" title="Testo normale">¶</button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('insertUnorderedList')" title="Elenco puntato">• Elenco</button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('insertOrderedList')" title="Elenco numerato">1. Elenco</button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtLink()" title="Link sul testo selezionato">Link</button>
+        <button type="button" onmousedown="event.preventDefault()" onclick="rtCmd('removeFormat');rtCmd('unlink')" title="Togli formattazione">✕ Formato</button>
+      </div>
+      <div id="corso-descr" class="rt-editor" contenteditable="true">${rtPulisci(c.descrizione)}</div></div>
     <div class="field"><label>Link</label><div id="corso-link"></div>
       <button class="btn btn-sm btn-outline" style="margin-top:4px;" onclick="corsoLinkAggiungi()">+ Aggiungi link</button></div>
     <button class="btn btn-sm btn-green" onclick="corsoSalva()">${id ? "Salva" : "Crea corso"}</button> <span id="corso-msg" style="font-size:0.85em;"></span>
@@ -5267,7 +5322,7 @@ async function corsoSalva() {
   try {
     const res = await callScript({ action: "saveCorso", password: adminPassword, corso: {
       corso_id: corsoSel || "", nome: document.getElementById("corso-nome").value.trim(),
-      descrizione: document.getElementById("corso-descr").value, link, stato: document.getElementById("corso-stato").value,
+      descrizione: rtPulisci(document.getElementById("corso-descr").innerHTML), link, stato: document.getElementById("corso-stato").value,
       cdl: [...document.querySelectorAll("#corso-cdl input:checked")].map(x => x.value) } });
     if (res.status !== "ok") throw new Error((res.message || "errore") + versioneScriptHint());
     corsoSel = res.corso_id;
