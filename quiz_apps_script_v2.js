@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.12.1"; // aggiornare ad ogni deploy
+const VERSION = "3.13.0"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -1408,17 +1408,26 @@ function writeStudente(email, nome, campi) {
   }
 }
 
+// Lo studente vede solo i corsi del proprio corso di laurea (nessuno finché non l'ha scelto);
+// un corso senza CdL non è visibile agli studenti. L'admin li vede tutti.
+function cdlDelloStudente(email) {
+  const st = readStudente(email);
+  return st && st.cdl && readCdl().some(x => x.cdl_id === st.cdl) ? st.cdl : "";
+}
+const corsoNelCdl = (c, cdl) => !!cdl && (c.cdl || []).indexOf(cdl) !== -1;
+
 function profiloDi(s) {
   const st = readStudente(s.email);
+  const mioCdl = cdlDelloStudente(s.email);
   const attive = readIscrizioniAttive().filter(x => x.email === s.email);
-  const corsi = readCorsi().filter(c => c.stato === "attivo" || attive.some(x => x.corso_id === c.corso_id));
+  const corsi = readCorsi().filter(c => corsoNelCdl(c, mioCdl) && (c.stato === "attivo" || attive.some(x => x.corso_id === c.corso_id)));
   const pub = c => ({ corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione, cdl: c.cdl || [] });
   const cdlElenco = readCdl().map(x => ({ cdl_id: x.cdl_id, nome: x.nome }));
   return {
     email: s.email, nome: s.nome, ruolo: s.ruolo, matricola: st ? st.matricola : "",
     cdl: st && cdlElenco.some(x => x.cdl_id === st.cdl) ? st.cdl : "", cdl_elenco: cdlElenco,
-    iscrizioni: attive.map(x => Object.assign(pub(corsi.find(c => c.corso_id === x.corso_id) || { corso_id: x.corso_id, nome: x.corso_id, descrizione: "" }),
-                                              { inizio: x.inizio, scadenza: x.scadenza })),
+    iscrizioni: attive.filter(x => corsi.some(c => c.corso_id === x.corso_id))
+      .map(x => Object.assign(pub(corsi.find(c => c.corso_id === x.corso_id)), { inizio: x.inizio, scadenza: x.scadenza })),
     altri_corsi: corsi.filter(c => c.stato === "attivo" && !attive.some(x => x.corso_id === c.corso_id)).map(pub)
   };
 }
@@ -1756,6 +1765,7 @@ function doPost(e) {
           }
           if (data.action === "iscriviCorso") {
             if (corso.stato !== "attivo") return corsResponse({ status: "error", message: "Le iscrizioni a questo corso sono chiuse." });
+            if (!corsoNelCdl(corso, cdlDelloStudente(s.email))) return corsResponse({ status: "error", message: "Il corso non fa parte del tuo corso di laurea." });
             const st = readStudente(s.email);
             if (!st || !st.matricola) return corsResponse({ status: "error", message: "Indica prima la tua matricola." });
             if (riga === -1) {
@@ -2118,6 +2128,12 @@ function doPost(e) {
       const corsoId = String(data.corso_id || "");
       const c = readCorsi().find(x => x.corso_id === corsoId);
       if (!c) return corsResponse({ status: "error", message: "Corso non trovato." });
+      // Solo con l'accesso: studenti del CdL del corso, o admin
+      const sess = data.session ? getSession(data.session) : null;
+      if (!sess) return corsResponse({ status: "error", codice: "accesso", message: "Accedi con l'account di ateneo per vedere il corso." });
+      if (sess.ruolo !== "admin" && !corsoNelCdl(c, cdlDelloStudente(sess.email))) {
+        return corsResponse({ status: "error", codice: "cdl", message: "Questo corso non fa parte del tuo corso di laurea." });
+      }
       const cdl = readCdl();
       const tz = Session.getScriptTimeZone();
       const oggi = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");

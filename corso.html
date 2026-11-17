@@ -113,6 +113,11 @@ const CORSO_ID    = new URLSearchParams(window.location.search).get("c") || "";
 const SESSION_KEY = "qf_student_session" + (_isTestMode ? "_test" : "");   // stessa sessione del profilo
 let sessione = null;
 try { const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); if (s && s.exp > Date.now()) sessione = s; } catch(e) {}
+// Aperta dall'admin (link «Home del corso»): vale anche la sessione admin della scheda
+if (!sessione) try {
+  const a = JSON.parse(sessionStorage.getItem("qf_admin_session" + (_isTestMode ? "_test" : "")) || "null");
+  if (a && a.exp > Date.now()) sessione = a;
+} catch(e) {}
 
 async function loadConfig() {
   try {
@@ -172,7 +177,14 @@ function errore(testo) {
 
 async function carica() {
   const res = await callScript({ action: "getCorsoPubblico", corso_id: CORSO_ID, session: sessione ? sessione.token : undefined });
-  if (res.status !== "ok") { errore(res.message || "Corso non disponibile."); return; }
+  if (res.status !== "ok") {
+    errore(res.message || "Corso non disponibile.");
+    if (res.codice === "accesso" || res.codice === "cdl") {
+      document.getElementById("errore-msg").insertAdjacentHTML("afterend",
+        `<p style="margin-top:12px;"><a href="${esc(conTest("index.html"))}">${res.codice === "accesso" ? "Accedi dalla pagina iniziale" : "Torna ai tuoi corsi"}</a></p>`);
+    }
+    return;
+  }
   render(res);
 }
 

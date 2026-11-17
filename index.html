@@ -37,8 +37,6 @@
 
   .corso { padding: 14px 0; border-top: 1px solid #eee; display: flex; gap: 14px; align-items: flex-start; }
   .corso:first-of-type { border-top: none; padding-top: 0; }
-  .cdl-gruppo { font-size: 0.82em; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin: 18px 0 6px; }
-  .cdl-gruppo:first-child { margin-top: 0; }
   .corso .info { flex: 1; min-width: 0; }
   .corso .nome { font-weight: bold; }
   .corso .nome a { color: #1a1a1a; }
@@ -106,11 +104,7 @@
     </div>
 
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-        <h2 style="margin:0;">Altri corsi</h2>
-        <label style="font-size:0.85em;color:#555;cursor:pointer;display:flex;gap:6px;align-items:center;">
-          <input type="checkbox" id="mostra-tutti" onchange="cambiaMostraTutti(this.checked)"> Mostra tutti i corsi</label>
-      </div>
+      <h2>Altri corsi del tuo corso di laurea</h2>
       <div id="altri-corsi"></div>
     </div>
   </div>
@@ -135,8 +129,6 @@ const GOOGLE_CLIENT_ID = "322876627281-v23v50rfun6vd0ea7jnkeejnjon3jks4.apps.goo
 const SESSION_KEY      = "qf_student_session" + (_isTestMode ? "_test" : "");
 let sessione = null;   // {token, email, nome, exp}
 let profilo  = null;
-// "Mostra tutti i corsi": anche quelli degli altri corsi di laurea, raggruppati per CdL
-let mostraTutti = (() => { try { return localStorage.getItem("qf_mostra_tutti_corsi") === "1"; } catch(e) { return false; } })();
 
 async function loadConfig() {
   try {
@@ -245,27 +237,12 @@ function renderProfilo() {
   sel.value = profilo.cdl || "";
   if (profilo.matricola && !profilo.cdl) msg("p-msg", "Scegli il tuo corso di laurea: vedrai i suoi corsi.");
 
-  // Altri corsi: quelli del CdL dello studente (e quelli senza CdL); con "Mostra tutti" tutti,
-  // raggruppati per CdL — un corso di più CdL compare sotto ciascuno, il CdL dello studente per primo
-  document.getElementById("mostra-tutti").checked = mostraTutti;
+  // Il server manda solo i corsi del CdL dello studente (nessuno se non l'ha ancora scelto)
   const altri = profilo.altri_corsi || [];
-  const nomeCdl = id => ((profilo.cdl_elenco || []).find(x => x.cdl_id === id) || {}).nome || "";
-  let html = "";
-  if (mostraTutti || !profilo.cdl) {
-    const gruppi = (profilo.cdl_elenco || []).map(x => x.cdl_id)
-      .sort((a, b) => a === profilo.cdl ? -1 : b === profilo.cdl ? 1 : nomeCdl(a).localeCompare(nomeCdl(b), "it"));
-    gruppi.forEach(id => {
-      const qui = altri.filter(c => (c.cdl || []).includes(id));
-      if (qui.length) html += `<div class="cdl-gruppo">${esc(nomeCdl(id))}</div>` + qui.map(voceCorso).join("");
-    });
-    const senza = altri.filter(c => !(c.cdl || []).length);
-    if (senza.length) html += `<div class="cdl-gruppo">Altri corsi</div>` + senza.map(voceCorso).join("");
-  } else {
-    html = altri.filter(c => !(c.cdl || []).length || c.cdl.includes(profilo.cdl)).map(voceCorso).join("");
-  }
-  document.getElementById("altri-corsi").innerHTML = html || '<p class="vuoto">' + (altri.length && !mostraTutti
-    ? "Nessun altro corso del tuo corso di laurea. Spunta «Mostra tutti i corsi» per vedere gli altri."
-    : "Nessun altro corso disponibile.") + '</p>';
+  document.getElementById("altri-corsi").innerHTML = !profilo.cdl
+    ? '<p class="vuoto">Scegli il tuo corso di laurea per vedere i suoi corsi.</p>'
+    : altri.length ? altri.map(voceCorso).join("") : '<p class="vuoto">Nessun altro corso disponibile.</p>';
+  if (!profilo.cdl) document.getElementById("miei-corsi").innerHTML = '<p class="vuoto">Scegli il tuo corso di laurea per vedere i suoi corsi.</p>';
 }
 
 function voceCorso(c) {
@@ -287,12 +264,6 @@ function testoSemplice(html) {
   return (d.body.textContent || "").replace(/\s+/g, " ").trim();
 }
 const accorcia = (t, n) => t.length > n ? t.slice(0, n) + "…" : t;
-
-function cambiaMostraTutti(on) {
-  mostraTutti = !!on;
-  try { localStorage.setItem("qf_mostra_tutti_corsi", mostraTutti ? "1" : "0"); } catch(e) {}
-  renderProfilo();
-}
 
 async function salvaCdl() {
   msg("p-msg", "Salvataggio…");
