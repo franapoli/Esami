@@ -13,7 +13,7 @@
 // PropertiesService, ...) fuori dal corpo di una funzione.
 // ============================================================
 
-const VERSION = "3.13.0"; // aggiornare ad ogni deploy
+const VERSION = "3.13.1"; // aggiornare ad ogni deploy
 
 // ID di default dei due Google Sheets (fallback se non configurati via ScriptProperties)
 const SHEET_QUESTIONS_ID_DEFAULT = "1qrDVCr4yxBHD3qINQSl-Jk4hIU-O4OS4NVHXa3nbOzQ";
@@ -2155,10 +2155,11 @@ function doPost(e) {
                      aperto: aperto, track_name: modalita === "practice" ? (tracce[trId] || "") : "" });
       });
       esami.sort((a, b) => (a.data || "").localeCompare(b.data || ""));
-      let iscrizione = null, loggato = false;
+      let iscrizione = null, loggato = false, matricolaMancante = false;
       const s = data.session ? getSession(data.session) : null;
       if (s) {
         loggato = true;
+        if (s.ruolo !== "admin") { const st = readStudente(s.email); matricolaMancante = !(st && st.matricola); }
         const x = readIscrizioniAttive(corsoId).find(i => i.email === s.email);
         if (x) iscrizione = { inizio: x.inizio, scadenza: x.scadenza };
       }
@@ -2167,7 +2168,8 @@ function doPost(e) {
         corso_id: c.corso_id, nome: c.nome, descrizione: c.descrizione, link: c.link, stato: c.stato,
         cdl: c.cdl.map(id => (cdl.find(x => x.cdl_id === id) || {}).nome).filter(Boolean) },
         avvisi: readAvvisi(corsoId).map(a => ({ data: a.data, testo: a.testo })),
-        esami: esami, loggato: loggato, iscrizione: iscrizione, risultati: risultati });
+        esami: esami, loggato: loggato, iscrizione: iscrizione, risultati: risultati,
+        matricola_mancante: matricolaMancante });
     }
 
     if (data.action === "getPublicExams") {

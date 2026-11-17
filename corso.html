@@ -212,8 +212,12 @@ function render(res) {
   if (res.iscrizione) {
     box.innerHTML = `<span class="ok">✓ Sei iscritto fino al ${esc(dataIt(res.iscrizione.scadenza))}</span>`;
   } else if (res.loggato) {
+    // Come nel profilo: senza matricola non ci si iscrive
     box.innerHTML = c.stato === "attivo"
-      ? `<button class="btn" onclick="iscriviti()">Iscriviti al corso</button><span class="msg" id="iscr-msg"></span>`
+      ? (res.matricola_mancante
+          ? `<button class="btn" disabled title="Indica prima la matricola">Iscriviti al corso</button>
+             <span style="color:#777;">Indica prima la matricola nel <a href="${esc(conTest("index.html"))}">tuo profilo</a>.</span>`
+          : `<button class="btn" onclick="iscriviti()">Iscriviti al corso</button><span class="msg" id="iscr-msg"></span>`)
       : `<span style="color:#777;">Il corso è archiviato: non accetta nuove iscrizioni.</span>`;
   } else {
     box.innerHTML = `<a href="${esc(conTest("index.html"))}">Accedi con l'account di ateneo</a>
