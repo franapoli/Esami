@@ -29,10 +29,18 @@
   .link a { font-size: 0.9em; padding: 5px 12px; border: 1px solid #ccc; color: #1a1a1a; text-decoration: none; }
   .link a:hover { background: #f8f8f4; }
 
-  .avviso { padding: 10px 0; border-top: 1px solid #eee; }
-  .avviso:first-of-type { border-top: none; padding-top: 0; }
-  .avviso .quando { font-size: 0.8em; color: #888; }
-  .avviso .testo { white-space: pre-wrap; line-height: 1.55; margin-top: 3px; }
+  /* Avvisi: in alto e ben visibili; quelli non ancora visti da questo studente sono marcati NUOVO */
+  .avvisi-box { background: #fff8e1; border: 1px solid #ffd54f; border-left: 6px solid #f9a825; padding: 18px 24px; margin-bottom: 20px; }
+  .avvisi-titolo { font-weight: bold; font-size: 1.02em; margin-bottom: 10px; color: #6d4c00; }
+  .avvisi-titolo span { font-weight: normal; font-size: 0.85em; color: #a35a00; margin-left: 6px; }
+  .avviso { padding: 10px 0; border-top: 1px solid #ffe7a3; }
+  .avviso:first-child { border-top: none; padding-top: 0; }
+  .avviso .quando { font-size: 0.8em; color: #8a6d00; }
+  .avviso .testo { white-space: pre-wrap; line-height: 1.55; margin-top: 3px; font-size: 1.02em; }
+  .avviso.nuovo { background: #fff3c4; margin: 0 -12px; padding: 10px 12px; border-top-color: transparent; }
+  .avviso.nuovo .testo { font-weight: bold; }
+  .badge-nuovo { display: inline-block; font-size: 0.72em; font-weight: bold; letter-spacing: 0.05em; background: #c62828; color: #fff; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+  #avvisi-altri a { font-size: 0.88em; color: #6d4c00; }
 
   .esame { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e4e4e0; margin-bottom: 6px; color: #1a1a1a; text-decoration: none; }
   a.esame:hover { background: #f8f8f4; }
@@ -74,14 +82,15 @@
       <div class="stato-iscr" id="c-iscrizione"></div>
     </div>
 
+    <div class="avvisi-box" id="sez-avvisi" style="display:none;">
+      <div class="avvisi-titolo">📢 Avvisi del docente <span id="avvisi-nuovi"></span></div>
+      <div id="c-avvisi"></div>
+      <div id="avvisi-altri"></div>
+    </div>
+
     <div class="card" id="sez-descr" style="display:none;">
       <div class="descr" id="c-descr"></div>
       <div class="link" id="c-link"></div>
-    </div>
-
-    <div class="card" id="sez-avvisi" style="display:none;">
-      <h2>Avvisi</h2>
-      <div id="c-avvisi"></div>
     </div>
 
     <div class="card" id="sez-risultati" style="display:none;">
@@ -218,11 +227,27 @@ function render(res) {
   document.getElementById("c-link").innerHTML = link.map(l =>
     `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.titolo)} ↗</a>`).join("");
 
-  // Avvisi
+  // Avvisi, dal più recente: NUOVO quelli pubblicati dopo l'ultima visita (ricordata nel browser)
   const avvisi = res.avvisi || [];
+  const chiave = "qf_avvisi_visti:" + CORSO_ID + (_isTestMode ? ":test" : "");
+  let visto = ""; try { visto = localStorage.getItem(chiave) || ""; } catch(e) {}
+  const nuovi = avvisi.filter(a => !visto || a.data > visto).length;
+  const MOSTRATI = 3;
+  const voceAvviso = a => {
+    const nuovo = !visto || a.data > visto;
+    return `<div class="avviso${nuovo && visto ? " nuovo" : ""}"><div class="quando">${nuovo && visto ? '<span class="badge-nuovo">NUOVO</span>' : ""}${esc(dataIt(a.data))}</div>` +
+           `<div class="testo">${esc(a.testo)}</div></div>`;
+  };
   document.getElementById("sez-avvisi").style.display = avvisi.length ? "" : "none";
-  document.getElementById("c-avvisi").innerHTML = avvisi.map(a =>
-    `<div class="avviso"><div class="quando">${esc(dataIt(a.data))}</div><div class="testo">${esc(a.testo)}</div></div>`).join("");
+  document.getElementById("avvisi-nuovi").textContent = visto && nuovi ? `· ${nuovi} ${nuovi === 1 ? "nuovo" : "nuovi"}` : "";
+  // Si mostrano almeno i 3 più recenti, e comunque tutti i nuovi
+  const visibili = Math.max(MOSTRATI, visto ? nuovi : 0);
+  document.getElementById("c-avvisi").innerHTML = avvisi.slice(0, visibili).map(voceAvviso).join("");
+  const resto = avvisi.slice(visibili);
+  document.getElementById("avvisi-altri").innerHTML = resto.length
+    ? `<div style="margin-top:8px;"><a href="#" onclick="this.parentElement.outerHTML = ${esc(JSON.stringify(resto.map(voceAvviso).join("")))}; return false;">Mostra ${resto.length === 1 ? "l'avviso precedente" : "i " + resto.length + " avvisi precedenti"}</a></div>`
+    : "";
+  if (avvisi.length) try { localStorage.setItem(chiave, avvisi[0].data); } catch(e) {}
 
   // I miei risultati (solo per chi è entrato con Google): esami solo se pubblicati
   const ris = res.risultati || [];
